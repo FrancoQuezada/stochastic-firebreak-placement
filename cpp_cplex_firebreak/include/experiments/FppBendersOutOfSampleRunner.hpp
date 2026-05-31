@@ -1,0 +1,49 @@
+#pragma once
+
+#include <cstddef>
+#include <filesystem>
+#include <string>
+#include <vector>
+
+#include "risk/RiskMeasure.hpp"
+
+namespace firebreak::experiments {
+
+struct FppBendersOutOfSampleOptions {
+    std::string landscape;
+    std::filesystem::path forest_path;
+    std::filesystem::path results_path;
+
+    std::vector<int> train_ids;
+    std::vector<int> test_ids;
+    bool use_generated_split = false;
+    unsigned int seed = 0;
+    std::size_t train_count = 0;
+    std::size_t test_count = 0;
+
+    double alpha = -1.0;
+    double time_limit_seconds = 0.0;
+    double mip_gap = -1.0;
+    int threads = 0;
+    int max_iterations = 20;
+    double tolerance = 1.0e-6;
+    bool verbose = false;
+    bool use_lifted_lower_bounds = false;
+    std::string run_id;
+
+    std::filesystem::path output_json_path;
+    std::filesystem::path output_csv_path;
+    std::filesystem::path solution_json_path;
+    std::filesystem::path solution_csv_path;
+    std::filesystem::path benders_cut_export_path;
+    std::filesystem::path lifted_lower_bound_export_path;
+
+    risk::RiskMeasureConfig risk_config;
+};
+
+class FppBendersOutOfSampleRunner {
+public:
+    int run(const FppBendersOutOfSampleOptions& options) const;
+};
+
+}  // namespace firebreak::experiments

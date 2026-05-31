@@ -1,0 +1,19 @@
+# Phase 12 Sub20 train25/test900 parallel alpha run.
+experiment_name=phase12_sub20_train25_test900_alpha001
+landscape=Sub20
+forest_path=../sample_test/data/CanadianFBP/Sub20
+results_path=../sample_test/Sub20
+alphas=0.01
+train_counts=25
+test_count=900
+num_cases=10
+seed_base=6300
+methods=FPP-SAA,DPV-SAA
+time_limit=600
+mip_gap=0.001
+threads=1
+output_dir=results/batch/sub20_train25_test900_alpha001
+warm_start_policy=none
+shared_splits=true
+split_dir=results/batch/sub20_train25_test900_shared_splits/splits
+resume=true

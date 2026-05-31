@@ -1,0 +1,8 @@
+# This repository publishes the C++ implementation only.
+*
+
+!.gitignore
+!LICENSE
+!README.md
+!cpp_cplex_firebreak/
+!cpp_cplex_firebreak/**

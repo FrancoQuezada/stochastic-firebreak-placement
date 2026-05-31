@@ -1,0 +1,34 @@
+# FPP projected LLBI scaling experiment methods.
+# One label per line. Blank lines and # comments are ignored by the launcher.
+
+FPP-SAA
+FPP-SAA-CVaR
+FPP-SAA-MeanCVaR
+
+FPP-Branch-Benders-RootCuts
+FPP-Branch-Benders-CVaR-RootCuts
+FPP-Branch-Benders-MeanCVaR-RootCuts
+
+FPP-Branch-Benders-LLBI-RootCuts
+FPP-Branch-Benders-CVaR-LLBI-RootCuts
+FPP-Branch-Benders-MeanCVaR-LLBI-RootCuts
+
+FPP-Branch-Benders-ProjectedCoverageLLBI-poly-RootCuts
+FPP-Branch-Benders-CVaR-ProjectedCoverageLLBI-poly-RootCuts
+FPP-Branch-Benders-MeanCVaR-ProjectedCoverageLLBI-poly-RootCuts
+
+FPP-Branch-Benders-ProjectedPathLLBI-poly-RootCuts
+FPP-Branch-Benders-CVaR-ProjectedPathLLBI-poly-RootCuts
+FPP-Branch-Benders-MeanCVaR-ProjectedPathLLBI-poly-RootCuts
+
+FPP-Branch-Benders-ProjectedCoverageLLBI-exp-RootCuts
+FPP-Branch-Benders-CVaR-ProjectedCoverageLLBI-exp-RootCuts
+FPP-Branch-Benders-MeanCVaR-ProjectedCoverageLLBI-exp-RootCuts
+
+FPP-Branch-Benders-ProjectedPathLLBI-exp-RootCuts
+FPP-Branch-Benders-CVaR-ProjectedPathLLBI-exp-RootCuts
+FPP-Branch-Benders-MeanCVaR-ProjectedPathLLBI-exp-RootCuts
+
+FPP-Branch-Benders-Combinatorial
+FPP-Branch-Benders-Combinatorial-CVaR
+FPP-Branch-Benders-Combinatorial-MeanCVaR

@@ -1,0 +1,19 @@
+# Parallel alpha run using shared train/test splits.
+experiment_name=sub20_exact_alpha001_shared
+landscape=Sub20
+forest_path=../sample_test/data/CanadianFBP/Sub20
+results_path=../sample_test/Sub20
+alphas=0.01
+train_counts=5,10,20
+test_count=100
+num_cases=3
+seed_base=9000
+methods=FPP-SAA,DPV-SAA
+time_limit=120
+mip_gap=0.001
+threads=1
+output_dir=results/batch/sub20_exact_alpha001_shared
+warm_start_policy=none
+shared_splits=true
+split_dir=results/batch/sub20_exact_shared_splits/splits
+resume=true

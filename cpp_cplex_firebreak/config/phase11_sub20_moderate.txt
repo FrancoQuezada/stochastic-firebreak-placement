@@ -1,0 +1,17 @@
+# Phase 11 moderate Sub20 manifest.
+# Monitor runtime before scaling this design further.
+experiment_name=phase11_sub20_moderate
+landscape=Sub20
+forest_path=../sample_test/data/CanadianFBP/Sub20
+results_path=../sample_test/Sub20
+alphas=0.01,0.02,0.03
+train_counts=5,10,20
+test_count=100
+num_cases=10
+seed_base=2026
+methods=FPP-SAA,DPV-SAA,Static-DPV,Greedy-DPV3,Greedy-DPV2
+time_limit=120
+mip_gap=0.001
+threads=1
+output_dir=results/batch/phase11_sub20_moderate
+warm_start_policy=none

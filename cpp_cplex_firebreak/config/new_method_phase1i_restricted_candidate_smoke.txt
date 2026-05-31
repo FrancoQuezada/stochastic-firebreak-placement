@@ -1,0 +1,17 @@
+# New Method Phase 1I tiny controlled comparison.
+experiment_name=new_method_phase1i_restricted_candidate_smoke
+landscape=Sub20
+forest_path=../sample_test/data/CanadianFBP/Sub20
+results_path=../sample_test/Sub20
+alphas=0.01
+train_counts=2
+test_count=5
+num_cases=3
+seed_base=36000
+methods=FPP-Branch-Benders,FPP-Restricted-Branch-Benders
+time_limit=120
+mip_gap=0.001
+threads=1
+output_dir=results/new_method_phase1i
+output_csv=results/new_method_phase1i/restricted_candidate_smoke_summary.csv
+warm_start_policy=none
