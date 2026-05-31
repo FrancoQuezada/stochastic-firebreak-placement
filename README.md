@@ -1,28 +1,48 @@
-# Optimisation procedures using fire simulator C2F 
-The codes found here correlates to specific versions of the simulator and can be outdated. 
+# Stochastic Firebreak Placement - C++ Implementation
 
-## Contents
-### Proccesing
-Proccesing folder contains the codes to procces the results obtained from C2F simulations.
-  - read_data: read forest and simulations data to feed optimization procedures.
-  - main: call functions.
-  - optimization: stochastic optimization model using gurobi.
-### Sample test
-Canadian forest and simulation results for testing purposes
+This repository publishes the active C++ implementation of the stochastic
+firebreak placement project.
 
-## C++ CPLEX implementation
+The legacy Python prototypes, Cell2Fire sample data, generated results, logs,
+build outputs, cache files, and development notes are intentionally excluded
+from version control.
 
-The active C++ implementation is in `cpp_cplex_firebreak/`. It supports the
-FPP and DPV exact/heuristic experiment pipeline, including:
+## Repository Layout
 
-- direct `FPP-SAA`, `FPP-SAA-CVaR`, and `FPP-SAA-MeanCVaR`;
-- explicit-loop `FPP-Benders` and `DPV-Benders`;
-- callback `FPP-Branch-Benders` and `DPV-Branch-Benders`;
-- restricted-candidate `FPP-Restricted-Branch-Benders`;
-- new combinatorial FPP Branch-and-Benders variants:
-  `FPP-Branch-Benders-Combinatorial` and
-  `FPP-Restricted-Branch-Benders-Combinatorial`, with `CVaR` and `MeanCVaR`
-  labels.
+- `cpp_cplex_firebreak/src/`: C++ implementation.
+- `cpp_cplex_firebreak/include/`: public project headers.
+- `cpp_cplex_firebreak/tests/`: C++ unit and regression tests.
+- `cpp_cplex_firebreak/config/`: experiment and method configuration files.
+- `cpp_cplex_firebreak/scripts/`: reproducibility and batch-run helper scripts.
+- `cpp_cplex_firebreak/README.md`: detailed build, CPLEX, CLI, and experiment
+  documentation.
 
-See `cpp_cplex_firebreak/README.md` for build instructions, CLI flags,
-manifest labels, and reporting fields.
+## Build
+
+From the C++ project directory:
+
+```bash
+cd cpp_cplex_firebreak
+mkdir -p build
+cd build
+cmake ..
+cmake --build .
+```
+
+The Makefile workflow is also available:
+
+```bash
+cd cpp_cplex_firebreak
+make help
+make build
+make test
+```
+
+Some solver paths require IBM ILOG CPLEX. See
+`cpp_cplex_firebreak/README.md` for the CPLEX configuration options.
+
+## Data And Outputs
+
+Large local inputs and generated outputs are not tracked. In particular,
+`sample_test/`, `cpp_cplex_firebreak/results/`, `cpp_cplex_firebreak/logs/`,
+and build directories are ignored by Git.
