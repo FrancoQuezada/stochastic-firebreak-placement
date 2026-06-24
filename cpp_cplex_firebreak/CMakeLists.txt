@@ -107,6 +107,7 @@ add_executable(firebreak_cpp
     src/io/Cell2FireReader.cpp
     src/io/ResultWriter.cpp
     src/experiments/SmokeRunner.cpp
+    src/experiments/NewInstancesSmokeRunner.cpp
     src/experiments/BatchExperimentConfig.cpp
     src/experiments/SharedSplitUtils.cpp
     src/experiments/BatchExperimentRunner.cpp
@@ -451,6 +452,28 @@ else()
 endif()
 
 add_test(NAME graph_diagnostics COMMAND test_graph_diagnostics)
+
+add_executable(test_cell2fire_reader_new_instances
+    src/core/Graph.cpp
+    src/core/Scenario.cpp
+    src/core/Instance.cpp
+    src/io/Cell2FireReader.cpp
+    src/io/ScenarioFileUtils.cpp
+    tests/test_cell2fire_reader_new_instances.cpp
+)
+
+target_include_directories(test_cell2fire_reader_new_instances PRIVATE include)
+target_compile_definitions(test_cell2fire_reader_new_instances PRIVATE
+    FIREBREAK_PROJECT_ROOT="${CMAKE_CURRENT_SOURCE_DIR}"
+)
+
+if (MSVC)
+    target_compile_options(test_cell2fire_reader_new_instances PRIVATE /W4)
+else()
+    target_compile_options(test_cell2fire_reader_new_instances PRIVATE -Wall -Wextra -pedantic)
+endif()
+
+add_test(NAME cell2fire_reader_new_instances COMMAND test_cell2fire_reader_new_instances)
 
 add_executable(test_solution_io
     src/io/ExperimentResultWriter.cpp

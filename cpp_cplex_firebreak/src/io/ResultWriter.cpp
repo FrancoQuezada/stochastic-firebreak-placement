@@ -69,6 +69,7 @@ void print_smoke_summary(
         out << "Scenario " << scenario.scenario_id
             << " | message=" << scenario.message_filename
             << " | ignition=" << scenario.ignition_node
+            << (scenario.weather_metadata.empty() ? "" : " | weather=" + scenario.weather_metadata)
             << " | observed_nodes=" << scenario.propagation_graph.num_nodes_observed()
             << " | edges=" << scenario.propagation_graph.num_edges() << "\n";
     }
@@ -122,6 +123,7 @@ void write_smoke_summary_json(
         out << "      \"scenario_id\": " << scenario.scenario_id << ",\n";
         out << "      \"message_filename\": \"" << json_escape(scenario.message_filename) << "\",\n";
         out << "      \"ignition_node\": " << scenario.ignition_node << ",\n";
+        out << "      \"weather\": \"" << json_escape(scenario.weather_metadata) << "\",\n";
         out << "      \"observed_nodes\": " << scenario.propagation_graph.num_nodes_observed() << ",\n";
         out << "      \"edges\": " << scenario.propagation_graph.num_edges() << "\n";
         out << "    }" << (i + 1 == instance.scenarios.size() ? "\n" : ",\n");
@@ -142,4 +144,3 @@ void write_smoke_summary_json(
 }
 
 }  // namespace firebreak::io
-

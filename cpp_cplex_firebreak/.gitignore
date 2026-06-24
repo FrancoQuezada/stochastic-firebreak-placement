@@ -19,6 +19,9 @@ logs/**
 !logs/
 !logs/.gitkeep
 
+new_instances/
+profiles_newInstancas_20x20/
+
 scripts/**/__pycache__/
 scripts/sub20_alpha001_002_tl300_workers/
 scripts/sub20_projected_llbi_integral_tl300_workers/

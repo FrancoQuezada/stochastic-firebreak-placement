@@ -1,0 +1,7 @@
+instance_id,folder_name,landscape,forest_path,results_path,declared_cells,instance_type,enabled,requires_strict_metadata
+new20x20,20x20,new20x20,new_instances/20x20,new_instances/20x20,400,shortest_path,true,true
+new20x20_reburn,20x20_reburn,new20x20_reburn,new_instances/20x20_reburn,new_instances/20x20_reburn,400,reburn,true,true
+new40x40,40x40,new40x40,new_instances/40x40,new_instances/40x40,1600,shortest_path,true,true
+new40x40_reburn,40x40_reburn,new40x40_reburn,new_instances/40x40_reburn,new_instances/40x40_reburn,1600,reburn,true,true
+new100x100,100x100,new100x100,new_instances/100x100,new_instances/100x100,10000,shortest_path,true,true
+new100x100_reburn,100x100_reburn,new100x100_reburn,new_instances/100x100_reburn,new_instances/100x100_reburn,10000,reburn,true,true

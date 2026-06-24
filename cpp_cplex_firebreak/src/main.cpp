@@ -25,6 +25,7 @@
 #include "experiments/GraphDiagnosticsRunner.hpp"
 #include "experiments/GreedyOutOfSampleRunner.hpp"
 #include "experiments/ManifestRunner.hpp"
+#include "experiments/NewInstancesSmokeRunner.hpp"
 #include "experiments/OptInstanceRunner.hpp"
 #include "experiments/SmokeRunner.hpp"
 #include "experiments/StaticDpvOutOfSampleRunner.hpp"
@@ -38,6 +39,8 @@ void print_usage(std::ostream& out) {
     out << "Usage:\n"
         << "  firebreak_cpp smoke --landscape Sub20 --scenario-ids 1,2 "
         << "[--forest-path PATH] [--results-path PATH] [--output results/out.json]\n"
+        << "  firebreak_cpp smoke-new-instances --instances-root new_instances "
+        << "[--strict|--strict-metadata] [--output results/new_instances_smoke_summary.csv]\n"
         << "  firebreak_cpp evaluate --landscape Sub20 --scenario-ids 1-5 "
         << "--firebreaks 10,20,30 [--forest-path PATH] [--results-path PATH] "
         << "[--output results/out.json]\n"
@@ -539,6 +542,7 @@ int main(int argc, char** argv) {
 
         const std::string command = argv[1];
         if (command != "smoke" &&
+            command != "smoke-new-instances" &&
             command != "evaluate" &&
             command != "build-opt-instance" &&
             command != "solve-fpp-saa" &&
@@ -586,6 +590,28 @@ int main(int argc, char** argv) {
             }
 
             firebreak::experiments::SmokeRunner runner;
+            return runner.run(options);
+        }
+
+        if (command == "smoke-new-instances") {
+            firebreak::experiments::NewInstancesSmokeOptions options;
+            for (int i = 2; i < argc; ++i) {
+                const std::string arg = argv[i];
+                if (arg == "--instances-root") {
+                    options.instances_root = require_value(i, argc, argv, arg);
+                } else if (arg == "--output") {
+                    options.output_path = require_value(i, argc, argv, arg);
+                } else if (arg == "--strict-metadata" || arg == "--strict") {
+                    options.strict_metadata = true;
+                } else if (arg == "--help" || arg == "-h") {
+                    print_usage(std::cout);
+                    return 0;
+                } else {
+                    throw std::runtime_error("Unknown argument: " + arg);
+                }
+            }
+
+            firebreak::experiments::NewInstancesSmokeRunner runner;
             return runner.run(options);
         }
 

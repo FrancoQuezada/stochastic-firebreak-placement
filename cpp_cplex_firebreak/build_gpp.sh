@@ -138,6 +138,7 @@ MAIN_SOURCES=(
   "${PROJECT_DIR}/src/io/Cell2FireReader.cpp"
   "${PROJECT_DIR}/src/io/ResultWriter.cpp"
   "${PROJECT_DIR}/src/experiments/SmokeRunner.cpp"
+  "${PROJECT_DIR}/src/experiments/NewInstancesSmokeRunner.cpp"
   "${PROJECT_DIR}/src/experiments/BatchExperimentConfig.cpp"
   "${PROJECT_DIR}/src/experiments/SharedSplitUtils.cpp"
   "${PROJECT_DIR}/src/experiments/BatchExperimentRunner.cpp"

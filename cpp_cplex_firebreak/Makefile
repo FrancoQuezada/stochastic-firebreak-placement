@@ -119,6 +119,7 @@ MAIN_SOURCES := \
 	src/io/Cell2FireReader.cpp \
 	src/io/ResultWriter.cpp \
 	src/experiments/SmokeRunner.cpp \
+	src/experiments/NewInstancesSmokeRunner.cpp \
 	src/experiments/BatchExperimentConfig.cpp \
 	src/experiments/SharedSplitUtils.cpp \
 	src/experiments/BatchExperimentRunner.cpp \
@@ -190,6 +191,14 @@ TEST_GRAPH_DIAGNOSTICS_SOURCES := \
 	src/core/Graph.cpp \
 	src/core/Scenario.cpp \
 	tests/test_graph_diagnostics.cpp
+
+TEST_CELL2FIRE_READER_SOURCES := \
+	src/core/Graph.cpp \
+	src/core/Scenario.cpp \
+	src/core/Instance.cpp \
+	src/io/Cell2FireReader.cpp \
+	src/io/ScenarioFileUtils.cpp \
+	tests/test_cell2fire_reader_new_instances.cpp
 
 TEST_SOLUTION_IO_SOURCES := \
 	src/io/SolutionIO.cpp \
@@ -433,6 +442,7 @@ TEST_EXES := \
 	$(BUILD_DIR)/test_fpp_saa_model_structure \
 	$(BUILD_DIR)/test_dpv_saa_model_structure \
 	$(BUILD_DIR)/test_graph_diagnostics \
+	$(BUILD_DIR)/test_cell2fire_reader_new_instances \
 	$(BUILD_DIR)/test_solution_io \
 	$(BUILD_DIR)/test_scenario_split_utils \
 	$(BUILD_DIR)/test_static_dpv_benchmark \
@@ -554,6 +564,9 @@ $(BUILD_DIR)/test_dpv_saa_model_structure: $(call test_obj,$(TEST_DPV_STRUCTURE_
 $(BUILD_DIR)/test_graph_diagnostics: $(call test_obj,$(TEST_GRAPH_DIAGNOSTICS_SOURCES))
 	$(CXX) $^ -o $@
 
+$(BUILD_DIR)/test_cell2fire_reader_new_instances: $(call test_obj,$(TEST_CELL2FIRE_READER_SOURCES))
+	$(CXX) $^ -o $@
+
 $(BUILD_DIR)/test_solution_io: $(call test_obj,$(TEST_SOLUTION_IO_SOURCES))
 	$(CXX) $^ -o $@
 
@@ -650,6 +663,7 @@ test: $(TEST_EXES)
 	./build_gpp/test_burned_area_evaluator
 	./build_gpp/test_fpp_saa_model_structure
 	./build_gpp/test_graph_diagnostics
+	./build_gpp/test_cell2fire_reader_new_instances
 	./build_gpp/test_solution_io
 	./build_gpp/test_scenario_split_utils
 	./build_gpp/test_dpv_saa_model_structure
@@ -757,6 +771,7 @@ clean:
 	$(TEST_FPP_STRUCTURE_SOURCES) \
 	$(TEST_DPV_STRUCTURE_SOURCES) \
 	$(TEST_GRAPH_DIAGNOSTICS_SOURCES) \
+	$(TEST_CELL2FIRE_READER_SOURCES) \
 	$(TEST_SOLUTION_IO_SOURCES) \
 	$(TEST_SCENARIO_SPLIT_SOURCES) \
 	$(TEST_STATIC_DPV_SOURCES) \

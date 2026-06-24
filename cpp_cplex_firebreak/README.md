@@ -201,6 +201,111 @@ folders:
 - `sample_test/data/CanadianFBP/Sub40` and `sample_test/Sub40`
 - `sample_test/data/CanadianFBP/Sub100` and `sample_test/Sub100`
 
+## Cell2Fire Data Layouts
+
+The loader supports two Cell2Fire-style result layouts.
+
+Legacy layout:
+
+```text
+sample_test/Sub20/
+  IgnitionsHistory/ignitions_log.csv
+  Messages/MessagesFile0001.csv
+  ...
+sample_test/data/CanadianFBP/Sub20/
+  fuels.asc
+  fbp_lookup_table.csv
+```
+
+When `IgnitionsHistory/ignitions_log.csv` exists, the legacy reader is used.
+One-column ignition logs are interpreted as one ignition node per line, with
+the line number as the scenario ID. Two-column logs are interpreted as
+`scenario_id,ignition_node`.
+
+New instance layout:
+
+```text
+new_instances/20x20/
+  ignition_and_weather_log.csv
+  run.log
+  Messages/MessagesFile00001.csv
+  ...
+  Messages/MessagesFile10000.csv
+```
+
+When `ignition_and_weather_log.csv` exists and the legacy ignition log is
+absent, the new-instances reader is used. The CSV must contain columns
+`simulation`, `ignition`, and optionally `weather`. `simulation` is the
+scenario ID, `ignition` is the ignition node, and `weather` is preserved as
+metadata only; it does not change optimization or evaluation. For this layout,
+`MessagesFile%05d.csv` is validated against the `simulation` ID.
+
+The current `new_instances` folders are:
+
+- `20x20`, `40x40`, `100x100`: directed propagation graphs built from the
+  shortest path between the ignition and each burned node.
+- `20x20_reburn`, `40x40_reburn`, `100x100_reburn`: directed propagation
+  graphs that include all possible propagation paths from the ignition to each
+  burned node.
+
+Both variants are loaded as directed propagation graphs. The FPP convention is
+unchanged: the ignition always burns; selected non-root firebreaks block
+incoming propagation into that node; a selected ignition still burns; selecting
+the ignition does not block outgoing arcs from the ignition.
+
+Do not infer scientific instance size only from the folder name. The loader
+uses `fuels.asc` when present, otherwise it falls back to `run.log` metadata
+before using the folder name. The current `100x100` and `100x100_reburn`
+folders are suspected 40x40 data until verified: their `run.log` files point
+to `instance_40x40.tif`, report 1600 cells, and observed node/ignition IDs are
+in `1..1600`. They should not be used in scientific experiments until corrected
+or explicitly relabeled.
+
+Validate the new folders before optimization:
+
+```bash
+./build_gpp/firebreak_cpp smoke-new-instances \
+  --instances-root new_instances \
+  --output results/new_instances_smoke_summary.csv
+```
+
+Use strict metadata mode in automated checks:
+
+```bash
+./build_gpp/firebreak_cpp smoke-new-instances \
+  --instances-root new_instances \
+  --output results/new_instances_smoke_summary.csv \
+  --strict-metadata
+```
+
+`--strict` is accepted as a short alias for `--strict-metadata`.
+
+The CSV reports message and ignition record counts, scenario ID ranges,
+source/target/ignition node ranges, declared vs inferred `NCells`, missing
+messages, missing ignitions, ignition/node-universe issues, filename
+mismatches, graph classification ratios, and warning/status fields.
+
+After diagnostics pass, a tiny loader-compatible optimization smoke can use
+validated folders only, for example:
+
+```bash
+./build_gpp/firebreak_cpp run-batch-oos \
+  --landscape new20x20 \
+  --forest-path new_instances/20x20 \
+  --results-path new_instances/20x20 \
+  --alphas 0.01 \
+  --train-counts 5 \
+  --test-count 10 \
+  --num-cases 1 \
+  --seed-base 123 \
+  --methods FPP-SAA,Greedy-DPV3 \
+  --time-limit 60 \
+  --mip-gap 0.001 \
+  --threads 1 \
+  --output-dir results/batch/new20x20_loader_smoke \
+  --output-csv results/batch/new20x20_loader_smoke/batch_results.csv
+```
+
 ## Scenario ID Syntax
 
 Flags that accept scenario IDs support comma-separated IDs, inclusive ranges
@@ -1671,6 +1776,95 @@ bash scripts/smoke_fpp_projected_llbi_scaling_experiment.sh
 
 Detailed design notes are in
 `docs/FPP_PROJECTED_LLBI_SCALING_EXPERIMENT.md`.
+
+### FPP New Instances Scaling Experiment
+
+The `new_instances` scaling infrastructure runs the same FPP method panel on
+the six new folders configured in
+`config/fpp_new_instances_scaling_instances.csv`. It uses the new
+`ignition_and_weather_log.csv` loader path, validates metadata with
+`smoke-new-instances` before launching workers, and writes outputs under:
+
+```text
+results/batch/fpp_new_instances_scaling/
+```
+
+The method file is `config/fpp_new_instances_scaling_methods.txt`: 18 labels,
+covering six algorithmic families under Expected, CVaR, and MeanCVaR
+objectives. The projected variants in this experiment are the `exp` variants
+only; `poly` variants are intentionally excluded.
+
+Default split design:
+
+```text
+training pool = 1..9000
+fixed OOS test set = 9001..10000
+train_count = 100,200,400,800
+alpha = 0.01,0.02,0.03
+num_cases = 5
+time_limit = 1800
+```
+
+The current `100x100` and `100x100_reburn` folders are included in the config
+but blocked by default because diagnostics infer 1600 cells and `run.log`
+references `instance_40x40.tif`. Until those folders are corrected, run only
+the validated four folders:
+
+```bash
+INSTANCE_FILTER=new20x20,new20x20_reburn,new40x40,new40x40_reburn \
+MAX_PARALLEL_JOBS=12 \
+PARALLEL=1 \
+scripts/run_fpp_new_instances_scaling_experiment.sh
+```
+
+For the validated `20x20` folders only, use the thin wrapper:
+
+```bash
+scripts/run_fpp_new20x20_scaling_experiment.sh
+```
+
+This launches:
+
+```text
+2 folders x 4 train counts x 3 alpha values x 5 cases x 18 methods = 2160 runs
+```
+
+To run only one `20x20` variant:
+
+```bash
+INSTANCE_FILTER=new20x20 \
+OUTPUT_DIR=results/batch/fpp_new20x20_only_scaling \
+scripts/run_fpp_new20x20_scaling_experiment.sh
+
+INSTANCE_FILTER=new20x20_reburn \
+OUTPUT_DIR=results/batch/fpp_new20x20_reburn_only_scaling \
+scripts/run_fpp_new20x20_scaling_experiment.sh
+```
+
+After the `100x100` folders are corrected, the full run is:
+
+```bash
+MAX_PARALLEL_JOBS=12 \
+PARALLEL=1 \
+scripts/run_fpp_new_instances_scaling_experiment.sh
+```
+
+Expected row counts are `6480` if all six folders are valid, and `4320` for
+the four currently validated folders. Completed worker rows are skipped unless
+`RERUN_EXISTING=1` is set. Use the smoke and manifest checks before a full run:
+
+```bash
+bash scripts/smoke_fpp_new_instances_scaling_experiment.sh
+
+INSTANCE_FILTER=new20x20,new20x20_reburn,new40x40,new40x40_reburn \
+OUTPUT_DIR=results/batch/fpp_new_instances_scaling_manifest_check \
+PARALLEL=0 \
+DRY_RUN=1 \
+scripts/run_fpp_new_instances_scaling_experiment.sh
+```
+
+Detailed design notes are in
+`docs/FPP_NEW_INSTANCES_SCALING_EXPERIMENT.md`.
 
 ### FPP 12-Mode Benchmark
 

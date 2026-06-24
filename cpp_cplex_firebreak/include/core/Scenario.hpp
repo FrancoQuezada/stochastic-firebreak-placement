@@ -11,6 +11,7 @@ struct Scenario {
     int scenario_id = 0;
     std::string message_filename;
     int ignition_node = 0;
+    std::string weather_metadata;
     Graph propagation_graph;
 
     const Graph& graph() const;
