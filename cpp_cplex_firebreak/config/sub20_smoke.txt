@@ -1,9 +1,0 @@
-# Example smoke configuration for Phase 1.
-# The executable currently accepts command line arguments, not this file.
-
-landscape=Sub20
-forest_path=../../sample_test/data/CanadianFBP/Sub20
-results_path=../../sample_test/Sub20
-scenario_ids=1,2
-output=results/sub20_smoke_summary.json
-
