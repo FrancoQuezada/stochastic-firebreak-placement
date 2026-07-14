@@ -201,6 +201,7 @@ TEST_CELL2FIRE_READER_SOURCES := \
 	tests/test_cell2fire_reader_new_instances.cpp
 
 TEST_SOLUTION_IO_SOURCES := \
+	src/io/ExperimentResultWriter.cpp \
 	src/io/SolutionIO.cpp \
 	src/io/PathUtils.cpp \
 	tests/test_solution_io.cpp
@@ -247,6 +248,13 @@ TEST_WARM_START_SOURCES := \
 	src/opt/OptimizationInstance.cpp \
 	src/solver/WarmStart.cpp \
 	tests/test_warm_start.cpp
+
+TEST_FPP_COMBINATORIAL_BENDERS_SOURCES := \
+	src/benders/BendersCut.cpp \
+	src/benders/FppCombinatorialBenders.cpp \
+	src/opt/IndexMapper.cpp \
+	src/opt/OptimizationInstance.cpp \
+	tests/test_fpp_combinatorial_benders.cpp
 
 TEST_BATCH_CONFIG_SOURCES := \
 	src/benders/BendersCut.cpp \
@@ -450,6 +458,7 @@ TEST_EXES := \
 	$(BUILD_DIR)/test_cumulative_propagation_graph \
 	$(BUILD_DIR)/test_greedy_heuristics \
 	$(BUILD_DIR)/test_warm_start \
+	$(BUILD_DIR)/test_fpp_combinatorial_benders \
 	$(BUILD_DIR)/test_batch_experiment_config \
 	$(BUILD_DIR)/test_experiment_aggregator \
 	$(BUILD_DIR)/test_experiment_manifest \
@@ -588,6 +597,9 @@ $(BUILD_DIR)/test_greedy_heuristics: $(call test_obj,$(TEST_GREEDY_SOURCES))
 $(BUILD_DIR)/test_warm_start: $(call test_obj,$(TEST_WARM_START_SOURCES))
 	$(CXX) $^ -o $@
 
+$(BUILD_DIR)/test_fpp_combinatorial_benders: $(call test_obj,$(TEST_FPP_COMBINATORIAL_BENDERS_SOURCES))
+	$(CXX) $^ -o $@
+
 $(BUILD_DIR)/test_batch_experiment_config: $(call test_obj,$(TEST_BATCH_CONFIG_SOURCES))
 	$(CXX) $^ -o $@
 
@@ -672,6 +684,7 @@ test: $(TEST_EXES)
 	./build_gpp/test_cumulative_propagation_graph
 	./build_gpp/test_greedy_heuristics
 	./build_gpp/test_warm_start
+	./build_gpp/test_fpp_combinatorial_benders
 	./build_gpp/test_batch_experiment_config
 	./build_gpp/test_experiment_aggregator
 	./build_gpp/test_experiment_manifest

@@ -52,6 +52,9 @@ struct ParsedFppStrengthenedMethod {
     bool use_global_dominance_preprocessing = false;
     bool use_conditional_zero_benefit_fixing = false;
     bool use_combinatorial_benders = false;
+    bool has_combinatorial_scenario_order = false;
+    benders::FppCombinatorialBendersScenarioOrder combinatorial_scenario_order =
+        benders::FppCombinatorialBendersScenarioOrder::EtaAscending;
     risk::RiskMeasureConfig risk_config;
 };
 
@@ -85,6 +88,22 @@ ParsedFppStrengthenedMethod parse_fpp_strengthened_method_key(std::string key) {
         erase_token(key, "conditionalzerofixing") ||
         erase_token(key, "conditionalzerobenefitfixing") ||
         erase_token(key, "conditionalzerobenefit");
+    const bool eta_desc =
+        erase_token(key, "etadesc") ||
+        erase_token(key, "descendingeta");
+    const bool eta_asc =
+        erase_token(key, "etaasc") ||
+        erase_token(key, "ascendingeta");
+    if (eta_desc && eta_asc) {
+        throw std::runtime_error(
+            "FPP combinatorial method label cannot request both EtaAsc and EtaDesc.");
+    }
+    if (eta_desc || eta_asc) {
+        parsed.has_combinatorial_scenario_order = true;
+        parsed.combinatorial_scenario_order = eta_desc
+            ? benders::FppCombinatorialBendersScenarioOrder::EtaDescending
+            : benders::FppCombinatorialBendersScenarioOrder::EtaAscending;
+    }
     parsed.use_combinatorial_benders =
         erase_token(key, "combinatorial") ||
         erase_token(key, "combinatorialbenders") ||
@@ -123,6 +142,11 @@ ParsedFppStrengthenedMethod parse_fpp_strengthened_method_key(std::string key) {
     if (!parsed.recognized) {
         return parsed;
     }
+    if (parsed.has_combinatorial_scenario_order &&
+        !parsed.use_combinatorial_benders) {
+        parsed.recognized = false;
+        return parsed;
+    }
 
     if (parsed.use_combinatorial_benders) {
         parsed.canonical += "-Combinatorial";
@@ -131,6 +155,11 @@ ParsedFppStrengthenedMethod parse_fpp_strengthened_method_key(std::string key) {
         parsed.canonical += "-CVaR";
     } else if (parsed.risk_config.type == risk::RiskMeasureType::MeanCVaR) {
         parsed.canonical += "-MeanCVaR";
+    }
+    if (parsed.use_combinatorial_benders &&
+        parsed.combinatorial_scenario_order ==
+            benders::FppCombinatorialBendersScenarioOrder::EtaDescending) {
+        parsed.canonical += "-EtaDesc";
     }
     if (parsed.use_lifted_lower_bounds) {
         parsed.canonical += "-LLBI";
@@ -200,8 +229,11 @@ const std::vector<std::string>& supported_batch_methods() {
         "FPP-Branch-Benders-CVaR",
         "FPP-Branch-Benders-MeanCVaR",
         "FPP-Branch-Benders-Combinatorial",
+        "FPP-Branch-Benders-Combinatorial-EtaDesc",
         "FPP-Branch-Benders-Combinatorial-CVaR",
+        "FPP-Branch-Benders-Combinatorial-CVaR-EtaDesc",
         "FPP-Branch-Benders-Combinatorial-MeanCVaR",
+        "FPP-Branch-Benders-Combinatorial-MeanCVaR-EtaDesc",
         "FPP-Branch-Benders-LLBI",
         "FPP-Branch-Benders-RootCuts",
         "FPP-Branch-Benders-LLBI-RootCuts",
@@ -748,6 +780,8 @@ FppMethodVariantSettings fpp_method_variant_settings(const std::string& method) 
         settings.combinatorial_options.enabled = parsed.use_combinatorial_benders;
         settings.combinatorial_options.lift_mode =
             benders::FppCombinatorialBendersLiftMode::Heuristic;
+        settings.combinatorial_options.scenario_order =
+            parsed.combinatorial_scenario_order;
         settings.combinatorial_options.cut_sampling_ratio = 0.10;
         settings.combinatorial_options.separate_fractional = true;
         settings.combinatorial_options.initial_cuts = true;
@@ -1037,6 +1071,8 @@ std::string fpp_enhancement_config_summary(const BatchExperimentConfig& config) 
     out << "FPP combinatorial Branch-Benders parameters:\n"
         << "  enabled: " << (config.combinatorial_options.enabled ? "true" : "false") << "\n"
         << "  lift_mode: " << benders::to_string(config.combinatorial_options.lift_mode) << "\n"
+        << "  scenario_order: "
+        << benders::to_string(config.combinatorial_options.scenario_order) << "\n"
         << "  cut_sampling_ratio: " << config.combinatorial_options.cut_sampling_ratio << "\n"
         << "  separate_fractional: "
         << (config.combinatorial_options.separate_fractional ? "true" : "false") << "\n"

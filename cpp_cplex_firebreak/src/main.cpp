@@ -86,6 +86,7 @@ void print_usage(std::ostream& out) {
         << "[--root-user-cut-max-rounds 1] [--root-user-cut-tolerance 1e-6] "
         << "[--use-combinatorial-benders] [--combinatorial-benders-lift none|posterior|heuristic] "
         << "[--combinatorial-benders-cut-sampling-ratio 0.10] "
+        << "[--combinatorial-benders-scenario-order eta-asc|eta-desc] "
         << "[--combinatorial-benders-separate-fractional true|false] "
         << "[--combinatorial-benders-initial-cuts true|false] "
         << "[--use-coverage-llbi] [--use-path-llbi] [--path-llbi-max-paths-per-node 8] "
@@ -122,6 +123,7 @@ void print_usage(std::ostream& out) {
         << "[--root-user-cut-max-rounds 1] [--root-user-cut-tolerance 1e-6] "
         << "[--use-combinatorial-benders] [--combinatorial-benders-lift none|posterior|heuristic] "
         << "[--combinatorial-benders-cut-sampling-ratio 0.10] "
+        << "[--combinatorial-benders-scenario-order eta-asc|eta-desc] "
         << "[--combinatorial-benders-separate-fractional true|false] "
         << "[--combinatorial-benders-initial-cuts true|false] "
         << "[--use-coverage-llbi] [--use-path-llbi] [--path-llbi-max-paths-per-node 8] "
@@ -176,6 +178,7 @@ void print_usage(std::ostream& out) {
         << "[--root-user-cut-max-rounds 1] [--root-user-cut-tolerance 1e-6] "
         << "[--use-combinatorial-benders] [--combinatorial-benders-lift none|posterior|heuristic] "
         << "[--combinatorial-benders-cut-sampling-ratio 0.10] "
+        << "[--combinatorial-benders-scenario-order eta-asc|eta-desc] "
         << "[--use-coverage-llbi] [--use-path-llbi] [--path-llbi-max-paths-per-node 8] "
         << "[--use-projected-coverage-llbi-exp] [--use-projected-path-llbi-exp] "
         << "[--use-projected-coverage-llbi-poly] [--use-projected-path-llbi-poly] "
@@ -489,6 +492,12 @@ bool parse_fpp_combinatorial_benders_arg(
     }
     if (arg == "--combinatorial-benders-cut-sampling-ratio") {
         options.cut_sampling_ratio = parse_double_strict(require_value(i, argc, argv, arg), arg);
+        return true;
+    }
+    if (arg == "--combinatorial-benders-scenario-order") {
+        options.scenario_order =
+            firebreak::benders::parse_fpp_combinatorial_benders_scenario_order(
+                require_value(i, argc, argv, arg));
         return true;
     }
     if (arg == "--combinatorial-benders-separate-fractional") {

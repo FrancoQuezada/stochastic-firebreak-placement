@@ -1,0 +1,10 @@
+experiment_name=final_candidate_methods_dpv_smoke
+landscape=Sub20
+alphas=0.01
+train_counts=2
+test_count=3
+num_cases=1
+seed_base=20260601
+methods=DPV-SAA,DPV-Branch-Benders,DPV-Branch-Benders-LLBI,DPV-Branch-Benders-LLBI-RootCuts,Static-DPV,Greedy-DPV3
+output_dir=results/batch/final_candidate_methods_dpv_smoke
+warm_start_policy=none

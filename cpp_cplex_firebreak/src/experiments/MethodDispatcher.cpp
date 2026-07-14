@@ -1120,6 +1120,8 @@ io::StandardExperimentResult MethodDispatcher::run_method(const MethodDispatchRe
     result.combinatorial_benders_enabled = solver_result.combinatorial_benders_enabled;
     result.combinatorial_benders_lift_mode =
         solver_result.combinatorial_benders_lift_mode;
+    result.combinatorial_benders_scenario_order =
+        solver_result.combinatorial_benders_scenario_order;
     result.combinatorial_benders_cut_sampling_ratio =
         solver_result.combinatorial_benders_cut_sampling_ratio;
     result.combinatorial_benders_fractional_separation_enabled =

@@ -59,6 +59,7 @@ max_aggregate_dominator_cuts_per_scenario=11
 max_individual_dominator_cuts_per_scenario=22
 root_user_cut_max_rounds=2
 root_user_cut_tolerance=0.000001
+combinatorial_benders_scenario_order=eta-desc
 cvar_beta=0.8
 cvar_lambda=0.4
 )");
@@ -96,6 +97,8 @@ cvar_lambda=0.4
     assert(manifest.config.max_individual_dominator_cuts_per_scenario == 22);
     assert(manifest.config.root_user_cut_max_rounds == 2);
     assert(manifest.config.root_user_cut_tolerance == 0.000001);
+    assert(manifest.config.combinatorial_options.scenario_order ==
+           firebreak::benders::FppCombinatorialBendersScenarioOrder::EtaDescending);
     assert(manifest.config.cvar_beta_specified);
     assert(manifest.config.cvar_lambda_specified);
     assert(manifest.config.risk_config.cvarBeta == 0.8);

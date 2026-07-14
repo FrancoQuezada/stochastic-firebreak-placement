@@ -25,8 +25,11 @@ void test_parse_methods() {
     const auto methods = firebreak::experiments::parse_batch_method_list(
         "FPP-SAA,FPP-SAA-CVaR,FPP-SAA-MeanCVaR,FPP-Benders,FPP-Benders-CVaR,FPP-Benders-MeanCVaR,"
         "FPP-Branch-Benders,FPP-Branch-Benders-CVaR,FPP-Branch-Benders-MeanCVaR,"
-        "FPP-Branch-Benders-Combinatorial,FPP-Branch-Benders-Combinatorial-CVaR,"
+        "FPP-Branch-Benders-Combinatorial,FPP-Branch-Benders-Combinatorial-EtaDesc,"
+        "FPP-Branch-Benders-Combinatorial-CVaR,"
+        "FPP-Branch-Benders-Combinatorial-CVaR-EtaDesc,"
         "FPP-Branch-Benders-Combinatorial-MeanCVaR,"
+        "FPP-Branch-Benders-Combinatorial-MeanCVaR-EtaDesc,"
         "FPP-Branch-Benders-LLBI,FPP-Branch-Benders-RootCuts,FPP-Branch-Benders-LLBI-RootCuts,"
         "FPP-Branch-Benders-CVaR-LLBI,FPP-Branch-Benders-CVaR-RootCuts,FPP-Branch-Benders-CVaR-LLBI-RootCuts,"
         "FPP-Branch-Benders-MeanCVaR-LLBI,FPP-Branch-Benders-MeanCVaR-RootCuts,"
@@ -54,8 +57,11 @@ void test_parse_methods() {
         "FPP-Branch-Benders-CVaR",
         "FPP-Branch-Benders-MeanCVaR",
         "FPP-Branch-Benders-Combinatorial",
+        "FPP-Branch-Benders-Combinatorial-EtaDesc",
         "FPP-Branch-Benders-Combinatorial-CVaR",
+        "FPP-Branch-Benders-Combinatorial-CVaR-EtaDesc",
         "FPP-Branch-Benders-Combinatorial-MeanCVaR",
+        "FPP-Branch-Benders-Combinatorial-MeanCVaR-EtaDesc",
         "FPP-Branch-Benders-LLBI",
         "FPP-Branch-Benders-RootCuts",
         "FPP-Branch-Benders-LLBI-RootCuts",
@@ -107,8 +113,11 @@ void test_official_method_labels_are_supported() {
         "FPP-Branch-Benders-CVaR",
         "FPP-Branch-Benders-MeanCVaR",
         "FPP-Branch-Benders-Combinatorial",
+        "FPP-Branch-Benders-Combinatorial-EtaDesc",
         "FPP-Branch-Benders-Combinatorial-CVaR",
+        "FPP-Branch-Benders-Combinatorial-CVaR-EtaDesc",
         "FPP-Branch-Benders-Combinatorial-MeanCVaR",
+        "FPP-Branch-Benders-Combinatorial-MeanCVaR-EtaDesc",
         "FPP-Branch-Benders-LLBI",
         "FPP-Branch-Benders-RootCuts",
         "FPP-Branch-Benders-LLBI-RootCuts",
@@ -155,8 +164,11 @@ void test_official_method_labels_are_supported() {
         "FPP-SAA,FPP-SAA-CVaR,FPP-SAA-MeanCVaR,FPP-Benders,FPP-Benders-CVaR,FPP-Benders-MeanCVaR,"
         "FPP-Branch-Benders,"
         "FPP-Branch-Benders-CVaR,FPP-Branch-Benders-MeanCVaR,"
-        "FPP-Branch-Benders-Combinatorial,FPP-Branch-Benders-Combinatorial-CVaR,"
+        "FPP-Branch-Benders-Combinatorial,FPP-Branch-Benders-Combinatorial-EtaDesc,"
+        "FPP-Branch-Benders-Combinatorial-CVaR,"
+        "FPP-Branch-Benders-Combinatorial-CVaR-EtaDesc,"
         "FPP-Branch-Benders-Combinatorial-MeanCVaR,"
+        "FPP-Branch-Benders-Combinatorial-MeanCVaR-EtaDesc,"
         "FPP-Branch-Benders-LLBI,FPP-Branch-Benders-RootCuts,FPP-Branch-Benders-LLBI-RootCuts,"
         "FPP-Branch-Benders-CVaR-LLBI,FPP-Branch-Benders-CVaR-RootCuts,FPP-Branch-Benders-CVaR-LLBI-RootCuts,"
         "FPP-Branch-Benders-MeanCVaR-LLBI,FPP-Branch-Benders-MeanCVaR-RootCuts,"
@@ -324,8 +336,11 @@ void test_projected_llbi_scaling_grid_labels() {
         "FPP-Branch-Benders-CVaR-ProjectedPathLLBI-exp-RootCuts",
         "FPP-Branch-Benders-MeanCVaR-ProjectedPathLLBI-exp-RootCuts",
         "FPP-Branch-Benders-Combinatorial",
+        "FPP-Branch-Benders-Combinatorial-EtaDesc",
         "FPP-Branch-Benders-Combinatorial-CVaR",
+        "FPP-Branch-Benders-Combinatorial-CVaR-EtaDesc",
         "FPP-Branch-Benders-Combinatorial-MeanCVaR",
+        "FPP-Branch-Benders-Combinatorial-MeanCVaR-EtaDesc",
     };
 
     std::string csv;
@@ -380,6 +395,13 @@ void test_projected_llbi_scaling_grid_labels() {
             assert(settings.combinatorial_options.separate_fractional);
             assert(settings.combinatorial_options.initial_cuts);
             assert(settings.combinatorial_options.cut_sampling_ratio == 0.10);
+            if (label.find("EtaDesc") != std::string::npos) {
+                assert(settings.combinatorial_options.scenario_order ==
+                       firebreak::benders::FppCombinatorialBendersScenarioOrder::EtaDescending);
+            } else {
+                assert(settings.combinatorial_options.scenario_order ==
+                       firebreak::benders::FppCombinatorialBendersScenarioOrder::EtaAscending);
+            }
         }
     }
 }
@@ -488,15 +510,65 @@ void test_fpp_variant_settings() {
     assert(!restricted_mean_root.use_lifted_lower_bounds);
     assert(restricted_mean_root.use_root_user_cuts);
 
-    const auto combinatorial =
-        firebreak::experiments::fpp_method_variant_settings(
-            "FPP-Branch-Benders-Combinatorial-CVaR");
-    assert(combinatorial.is_fpp_branch_benders);
-    assert(combinatorial.use_combinatorial_benders);
-    assert(combinatorial.combinatorial_options.enabled);
-    assert(combinatorial.combinatorial_options.separate_fractional);
-    assert(combinatorial.combinatorial_options.initial_cuts);
-    assert(combinatorial.risk_config.type == firebreak::risk::RiskMeasureType::CVaR);
+    struct CombinatorialCase {
+        std::string label;
+        firebreak::risk::RiskMeasureType risk_type;
+        double cvar_lambda;
+        firebreak::benders::FppCombinatorialBendersScenarioOrder scenario_order;
+    };
+    const std::vector<CombinatorialCase> combinatorial_cases = {
+        {
+            "FPP-Branch-Benders-Combinatorial",
+            firebreak::risk::RiskMeasureType::Expected,
+            1.0,
+            firebreak::benders::FppCombinatorialBendersScenarioOrder::EtaAscending,
+        },
+        {
+            "FPP-Branch-Benders-Combinatorial-EtaDesc",
+            firebreak::risk::RiskMeasureType::Expected,
+            1.0,
+            firebreak::benders::FppCombinatorialBendersScenarioOrder::EtaDescending,
+        },
+        {
+            "FPP-Branch-Benders-Combinatorial-CVaR",
+            firebreak::risk::RiskMeasureType::CVaR,
+            1.0,
+            firebreak::benders::FppCombinatorialBendersScenarioOrder::EtaAscending,
+        },
+        {
+            "FPP-Branch-Benders-Combinatorial-CVaR-EtaDesc",
+            firebreak::risk::RiskMeasureType::CVaR,
+            1.0,
+            firebreak::benders::FppCombinatorialBendersScenarioOrder::EtaDescending,
+        },
+        {
+            "FPP-Branch-Benders-Combinatorial-MeanCVaR",
+            firebreak::risk::RiskMeasureType::MeanCVaR,
+            0.5,
+            firebreak::benders::FppCombinatorialBendersScenarioOrder::EtaAscending,
+        },
+        {
+            "FPP-Branch-Benders-Combinatorial-MeanCVaR-EtaDesc",
+            firebreak::risk::RiskMeasureType::MeanCVaR,
+            0.5,
+            firebreak::benders::FppCombinatorialBendersScenarioOrder::EtaDescending,
+        },
+    };
+    for (const auto& item : combinatorial_cases) {
+        const auto settings =
+            firebreak::experiments::fpp_method_variant_settings(item.label);
+        assert(settings.is_fpp_branch_benders);
+        assert(settings.use_combinatorial_benders);
+        assert(settings.combinatorial_options.enabled);
+        assert(settings.combinatorial_options.lift_mode ==
+               firebreak::benders::FppCombinatorialBendersLiftMode::Heuristic);
+        assert(settings.combinatorial_options.separate_fractional);
+        assert(settings.combinatorial_options.initial_cuts);
+        assert(settings.combinatorial_options.cut_sampling_ratio == 0.10);
+        assert(settings.combinatorial_options.scenario_order == item.scenario_order);
+        assert(settings.risk_config.type == item.risk_type);
+        assert(settings.risk_config.cvarLambda == item.cvar_lambda);
+    }
 
     const auto restricted_combinatorial =
         firebreak::experiments::fpp_method_variant_settings(

@@ -78,6 +78,7 @@ int main() {
     result.branch_benders_nonviolated_cuts = 2;
     result.combinatorial_benders_enabled = true;
     result.combinatorial_benders_lift_mode = "heuristic";
+    result.combinatorial_benders_scenario_order = "eta-desc";
     result.combinatorial_benders_cut_sampling_ratio = 0.1;
     result.combinatorial_benders_integer_cuts_added = 3;
     result.combinatorial_benders_fractional_cuts_added = 4;
@@ -121,6 +122,8 @@ int main() {
         assert(text.find("branch_benders_subproblems_attempted") != std::string::npos);
         assert(text.find("branch_benders_average_subproblem_time_sec") != std::string::npos);
         assert(text.find("combinatorial_benders_enabled") != std::string::npos);
+        assert(text.find("combinatorial_benders_scenario_order") != std::string::npos);
+        assert(text.find("eta-desc") != std::string::npos);
         assert(text.find("combinatorial_benders_integer_cuts_added") != std::string::npos);
         assert(text.find("coverage_llbi_enabled") != std::string::npos);
         assert(text.find("path_llbi_num_paths_used") != std::string::npos);
@@ -136,6 +139,7 @@ int main() {
         assert(text.find("\"cut_construction_time_sec\"") != std::string::npos);
         assert(text.find("\"coverage_llbi_enabled\": true") != std::string::npos);
         assert(text.find("\"combinatorial_benders_enabled\": true") != std::string::npos);
+        assert(text.find("\"combinatorial_benders_scenario_order\": \"eta-desc\"") != std::string::npos);
         assert(text.find("\"combinatorial_benders_integer_cuts_added\": 3") != std::string::npos);
         assert(text.find("\"path_llbi_num_paths_used\": 11") != std::string::npos);
         assert(text.find("\"global_dominance_candidates_removed\": 1") != std::string::npos);

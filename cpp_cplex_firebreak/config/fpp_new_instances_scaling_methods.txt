@@ -7,6 +7,7 @@ FPP-Branch-Benders-LLBI-RootCuts
 FPP-Branch-Benders-ProjectedCoverageLLBI-exp-RootCuts
 FPP-Branch-Benders-ProjectedPathLLBI-exp-RootCuts
 FPP-Branch-Benders-Combinatorial
+FPP-Branch-Benders-Combinatorial-EtaDesc
 
 FPP-SAA-CVaR
 FPP-Branch-Benders-CVaR-RootCuts
@@ -14,6 +15,7 @@ FPP-Branch-Benders-CVaR-LLBI-RootCuts
 FPP-Branch-Benders-CVaR-ProjectedCoverageLLBI-exp-RootCuts
 FPP-Branch-Benders-CVaR-ProjectedPathLLBI-exp-RootCuts
 FPP-Branch-Benders-Combinatorial-CVaR
+FPP-Branch-Benders-Combinatorial-CVaR-EtaDesc
 
 FPP-SAA-MeanCVaR
 FPP-Branch-Benders-MeanCVaR-RootCuts
@@ -21,3 +23,4 @@ FPP-Branch-Benders-MeanCVaR-LLBI-RootCuts
 FPP-Branch-Benders-MeanCVaR-ProjectedCoverageLLBI-exp-RootCuts
 FPP-Branch-Benders-MeanCVaR-ProjectedPathLLBI-exp-RootCuts
 FPP-Branch-Benders-Combinatorial-MeanCVaR
+FPP-Branch-Benders-Combinatorial-MeanCVaR-EtaDesc

@@ -1502,6 +1502,7 @@ private:
             eta_values,
             false,
             combinatorial_options_.lift_mode,
+            combinatorial_options_.scenario_order,
             combinatorial_options_.cut_sampling_ratio,
             tolerance_);
 
@@ -1606,6 +1607,7 @@ private:
             eta_values,
             true,
             combinatorial_options_.lift_mode,
+            combinatorial_options_.scenario_order,
             combinatorial_options_.cut_sampling_ratio,
             tolerance_);
         int cuts_added = 0;
@@ -1742,6 +1744,8 @@ RestrictedStageSolveResult solve_stage_impl(
         options.combinatorial_options.enabled;
     stage.model_result.combinatorial_benders_lift_mode =
         to_string(options.combinatorial_options.lift_mode);
+    stage.model_result.combinatorial_benders_scenario_order =
+        to_string(options.combinatorial_options.scenario_order);
     stage.model_result.combinatorial_benders_cut_sampling_ratio =
         options.combinatorial_options.cut_sampling_ratio;
     stage.model_result.combinatorial_benders_fractional_separation_enabled =
@@ -2005,6 +2009,8 @@ RestrictedStageSolveResult solve_stage_impl(
             options.combinatorial_options.enabled;
         callback_stats.combinatorial_stats.lift_mode =
             to_string(options.combinatorial_options.lift_mode);
+        callback_stats.combinatorial_stats.scenario_order =
+            to_string(options.combinatorial_options.scenario_order);
         callback_stats.combinatorial_stats.cut_sampling_ratio =
             options.combinatorial_options.cut_sampling_ratio;
         callback_stats.combinatorial_stats.fractional_separation_enabled =
@@ -2228,6 +2234,8 @@ RestrictedStageSolveResult solve_stage_impl(
             callback_stats.combinatorial_stats.enabled;
         stage.model_result.combinatorial_benders_lift_mode =
             callback_stats.combinatorial_stats.lift_mode;
+        stage.model_result.combinatorial_benders_scenario_order =
+            callback_stats.combinatorial_stats.scenario_order;
         stage.model_result.combinatorial_benders_cut_sampling_ratio =
             callback_stats.combinatorial_stats.cut_sampling_ratio;
         stage.model_result.combinatorial_benders_fractional_separation_enabled =

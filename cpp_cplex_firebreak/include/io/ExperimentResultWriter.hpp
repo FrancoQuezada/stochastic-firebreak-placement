@@ -131,6 +131,7 @@ struct StandardExperimentResult {
     std::vector<solver::BranchBendersIncumbentLog> branch_benders_incumbent_log;
     bool combinatorial_benders_enabled = false;
     std::string combinatorial_benders_lift_mode = "heuristic";
+    std::string combinatorial_benders_scenario_order = "eta-asc";
     double combinatorial_benders_cut_sampling_ratio = 0.10;
     bool combinatorial_benders_fractional_separation_enabled = true;
     bool combinatorial_benders_initial_cuts_enabled = true;

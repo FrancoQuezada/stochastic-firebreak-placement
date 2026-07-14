@@ -8,6 +8,9 @@ import csv
 import math
 import os
 from collections import Counter, defaultdict
+from pathlib import Path
+
+from fpp_new_instances_scaling_compact_schema import default_analysis_input_csv
 
 
 DEFAULT_RESULTS_DIR = "results/batch/fpp_new_instances_scaling"
@@ -65,6 +68,13 @@ def rel_diff(new, base):
 
 
 def objective_family(row):
+    obj_type = row.get("objective_type", "").strip().lower()
+    if obj_type == "cvar":
+        return "CVaR"
+    if obj_type in {"mean_cvar", "mean-cvar", "meancvar"}:
+        return "MeanCVaR"
+    if obj_type == "expected":
+        return "Expected"
     risk = row.get("risk_measure", "").strip().lower()
     method = row.get("method", "")
     if risk == "cvar" or "-CVaR" in method:
@@ -122,6 +132,27 @@ def method_family(row):
 
 def enrich(row):
     out = dict(row)
+    for target, sources in [
+        ("instance_id", ("instance_name", "landscape")),
+        ("instance_type", ("instance_group",)),
+        ("objective_in_sample", ("objective_value",)),
+        ("runtime_seconds", ("runtime_sec",)),
+        ("train_scenario_count", ("train_count",)),
+        ("test_scenario_count", ("test_count",)),
+        ("branch_benders_lazy_cuts_added", ("benders_lazy_cuts_added",)),
+        ("branch_benders_root_user_cuts_added", ("root_user_cuts_added",)),
+        ("benders_lifted_lower_bound_count", ("llbi_cuts_added",)),
+        ("train_worst_10pct_burned_area", ("train_worst10_burned_area",)),
+        ("test_worst_10pct_burned_area", ("test_worst10_burned_area",)),
+        ("train_evaluation_runtime_seconds", ("train_eval_runtime_sec",)),
+        ("test_evaluation_runtime_seconds", ("test_eval_runtime_sec",)),
+    ]:
+        if not is_missing(out.get(target)):
+            continue
+        for source in sources:
+            if not is_missing(row.get(source)):
+                out[target] = row.get(source, "")
+                break
     out["objective_family"] = objective_family(row)
     out["method_family"] = method_family(row)
     out["projected_llbi_family_reconstructed"] = projected_family(row)
@@ -129,8 +160,9 @@ def enrich(row):
     out["use_root_user_cuts_reconstructed"] = str(
         bool_text(row.get("branch_benders_use_root_user_cuts", "")) or row.get("method", "").endswith("-RootCuts")
     ).lower()
+    method_tokens = set(row.get("method", "").split("-"))
     out["use_lifted_lower_bounds_reconstructed"] = str(
-        bool_text(row.get("benders_use_lifted_lower_bounds", "")) or "LLBI" in row.get("method", "")
+        bool_text(row.get("benders_use_lifted_lower_bounds", "")) or "LLBI" in method_tokens
     ).lower()
     out["use_projected_llbi_reconstructed"] = str(projected_family(row) != "none").lower()
     out["use_combinatorial_benders_reconstructed"] = str(
@@ -190,7 +222,7 @@ def metric(row, *names):
 
 
 SUMMARY_METRICS = [
-    ("avg_objective_value", ("objective_in_sample",)),
+    ("avg_objective_value", ("objective_in_sample", "objective_value")),
     ("avg_best_bound", ("best_bound",)),
     ("avg_mip_gap", ("mip_gap",)),
     ("avg_runtime", ("runtime_seconds", "runtime_sec")),
@@ -198,9 +230,9 @@ SUMMARY_METRICS = [
     ("avg_test_expected_burned_area", ("test_expected_burned_area",)),
     ("avg_train_worst10_burned_area", ("train_worst_10pct_burned_area", "train_worst10_burned_area")),
     ("avg_test_worst10_burned_area", ("test_worst_10pct_burned_area", "test_worst10_burned_area")),
-    ("avg_lazy_benders_cuts_added", ("branch_benders_lazy_cuts_added",)),
-    ("avg_root_user_cuts_added", ("branch_benders_root_user_cuts_added",)),
-    ("avg_standard_llbi_cut_count", ("benders_lifted_lower_bound_count",)),
+    ("avg_lazy_benders_cuts_added", ("branch_benders_lazy_cuts_added", "benders_lazy_cuts_added")),
+    ("avg_root_user_cuts_added", ("branch_benders_root_user_cuts_added", "root_user_cuts_added")),
+    ("avg_standard_llbi_cut_count", ("benders_lifted_lower_bound_count", "llbi_cuts_added")),
     ("avg_projected_llbi_cut_count", ("projected_llbi_cuts_added",)),
     ("avg_root_separation_time", ("branch_benders_root_user_cut_total_time_sec", "projected_llbi_total_time_sec")),
     ("avg_subproblem_solving_time", ("branch_benders_subproblem_time_sec", "benders_subproblem_time_sec")),
@@ -208,6 +240,8 @@ SUMMARY_METRICS = [
 
 
 def combinatorial_cut_count(row):
+    if not is_missing(row.get("combinatorial_benders_cuts_added")):
+        return as_int(row.get("combinatorial_benders_cuts_added"))
     return (
         as_int(row.get("combinatorial_benders_integer_cuts_added"))
         + as_int(row.get("combinatorial_benders_fractional_cuts_added"))
@@ -277,48 +311,55 @@ def validate_splits(rows, manifest_rows, allow_partial=False):
     report = []
     ok = True
 
+    has_split_lists = any("train_ids" in row or "test_ids" in row for row in rows)
     groups = defaultdict(list)
     for row in rows:
         groups[controlled_key(row)].append(row)
-    for key, group in sorted(groups.items()):
-        train_ids = {row.get("train_ids", "") for row in group}
-        test_ids = {row.get("test_ids", "") for row in group}
-        if len(train_ids) != 1 or len(test_ids) != 1:
-            ok = False
-            report.append(f"SPLIT MISMATCH {key}: train_versions={len(train_ids)} test_versions={len(test_ids)}")
-    if ok:
-        report.append(f"PASS controlled split validation for {len(groups)} (instance_id, alpha, train_count, case_id) blocks.")
+    if has_split_lists:
+        for key, group in sorted(groups.items()):
+            train_ids = {row.get("train_ids", "") for row in group}
+            test_ids = {row.get("test_ids", "") for row in group}
+            if len(train_ids) != 1 or len(test_ids) != 1:
+                ok = False
+                report.append(f"SPLIT MISMATCH {key}: train_versions={len(train_ids)} test_versions={len(test_ids)}")
+        if ok:
+            report.append(f"PASS controlled split validation for {len(groups)} (instance_id, alpha, train_count, case_id) blocks.")
 
-    cross_alpha = defaultdict(list)
-    for row in rows:
-        cross_alpha[cross_alpha_key(row)].append(row)
-    for key, group in sorted(cross_alpha.items()):
-        train_ids = {row.get("train_ids", "") for row in group}
-        test_ids = {row.get("test_ids", "") for row in group}
-        if len(train_ids) != 1 or len(test_ids) != 1:
-            ok = False
-            report.append(f"CROSS-ALPHA SPLIT MISMATCH {key}: train_versions={len(train_ids)} test_versions={len(test_ids)}")
-    if ok:
-        report.append(f"PASS cross-alpha split reuse validation for {len(cross_alpha)} (instance_id, train_count, case_id) blocks.")
+        cross_alpha = defaultdict(list)
+        for row in rows:
+            cross_alpha[cross_alpha_key(row)].append(row)
+        for key, group in sorted(cross_alpha.items()):
+            train_ids = {row.get("train_ids", "") for row in group}
+            test_ids = {row.get("test_ids", "") for row in group}
+            if len(train_ids) != 1 or len(test_ids) != 1:
+                ok = False
+                report.append(f"CROSS-ALPHA SPLIT MISMATCH {key}: train_versions={len(train_ids)} test_versions={len(test_ids)}")
+        if ok:
+            report.append(f"PASS cross-alpha split reuse validation for {len(cross_alpha)} (instance_id, train_count, case_id) blocks.")
 
-    by_instance = defaultdict(list)
-    for row in rows:
-        by_instance[row.get("instance_id", "")].append(row)
-    for instance_id, group in sorted(by_instance.items()):
-        test_versions = {row.get("test_ids", "") for row in group}
-        if len(test_versions) != 1:
-            ok = False
-            report.append(f"FIXED-OOS MISMATCH {instance_id}: test_versions={len(test_versions)}")
-            continue
-        first = group[0]
-        expected = list(range(as_int(first.get("test_pool_min")), as_int(first.get("test_pool_max")) + 1))
-        actual = parse_ids(next(iter(test_versions)))
-        if expected and actual != expected:
-            ok = False
-            report.append(
-                f"FIXED-OOS RANGE MISMATCH {instance_id}: actual_count={len(actual)} expected_count={len(expected)}")
-    if ok:
-        report.append(f"PASS fixed OOS test-set validation for {len(by_instance)} instances.")
+        by_instance = defaultdict(list)
+        for row in rows:
+            by_instance[row.get("instance_id", "")].append(row)
+        for instance_id, group in sorted(by_instance.items()):
+            test_versions = {row.get("test_ids", "") for row in group}
+            if len(test_versions) != 1:
+                ok = False
+                report.append(f"FIXED-OOS MISMATCH {instance_id}: test_versions={len(test_versions)}")
+                continue
+            first = group[0]
+            expected = list(range(as_int(first.get("test_pool_min")), as_int(first.get("test_pool_max")) + 1))
+            actual = parse_ids(next(iter(test_versions)))
+            if expected and actual != expected:
+                ok = False
+                report.append(
+                    f"FIXED-OOS RANGE MISMATCH {instance_id}: actual_count={len(actual)} expected_count={len(expected)}")
+        if ok:
+            report.append(f"PASS fixed OOS test-set validation for {len(by_instance)} instances.")
+    else:
+        report.append(
+            "SKIP split-list validation: compact input omits train_ids/test_ids; "
+            "manifest split paths remain the source of deterministic split reuse."
+        )
 
     expected_methods = len({row.get("method", "") for row in manifest_rows}) if manifest_rows else len({row.get("method", "") for row in rows})
     block_counts = Counter(controlled_key(row) for row in rows)
@@ -473,7 +514,7 @@ def main():
     )
     args = parser.parse_args()
 
-    input_csv = args.input_csv or os.path.join(args.results_dir, "batch_results_all.csv")
+    input_csv = args.input_csv or str(default_analysis_input_csv(Path(args.results_dir), args.allow_partial))
     if not os.path.exists(input_csv):
         raise SystemExit(f"Missing input CSV: {input_csv}")
 
@@ -485,6 +526,7 @@ def main():
     validation_lines.append(f"Allow partial: {str(args.allow_partial).lower()}")
     validation_lines.append(f"Expected methods per block: {expected_methods}")
     validation_lines.append(f"Total rows: {len(rows)}")
+    validation_lines.append(f"Input CSV: {input_csv}")
 
     output_dir = args.results_dir
     summary_fields = [

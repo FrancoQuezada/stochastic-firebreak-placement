@@ -15,10 +15,17 @@ enum class FppCombinatorialBendersLiftMode {
     Heuristic,
 };
 
+enum class FppCombinatorialBendersScenarioOrder {
+    EtaAscending,
+    EtaDescending,
+};
+
 struct FppCombinatorialBendersOptions {
     bool enabled = false;
     FppCombinatorialBendersLiftMode lift_mode =
         FppCombinatorialBendersLiftMode::Heuristic;
+    FppCombinatorialBendersScenarioOrder scenario_order =
+        FppCombinatorialBendersScenarioOrder::EtaAscending;
     double cut_sampling_ratio = 0.10;
     bool separate_fractional = true;
     bool initial_cuts = true;
@@ -51,6 +58,7 @@ struct FppCombinatorialSeparationSummary {
 struct FppCombinatorialBendersStats {
     bool enabled = false;
     std::string lift_mode = "heuristic";
+    std::string scenario_order = "eta-asc";
     double cut_sampling_ratio = 0.10;
     bool fractional_separation_enabled = true;
     bool initial_cuts_enabled = true;
@@ -73,6 +81,12 @@ struct FppCombinatorialBendersStats {
 std::string to_string(FppCombinatorialBendersLiftMode mode);
 FppCombinatorialBendersLiftMode parse_fpp_combinatorial_benders_lift_mode(
     const std::string& value);
+std::string to_string(FppCombinatorialBendersScenarioOrder order);
+FppCombinatorialBendersScenarioOrder parse_fpp_combinatorial_benders_scenario_order(
+    const std::string& value);
+std::vector<int> order_fpp_combinatorial_scenarios_by_eta(
+    const std::vector<double>& eta_values_by_scenario,
+    FppCombinatorialBendersScenarioOrder order);
 
 void validate_fpp_combinatorial_benders_options(
     const FppCombinatorialBendersOptions& options);
@@ -94,6 +108,7 @@ public:
         const std::vector<double>& eta_values_by_scenario,
         bool fractional,
         FppCombinatorialBendersLiftMode lift_mode,
+        FppCombinatorialBendersScenarioOrder scenario_order,
         double cut_sampling_ratio,
         double tolerance) const;
 

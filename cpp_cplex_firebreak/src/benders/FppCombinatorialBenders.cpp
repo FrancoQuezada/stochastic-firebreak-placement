@@ -113,6 +113,55 @@ FppCombinatorialBendersLiftMode parse_fpp_combinatorial_benders_lift_mode(
         ". Supported values are none, posterior, heuristic.");
 }
 
+std::string to_string(FppCombinatorialBendersScenarioOrder order) {
+    switch (order) {
+        case FppCombinatorialBendersScenarioOrder::EtaAscending:
+            return "eta-asc";
+        case FppCombinatorialBendersScenarioOrder::EtaDescending:
+            return "eta-desc";
+    }
+    return "eta-asc";
+}
+
+FppCombinatorialBendersScenarioOrder parse_fpp_combinatorial_benders_scenario_order(
+    const std::string& value) {
+    const std::string key = normalized_key(value);
+    if (key == "etaasc" || key == "ascendingeta" || key == "asc") {
+        return FppCombinatorialBendersScenarioOrder::EtaAscending;
+    }
+    if (key == "etadesc" || key == "descendingeta" || key == "desc") {
+        return FppCombinatorialBendersScenarioOrder::EtaDescending;
+    }
+    throw std::runtime_error(
+        "Unsupported FPP combinatorial Benders scenario order: " + value +
+        ". Supported values are eta-asc, eta-desc.");
+}
+
+std::vector<int> order_fpp_combinatorial_scenarios_by_eta(
+    const std::vector<double>& eta_values_by_scenario,
+    FppCombinatorialBendersScenarioOrder order) {
+    std::vector<int> ordered;
+    ordered.reserve(eta_values_by_scenario.size());
+    for (std::size_t s = 0; s < eta_values_by_scenario.size(); ++s) {
+        ordered.push_back(static_cast<int>(s));
+    }
+    std::sort(
+        ordered.begin(),
+        ordered.end(),
+        [&eta_values_by_scenario, order](int lhs, int rhs) {
+            const double lhs_eta = eta_values_by_scenario[static_cast<std::size_t>(lhs)];
+            const double rhs_eta = eta_values_by_scenario[static_cast<std::size_t>(rhs)];
+            if (std::fabs(lhs_eta - rhs_eta) > 1.0e-12) {
+                if (order == FppCombinatorialBendersScenarioOrder::EtaDescending) {
+                    return lhs_eta > rhs_eta;
+                }
+                return lhs_eta < rhs_eta;
+            }
+            return lhs < rhs;
+        });
+    return ordered;
+}
+
 void validate_fpp_combinatorial_benders_options(
     const FppCombinatorialBendersOptions& options) {
     if (options.cut_sampling_ratio <= 0.0 || options.cut_sampling_ratio > 1.0) {
@@ -301,6 +350,7 @@ FppCombinatorialBendersSeparator::separateViolatedCuts(
     const std::vector<double>& eta_values_by_scenario,
     bool fractional,
     FppCombinatorialBendersLiftMode lift_mode,
+    FppCombinatorialBendersScenarioOrder scenario_order,
     double cut_sampling_ratio,
     double tolerance) const {
     if (eta_values_by_scenario.size() != opt_.scenarios.size()) {
@@ -309,22 +359,8 @@ FppCombinatorialBendersSeparator::separateViolatedCuts(
     }
     FppCombinatorialSeparationSummary summary;
     const auto start = std::chrono::steady_clock::now();
-    std::vector<int> order;
-    order.reserve(opt_.scenarios.size());
-    for (std::size_t s = 0; s < opt_.scenarios.size(); ++s) {
-        order.push_back(static_cast<int>(s));
-    }
-    std::sort(
-        order.begin(),
-        order.end(),
-        [&eta_values_by_scenario](int lhs, int rhs) {
-            const double lhs_eta = eta_values_by_scenario[static_cast<std::size_t>(lhs)];
-            const double rhs_eta = eta_values_by_scenario[static_cast<std::size_t>(rhs)];
-            if (std::fabs(lhs_eta - rhs_eta) > 1.0e-12) {
-                return lhs_eta < rhs_eta;
-            }
-            return lhs < rhs;
-        });
+    const std::vector<int> order =
+        order_fpp_combinatorial_scenarios_by_eta(eta_values_by_scenario, scenario_order);
 
     const int max_violated = sampled_cut_limit(cut_sampling_ratio, opt_.scenarios.size());
     for (const int scenario_position : order) {

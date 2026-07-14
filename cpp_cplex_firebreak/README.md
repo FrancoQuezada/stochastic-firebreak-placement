@@ -84,10 +84,10 @@ as likely 40x40 data: declared 10000 cells, inferred 1600 cells.
 
 ## Methods
 
-The default method file has 18 labels:
+The default method file has 21 labels:
 
 ```text
-6 method families x 3 objectives = 18 methods
+6 method families x 3 objectives + 3 eta-desc combinatorial variants = 21 methods
 ```
 
 Objectives:
@@ -100,6 +100,58 @@ MeanCVaR
 
 The projected LLBI variants used by this experiment are the `exp` variants
 only. The old `poly` variants are not part of this experiment.
+
+### Combinatorial Benders Cut Sampling
+
+The combinatorial Branch-and-Benders methods use:
+
+```text
+combinatorial_benders_cut_sampling_ratio = 0.10
+```
+
+This ratio limits how many violated combinatorial Benders cuts are added each
+time the callback separates cuts. The limit is:
+
+```text
+ceil(combinatorial_benders_cut_sampling_ratio * train_scenario_count)
+```
+
+with a minimum of one cut. For the default 20x20 runs this means:
+
+```text
+train_count = 100 -> at most 10 violated cuts per callback
+train_count = 200 -> at most 20 violated cuts per callback
+```
+
+The code does not sample these cuts randomly. It orders scenarios by increasing
+eta value and separates in that order until the limit of violated cuts is
+reached. The same ratio is used for lazy cuts at integer candidate solutions
+and, when `combinatorial_benders_separate_fractional=true`, for user cuts at
+fractional relaxations. For CVaR methods such as
+`FPP-Branch-Benders-Combinatorial-CVaR`, this parameter does not define the CVaR
+tail; it only controls callback cut aggressiveness.
+
+The scenario ordering is configurable with:
+
+```text
+--combinatorial-benders-scenario-order eta-asc|eta-desc
+```
+
+`eta-asc` is the default and preserves the previous behavior. The official
+eta-desc variants are:
+
+```text
+FPP-Branch-Benders-Combinatorial-EtaDesc
+FPP-Branch-Benders-Combinatorial-CVaR-EtaDesc
+FPP-Branch-Benders-Combinatorial-MeanCVaR-EtaDesc
+```
+
+Each one is identical to its corresponding base combinatorial method except
+that violated combinatorial cuts are searched after ordering scenarios by
+decreasing eta value. For the expected-value variant, this is an alternative
+cut-priority rule. For CVaR and mean-CVaR variants, it is a tail-oriented
+heuristic based on the master's current scenario-loss approximation; it does not
+change the risk objective or exactly identify the CVaR tail.
 
 ## Default Experiment Grid
 
@@ -196,6 +248,7 @@ The partial merge writes:
 
 ```text
 batch_results_partial.csv
+batch_results_partial_compact.csv
 merge_report_partial.txt
 summary_by_instance_objective_alpha_traincount_method.csv
 summary_by_instance_alpha_traincount_method.csv
@@ -204,6 +257,12 @@ projected_llbi_comparison.csv
 rootcuts_llbi_impact.csv
 validation_report.txt
 ```
+
+Full merges also keep the detailed `batch_results_all.csv` and write the
+analysis-ready `batch_results_compact.csv`. The analysis script prefers the
+compact file when it is present. Compact results keep aggregate graph-type
+proportions as numeric train/test/instance columns, while scenario ID lists and
+per-scenario graph classifications remain out of the compact CSV.
 
 ## Generated Files
 

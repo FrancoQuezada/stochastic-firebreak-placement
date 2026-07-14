@@ -8,6 +8,8 @@ import csv
 from collections import Counter
 from pathlib import Path
 
+from fpp_new_instances_scaling_compact_schema import compact_csv_path_for, write_compact_csv
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -31,11 +33,111 @@ def read_csv(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(inp))
 
 
+OMIT_FIELDS = {
+    "projected_llbi_family",
+    "projected_llbi_variant",
+    "use_root_user_cuts",
+    "use_lifted_lower_bounds",
+    "use_projected_llbi",
+    "use_projected_coverage_llbi_poly",
+    "use_projected_path_llbi_poly",
+    "use_projected_coverage_llbi_exp",
+    "use_projected_path_llbi_exp",
+    "use_combinatorial_benders",
+    "combinatorial_benders_lift",
+    "combinatorial_benders_cut_sampling_ratio",
+    "combinatorial_benders_separate_fractional",
+    "combinatorial_benders_initial_cuts",
+    "projected_llbi_root_rounds",
+    "projected_llbi_max_cuts_per_round",
+    "projected_llbi_violation_tolerance",
+    "projected_llbi_cut_density_limit",
+    "projected_poly_max_cuts",
+    "split_dir",
+    "output_dir",
+    "output_csv",
+    "output_json",
+    "solution_dir",
+    "run_id",
+    "solver_command",
+    "worker_status",
+    "worker_return_code",
+    "worker_started_at_epoch",
+    "worker_finished_at_epoch",
+    "worker_command",
+    "worker_log",
+    "configured_mip_gap",
+    "solver_mip_gap",
+    "global_dominance_enabled",
+    "global_dominance_candidates_removed",
+    "global_dominance_equivalence_classes",
+    "global_dominance_precompute_time_sec",
+    "conditional_zero_benefit_enabled",
+    "conditional_zero_benefit_fixings_attempted",
+    "conditional_zero_benefit_fixings_applied",
+    "conditional_zero_benefit_time_sec",
+    "branch_benders_use_root_user_cuts",
+    "branch_benders_root_user_cuts_added",
+    "branch_benders_root_user_cut_rounds",
+    "branch_benders_root_user_cut_max_violation",
+    "restricted_candidate_enabled",
+    "restricted_candidate_exact_mode",
+    "restricted_candidate_initial_active_count",
+    "restricted_candidate_final_active_count",
+    "restricted_candidate_final_active_fraction",
+    "restricted_candidate_eventually_activated_all",
+    "restricted_candidate_rounds",
+    "restricted_candidate_cut_pool_size",
+    "restricted_candidate_heuristic_mode_enabled",
+    "restricted_candidate_stopped_before_full_activation",
+    "restricted_candidate_global_optimality_certified",
+    "formulation",
+    "dominator_cuts_enabled",
+    "separator_cuts_enabled",
+    "greedy_warm_start_enabled",
+    "local_search_enabled",
+    "compact_node_count",
+    "eligible_node_count",
+    "total_observed_scenario_nodes",
+    "total_scenario_arcs",
+    "separator_cuts_added",
+    "separator_min_cut_calls",
+    "separator_callback_invocations",
+    "separator_duplicate_cuts_skipped",
+    "separator_large_cuts_skipped",
+    "separator_time_sec",
+    "dominator_cuts_added",
+    "dominator_aggregate_cuts_added",
+    "dominator_individual_cuts_added",
+    "dominator_dag_scenarios",
+    "dominator_fallback_scenarios",
+    "dominator_preprocessing_time_sec",
+    "heuristic_time_sec",
+    "heuristic_objective",
+    "heuristic_exact_evaluations",
+    "heuristic_selected_count",
+    "evaluator_objective",
+    "evaluator_abs_diff",
+    "evaluator_rel_diff",
+    "validation_status",
+    "train_cvar_burned_area",
+    "test_cvar_burned_area",
+    "selected_firebreaks",
+    "warm_start_used",
+    "mip_start_accepted",
+    "warm_start_source",
+    "warm_start_valid_nodes",
+    "warm_start_ignored_nodes",
+    "warm_start_notes",
+}
+
 def write_csv(path: Path, rows: list[dict[str, str]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fields: list[str] = []
     for row in rows:
         for field in row:
+            if field in OMIT_FIELDS:
+                continue
             if field not in fields:
                 fields.append(field)
     with path.open("w", newline="", encoding="utf-8") as out:
@@ -144,6 +246,8 @@ def main() -> int:
     else:
         combined_csv = args.results_dir / "batch_results_all.csv"
     write_csv(combined_csv, merged)
+    compact_csv = compact_csv_path_for(combined_csv, args.results_dir, args.allow_partial)
+    write_compact_csv(compact_csv, merged, default_experiment_id=args.results_dir.name)
     report_path = args.results_dir / ("merge_report_partial.txt" if args.allow_partial else "merge_report.txt")
     report_path.write_text(
         "\n".join([
@@ -157,6 +261,7 @@ def main() -> int:
             f"methods_per_worker={expected_methods}",
             f"allow_partial={str(args.allow_partial).lower()}",
             f"combined_csv={combined_csv}",
+            f"compact_csv={compact_csv}",
             "",
             *report,
             "",
@@ -164,6 +269,7 @@ def main() -> int:
         encoding="utf-8",
     )
     print(f"Merged {len(merged)} rows into {combined_csv}")
+    print(f"Wrote compact results to {compact_csv}")
     if args.allow_partial:
         print(f"Partial merge report: {report_path}")
     return 0

@@ -145,12 +145,26 @@ void test_initial_cuts_and_sampling() {
         eta,
         false,
         firebreak::benders::FppCombinatorialBendersLiftMode::Heuristic,
+        firebreak::benders::FppCombinatorialBendersScenarioOrder::EtaAscending,
         0.20,
         1.0e-7);
     assert(summary.cuts.size() == 2);
     assert(summary.violated_cuts == 2);
     assert(summary.scenarios_checked == 2);
     assert(summary.scenarios_skipped == 8);
+}
+
+void test_scenario_ordering() {
+    const std::vector<double> eta = {3.0, 1.0, 3.0, 2.0};
+    const auto asc = firebreak::benders::order_fpp_combinatorial_scenarios_by_eta(
+        eta,
+        firebreak::benders::FppCombinatorialBendersScenarioOrder::EtaAscending);
+    assert((asc == std::vector<int>{1, 3, 0, 2}));
+
+    const auto desc = firebreak::benders::order_fpp_combinatorial_scenarios_by_eta(
+        eta,
+        firebreak::benders::FppCombinatorialBendersScenarioOrder::EtaDescending);
+    assert((desc == std::vector<int>{0, 2, 3, 1}));
 }
 
 void test_lift_mode_parser() {
@@ -163,6 +177,16 @@ void test_lift_mode_parser() {
     assert(
         firebreak::benders::parse_fpp_combinatorial_benders_lift_mode("heuristic") ==
         firebreak::benders::FppCombinatorialBendersLiftMode::Heuristic);
+    assert(
+        firebreak::benders::parse_fpp_combinatorial_benders_scenario_order("eta-asc") ==
+        firebreak::benders::FppCombinatorialBendersScenarioOrder::EtaAscending);
+    assert(
+        firebreak::benders::parse_fpp_combinatorial_benders_scenario_order("eta-desc") ==
+        firebreak::benders::FppCombinatorialBendersScenarioOrder::EtaDescending);
+    assert(
+        firebreak::benders::to_string(
+            firebreak::benders::FppCombinatorialBendersScenarioOrder::EtaDescending) ==
+        "eta-desc");
 }
 
 }  // namespace
@@ -173,6 +197,7 @@ int main() {
     test_fractional_separation_on_dag();
     test_heuristic_lift_counts_candidate_once_per_path();
     test_initial_cuts_and_sampling();
+    test_scenario_ordering();
     test_lift_mode_parser();
     std::cout << "All FPP combinatorial Benders tests passed.\n";
     return 0;

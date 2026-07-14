@@ -83,6 +83,8 @@ void write_evaluation_json(
     out << ",\n";
     out << "  \"expected_burned_area\": " << result.expected_burned_area << ",\n";
     out << "  \"worst_10pct_burned_area\": " << result.worst_10pct_burned_area << ",\n";
+    out << "  \"empirical_var_90pct_burned_area\": " << result.empirical_var_90pct_burned_area << ",\n";
+    out << "  \"empirical_cvar_90pct_burned_area\": " << result.empirical_cvar_90pct_burned_area << ",\n";
     out << "  \"total_runtime_seconds\": " << result.total_runtime_seconds << ",\n";
     out << "  \"scenarios\": [\n";
     for (std::size_t i = 0; i < result.per_scenario_results.size(); ++i) {

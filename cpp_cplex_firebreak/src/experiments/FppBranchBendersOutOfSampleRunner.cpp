@@ -103,6 +103,11 @@ std::string method_label_for_options(
     } else if (config.type == risk::RiskMeasureType::MeanCVaR) {
         label += "-MeanCVaR";
     }
+    if (combinatorial_options.enabled &&
+        combinatorial_options.scenario_order ==
+            benders::FppCombinatorialBendersScenarioOrder::EtaDescending) {
+        label += "-EtaDesc";
+    }
     if (use_lifted_lower_bounds) {
         label += "-LLBI";
     }
@@ -470,6 +475,8 @@ int FppBranchBendersOutOfSampleRunner::run(
     result.combinatorial_benders_enabled = solve_result.combinatorial_benders_enabled;
     result.combinatorial_benders_lift_mode =
         solve_result.combinatorial_benders_lift_mode;
+    result.combinatorial_benders_scenario_order =
+        solve_result.combinatorial_benders_scenario_order;
     result.combinatorial_benders_cut_sampling_ratio =
         solve_result.combinatorial_benders_cut_sampling_ratio;
     result.combinatorial_benders_fractional_separation_enabled =

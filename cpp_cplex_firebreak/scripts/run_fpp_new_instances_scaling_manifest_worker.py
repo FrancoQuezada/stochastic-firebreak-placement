@@ -14,6 +14,7 @@ import sys
 import time
 from pathlib import Path
 
+from fpp_new_instances_scaling_compact_schema import graph_ratio_columns, parse_graph_ratio_summary
 
 WORKER_FIELDS = [
     "worker_status",
@@ -26,7 +27,115 @@ WORKER_FIELDS = [
     "solver_method",
     "configured_mip_gap",
     "solver_mip_gap",
+    "paired_reburn_status",
+    "paired_reburn_return_code",
+    "paired_reburn_eval_command",
+    "paired_reburn_train_expected_burned_area",
+    "paired_reburn_train_worst_10pct_burned_area",
+    "paired_reburn_train_empirical_var_90pct_burned_area",
+    "paired_reburn_train_empirical_cvar_90pct_burned_area",
+    "paired_reburn_train_evaluation_runtime_seconds",
+    "paired_reburn_train_eval_runtime_sec",
+    "paired_reburn_train_scenario_count",
 ]
+
+OMIT_FIELDS = {
+    "projected_llbi_family",
+    "projected_llbi_variant",
+    "use_root_user_cuts",
+    "use_lifted_lower_bounds",
+    "use_projected_llbi",
+    "use_projected_coverage_llbi_poly",
+    "use_projected_path_llbi_poly",
+    "use_projected_coverage_llbi_exp",
+    "use_projected_path_llbi_exp",
+    "use_combinatorial_benders",
+    "combinatorial_benders_lift",
+    "combinatorial_benders_cut_sampling_ratio",
+    "combinatorial_benders_separate_fractional",
+    "combinatorial_benders_initial_cuts",
+    "projected_llbi_root_rounds",
+    "projected_llbi_max_cuts_per_round",
+    "projected_llbi_violation_tolerance",
+    "projected_llbi_cut_density_limit",
+    "projected_poly_max_cuts",
+    "split_dir",
+    "output_dir",
+    "output_csv",
+    "output_json",
+    "solution_dir",
+    "run_id",
+    "solver_command",
+    "worker_status",
+    "worker_return_code",
+    "worker_started_at_epoch",
+    "worker_finished_at_epoch",
+    "worker_command",
+    "worker_log",
+    "configured_mip_gap",
+    "solver_mip_gap",
+    "global_dominance_enabled",
+    "global_dominance_candidates_removed",
+    "global_dominance_equivalence_classes",
+    "global_dominance_precompute_time_sec",
+    "conditional_zero_benefit_enabled",
+    "conditional_zero_benefit_fixings_attempted",
+    "conditional_zero_benefit_fixings_applied",
+    "conditional_zero_benefit_time_sec",
+    "branch_benders_use_root_user_cuts",
+    "branch_benders_root_user_cuts_added",
+    "branch_benders_root_user_cut_rounds",
+    "branch_benders_root_user_cut_max_violation",
+    "restricted_candidate_enabled",
+    "restricted_candidate_exact_mode",
+    "restricted_candidate_initial_active_count",
+    "restricted_candidate_final_active_count",
+    "restricted_candidate_final_active_fraction",
+    "restricted_candidate_eventually_activated_all",
+    "restricted_candidate_rounds",
+    "restricted_candidate_cut_pool_size",
+    "restricted_candidate_heuristic_mode_enabled",
+    "restricted_candidate_stopped_before_full_activation",
+    "restricted_candidate_global_optimality_certified",
+    "formulation",
+    "dominator_cuts_enabled",
+    "separator_cuts_enabled",
+    "greedy_warm_start_enabled",
+    "local_search_enabled",
+    "compact_node_count",
+    "eligible_node_count",
+    "total_observed_scenario_nodes",
+    "total_scenario_arcs",
+    "separator_cuts_added",
+    "separator_min_cut_calls",
+    "separator_callback_invocations",
+    "separator_duplicate_cuts_skipped",
+    "separator_large_cuts_skipped",
+    "separator_time_sec",
+    "dominator_cuts_added",
+    "dominator_aggregate_cuts_added",
+    "dominator_individual_cuts_added",
+    "dominator_dag_scenarios",
+    "dominator_fallback_scenarios",
+    "dominator_preprocessing_time_sec",
+    "heuristic_time_sec",
+    "heuristic_objective",
+    "heuristic_exact_evaluations",
+    "heuristic_selected_count",
+    "evaluator_objective",
+    "evaluator_abs_diff",
+    "evaluator_rel_diff",
+    "validation_status",
+    "train_cvar_burned_area",
+    "test_cvar_burned_area",
+    "selected_firebreaks",
+    "warm_start_used",
+    "mip_start_accepted",
+    "warm_start_source",
+    "warm_start_valid_nodes",
+    "warm_start_ignored_nodes",
+    "warm_start_notes",
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -110,6 +219,33 @@ def find_binary(explicit: Path | None) -> Path:
     raise RuntimeError("Could not find firebreak_cpp binary. Build first or set FIREBREAK_BIN.")
 
 
+def load_instance_config(path: Path) -> dict[str, dict[str, str]]:
+    if not path.exists():
+        raise RuntimeError(f"Missing instance config: {path}")
+    with path.open(newline="", encoding="utf-8") as inp:
+        rows = list(csv.DictReader(inp))
+    config: dict[str, dict[str, str]] = {}
+    for row in rows:
+        instance_id = row.get("instance_id", "")
+        if not instance_id:
+            raise RuntimeError(f"Instance config row missing instance_id: {row}")
+        if instance_id in config:
+            raise RuntimeError(f"Duplicate instance_id in config: {instance_id}")
+        config[instance_id] = row
+    return config
+
+
+def paired_reburn_instance_id(instance_id: str) -> str | None:
+    if instance_id.endswith("_reburn"):
+        return None
+    return f"{instance_id}_reburn"
+
+
+def read_csv(path: Path) -> list[dict[str, str]]:
+    with path.open(newline="", encoding="utf-8") as inp:
+        return list(csv.DictReader(inp))
+
+
 def load_manifest(path: Path, worker_id: str) -> list[dict[str, str]]:
     if not path.exists():
         raise RuntimeError(f"Missing worker manifest: {path}")
@@ -127,18 +263,35 @@ def load_existing(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(inp))
 
 
+def pair_to_reburn_matrix(config: dict[str, dict[str, str]]) -> dict[str, str]:
+    pairs: dict[str, str] = {}
+    for instance_id in config:
+        reburn_id = paired_reburn_instance_id(instance_id)
+        if reburn_id and reburn_id in config:
+            pairs[instance_id] = reburn_id
+    return pairs
+
+
 def row_complete(row: dict[str, str]) -> bool:
-    return row.get("worker_return_code") == "0" and bool(row.get("solver_status") or row.get("status"))
+    if row.get("worker_return_code") == "0":
+        return bool(row.get("solver_status") or row.get("status"))
+    if row.get("worker_status", "").lower() == "ok":
+        return bool(row.get("solver_status") or row.get("status"))
+    return bool(row.get("solver_status") or row.get("status"))
 
 
 def write_worker_csv(path: Path, rows: list[dict[str, str]], manifest_fields: list[str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fields: list[str] = []
     for field in manifest_fields + WORKER_FIELDS:
+        if field in OMIT_FIELDS:
+            continue
         if field not in fields:
             fields.append(field)
     for row in rows:
         for field in row:
+            if field in OMIT_FIELDS:
+                continue
             if field not in fields:
                 fields.append(field)
     with path.open("w", newline="", encoding="utf-8") as out:
@@ -224,10 +377,44 @@ def build_command(
         args.extend([
             "--combinatorial-benders-lift", row["combinatorial_benders_lift"],
             "--combinatorial-benders-cut-sampling-ratio", row["combinatorial_benders_cut_sampling_ratio"],
+            "--combinatorial-benders-scenario-order", row.get("combinatorial_benders_scenario_order", "eta-asc"),
             "--combinatorial-benders-separate-fractional", row["combinatorial_benders_separate_fractional"],
             "--combinatorial-benders-initial-cuts", row["combinatorial_benders_initial_cuts"],
         ])
     return args
+
+
+def build_paired_reburn_evaluation_command(
+    binary: Path,
+    reburn_row: dict[str, str],
+    train_ids: list[int],
+    firebreaks_csv: Path,
+    output_json: Path,
+) -> list[str]:
+    return [
+        str(binary),
+        "evaluate",
+        "--landscape", reburn_row["landscape"],
+        "--forest-path", reburn_row["forest_path"],
+        "--results-path", reburn_row["results_path"],
+        "--scenario-ids", ids_arg(train_ids),
+        "--firebreaks", str(firebreaks_csv),
+        "--output", str(output_json),
+    ]
+
+
+def parse_paired_reburn_evaluation_json(path: Path) -> dict[str, str]:
+    if not path.exists():
+        raise RuntimeError(f"Paired reburn evaluation JSON missing: {path}")
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    return {
+        "paired_reburn_train_expected_burned_area": str(payload.get("expected_burned_area", "")),
+        "paired_reburn_train_worst_10pct_burned_area": str(payload.get("worst_10pct_burned_area", "")),
+        "paired_reburn_train_empirical_var_90pct_burned_area": str(payload.get("empirical_var_90pct_burned_area", "")),
+        "paired_reburn_train_empirical_cvar_90pct_burned_area": str(payload.get("empirical_cvar_90pct_burned_area", "")),
+        "paired_reburn_train_evaluation_runtime_seconds": str(payload.get("total_runtime_seconds", "")),
+        "paired_reburn_train_scenario_count": str(len(payload.get("scenarios", []))),
+    }
 
 
 def read_single_solver_row(path: Path) -> dict[str, str]:
@@ -314,6 +501,9 @@ def merged_result(
     out["worker_runtime_seconds"] = f"{finished - started:.6f}"
     out["worker_command"] = " ".join(shlex.quote(part) for part in command)
     out["worker_log"] = str(log_path)
+    out.update(graph_ratio_columns("train", parse_graph_ratio_summary(out.get("train_graph_classification_ratios", ""))))
+    out.update(graph_ratio_columns("test", parse_graph_ratio_summary(out.get("test_graph_classification_ratios", ""))))
+    out.update(graph_ratio_columns("instance", parse_graph_ratio_summary(out.get("instance_graph_classification_ratios", ""))))
     return out
 
 
@@ -380,6 +570,33 @@ def main() -> int:
         completed_row = merged_result(
             row, solver_row, train_ids=train_ids, test_ids=test_ids, command=command,
             log_path=log_path, return_code=0, started=started, finished=finished)
+
+        instance_config = load_instance_config(Path("config/fpp_new_instances_scaling_instances.csv"))
+        reburn_pairs = pair_to_reburn_matrix(instance_config)
+        paired_reburn_id = reburn_pairs.get(row["instance_id"])
+        if paired_reburn_id is not None:
+            reburn_row = instance_config[paired_reburn_id]
+            reburn_eval_json = output_dir / "json" / f"{task_id}_paired_reburn_eval.json"
+            reburn_command = build_paired_reburn_evaluation_command(
+                binary, reburn_row, train_ids, Path(row["solution_dir"]) / f"{row['task_id']}.csv", reburn_eval_json)
+            completed_row["paired_reburn_eval_command"] = " ".join(shlex.quote(part) for part in reburn_command)
+            reburn_started = time.time()
+            with log_path.open("a", encoding="utf-8") as log:
+                log.write("\nPAIRED REBURN COMMAND: " + " ".join(shlex.quote(part) for part in reburn_command) + "\n")
+                log.flush()
+                paired_completed = subprocess.run(reburn_command, stdout=log, stderr=subprocess.STDOUT)
+            reburn_finished = time.time()
+            if paired_completed.returncode != 0:
+                completed_row["paired_reburn_status"] = "failed"
+                completed_row["paired_reburn_return_code"] = str(paired_completed.returncode)
+            else:
+                completed_row["paired_reburn_status"] = "ok"
+                completed_row["paired_reburn_return_code"] = "0"
+                completed_row.update(parse_paired_reburn_evaluation_json(reburn_eval_json))
+                completed_row["paired_reburn_train_eval_runtime_sec"] = str(reburn_finished - reburn_started)
+        else:
+            completed_row["paired_reburn_status"] = "n/a"
+
         by_task[task_id] = completed_row
         final_rows = [r for r in final_rows if r.get("task_id") != task_id] + [completed_row]
         final_rows.sort(key=lambda r: r.get("task_id", ""))

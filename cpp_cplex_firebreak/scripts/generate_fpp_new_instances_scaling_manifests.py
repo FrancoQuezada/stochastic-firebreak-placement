@@ -58,6 +58,7 @@ FIELDS = [
     "use_combinatorial_benders",
     "combinatorial_benders_lift",
     "combinatorial_benders_cut_sampling_ratio",
+    "combinatorial_benders_scenario_order",
     "combinatorial_benders_separate_fractional",
     "combinatorial_benders_initial_cuts",
     "projected_llbi_root_rounds",
@@ -378,6 +379,7 @@ def method_flags(method: str) -> dict[str, str]:
     tokens = method.split("-")
     use_standard_llbi = "LLBI" in tokens
     use_root = method.endswith("-RootCuts")
+    scenario_order = "eta-desc" if method.endswith("-EtaDesc") else "eta-asc"
     return {
         "method_family": "FPP-SAA" if is_saa else (
             "FPP-Branch-Benders-Combinatorial" if is_combinatorial else "FPP-Branch-Benders"),
@@ -393,6 +395,7 @@ def method_flags(method: str) -> dict[str, str]:
         "use_projected_coverage_llbi_exp": bool_text(projected_family == "coverage" and projected_variant == "exp"),
         "use_projected_path_llbi_exp": bool_text(projected_family == "path" and projected_variant == "exp"),
         "use_combinatorial_benders": bool_text(is_combinatorial),
+        "combinatorial_benders_scenario_order": scenario_order,
     }
 
 
@@ -485,6 +488,7 @@ def row_for_method(
         "use_combinatorial_benders": flags["use_combinatorial_benders"],
         "combinatorial_benders_lift": "heuristic",
         "combinatorial_benders_cut_sampling_ratio": "0.10",
+        "combinatorial_benders_scenario_order": flags["combinatorial_benders_scenario_order"],
         "combinatorial_benders_separate_fractional": "true",
         "combinatorial_benders_initial_cuts": "true",
         "projected_llbi_root_rounds": str(projected_llbi_root_rounds),

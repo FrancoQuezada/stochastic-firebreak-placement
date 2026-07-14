@@ -953,6 +953,7 @@ private:
             eta_values,
             false,
             combinatorial_options_.lift_mode,
+            combinatorial_options_.scenario_order,
             combinatorial_options_.cut_sampling_ratio,
             tolerance_);
 
@@ -1056,6 +1057,7 @@ private:
             eta_values,
             true,
             combinatorial_options_.lift_mode,
+            combinatorial_options_.scenario_order,
             combinatorial_options_.cut_sampling_ratio,
             tolerance_);
 
@@ -1203,6 +1205,8 @@ solver::ModelResult FppBranchBendersSolver::solve(
     result.combinatorial_benders_enabled = options.combinatorial_options.enabled;
     result.combinatorial_benders_lift_mode =
         to_string(options.combinatorial_options.lift_mode);
+    result.combinatorial_benders_scenario_order =
+        to_string(options.combinatorial_options.scenario_order);
     result.combinatorial_benders_cut_sampling_ratio =
         options.combinatorial_options.cut_sampling_ratio;
     result.combinatorial_benders_fractional_separation_enabled =
@@ -1657,6 +1661,8 @@ solver::ModelResult FppBranchBendersSolver::solve(
         callback_stats.combinatorial_stats.enabled = options.combinatorial_options.enabled;
         callback_stats.combinatorial_stats.lift_mode =
             to_string(options.combinatorial_options.lift_mode);
+        callback_stats.combinatorial_stats.scenario_order =
+            to_string(options.combinatorial_options.scenario_order);
         callback_stats.combinatorial_stats.cut_sampling_ratio =
             options.combinatorial_options.cut_sampling_ratio;
         callback_stats.combinatorial_stats.fractional_separation_enabled =
@@ -1863,6 +1869,8 @@ solver::ModelResult FppBranchBendersSolver::solve(
             callback_stats.combinatorial_stats.enabled;
         result.combinatorial_benders_lift_mode =
             callback_stats.combinatorial_stats.lift_mode;
+        result.combinatorial_benders_scenario_order =
+            callback_stats.combinatorial_stats.scenario_order;
         result.combinatorial_benders_cut_sampling_ratio =
             callback_stats.combinatorial_stats.cut_sampling_ratio;
         result.combinatorial_benders_fractional_separation_enabled =

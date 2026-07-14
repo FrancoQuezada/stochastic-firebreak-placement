@@ -827,6 +827,8 @@ void write_experiment_result_json(
         << (result.combinatorial_benders_enabled ? "true" : "false") << ",\n";
     out << "  \"combinatorial_benders_lift_mode\": \""
         << json_escape_local(result.combinatorial_benders_lift_mode) << "\",\n";
+    out << "  \"combinatorial_benders_scenario_order\": \""
+        << json_escape_local(result.combinatorial_benders_scenario_order) << "\",\n";
     out << "  \"combinatorial_benders_cut_sampling_ratio\": "
         << format_json_number(result.combinatorial_benders_cut_sampling_ratio) << ",\n";
     out << "  \"combinatorial_benders_fractional_separation_enabled\": "
@@ -1098,6 +1100,7 @@ void append_experiment_result_csv(
             << "branch_benders_nonviolated_cuts,branch_benders_skipped_cuts,"
             << "branch_benders_duplicate_cuts,"
             << "combinatorial_benders_enabled,combinatorial_benders_lift_mode,"
+            << "combinatorial_benders_scenario_order,"
             << "combinatorial_benders_cut_sampling_ratio,"
             << "combinatorial_benders_fractional_separation_enabled,"
             << "combinatorial_benders_initial_cuts_enabled,"
@@ -1233,6 +1236,7 @@ void append_experiment_result_csv(
     if (include_combinatorial_benders_summary) {
         out << (result.combinatorial_benders_enabled ? "true" : "false") << ","
             << csv_escape(result.combinatorial_benders_lift_mode) << ","
+            << csv_escape(result.combinatorial_benders_scenario_order) << ","
             << format_csv_number(result.combinatorial_benders_cut_sampling_ratio) << ","
             << (result.combinatorial_benders_fractional_separation_enabled ? "true" : "false") << ","
             << (result.combinatorial_benders_initial_cuts_enabled ? "true" : "false") << ","

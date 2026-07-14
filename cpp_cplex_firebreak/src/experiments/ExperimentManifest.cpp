@@ -425,6 +425,11 @@ ExperimentManifest load_experiment_manifest(const std::filesystem::path& manifes
                 values["combinatorial_benders_cut_sampling_ratio"],
                 "combinatorial_benders_cut_sampling_ratio");
     }
+    if (has_key(values, "combinatorial_benders_scenario_order")) {
+        config.combinatorial_options.scenario_order =
+            benders::parse_fpp_combinatorial_benders_scenario_order(
+                values["combinatorial_benders_scenario_order"]);
+    }
     if (has_key(values, "combinatorial_benders_separate_fractional")) {
         config.combinatorial_options.separate_fractional = parse_bool_value(
             values["combinatorial_benders_separate_fractional"],
