@@ -59,9 +59,20 @@ mkdir -p "$OUTPUT_DIR/logs" "$OUTPUT_DIR/manifests"
 if [[ "$SMOKE_METHODS" == "1" ]]; then
   METHOD_FILE="$OUTPUT_DIR/manifests/smoke_methods.txt"
   cat > "$METHOD_FILE" <<'EOF'
-FPP-SAA
-FPP-SAA-CVaR
+# FPP-SAA
+# FPP-SAA-CVaR
+FPP-SAA-MeanCVaR
+FPP-Branch-Benders-LLBI-RootCuts
+FPP-Branch-Benders-ProjectedCoverageLLBI-exp-RootCuts
+FPP-Branch-Benders-ProjectedPathLLBI-exp-RootCuts
 FPP-Branch-Benders-CVaR-RootCuts
+FPP-Branch-Benders-CVaR-LLBI-RootCuts
+FPP-Branch-Benders-CVaR-ProjectedCoverageLLBI-exp-RootCuts
+FPP-Branch-Benders-CVaR-ProjectedPathLLBI-exp-RootCuts
+FPP-Branch-Benders-MeanCVaR-RootCuts
+FPP-Branch-Benders-MeanCVaR-LLBI-RootCuts
+FPP-Branch-Benders-MeanCVaR-ProjectedCoverageLLBI-exp-RootCuts
+FPP-Branch-Benders-MeanCVaR-ProjectedPathLLBI-exp-RootCuts
 # FPP-Branch-Benders-Combinatorial
 # FPP-Branch-Benders-Combinatorial-EtaDesc
 # FPP-Branch-Benders-Combinatorial-CVaR

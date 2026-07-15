@@ -12,14 +12,22 @@ The experiment launcher is:
 scripts/run_fpp_new_instances_scaling_experiment.sh
 ```
 
+There is also a focused 20x20 launcher used for smaller or incremental panels:
+
+```bash
+scripts/run_fpp_new_instances_scaling_experiment_sub20.sh
+```
+
 The minimal script chain is:
 
 ```text
 scripts/run_fpp_new_instances_scaling_experiment.sh
+scripts/run_fpp_new_instances_scaling_experiment_sub20.sh
 scripts/generate_fpp_new_instances_scaling_manifests.py
 scripts/run_fpp_new_instances_scaling_manifest_worker.py
 scripts/merge_fpp_new_instances_scaling_experiment.py
 scripts/analyze_fpp_new_instances_scaling_experiment.py
+scripts/fpp_new_instances_scaling_compact_schema.py
 ```
 
 The required config files are:
@@ -101,6 +109,58 @@ MeanCVaR
 The projected LLBI variants used by this experiment are the `exp` variants
 only. The old `poly` variants are not part of this experiment.
 
+The full method file is:
+
+```text
+config/fpp_new_instances_scaling_methods.txt
+```
+
+It includes, for each objective family, the root-cut baseline, lifted lower
+bound inequalities, projected coverage LLBI, projected path LLBI, and
+combinatorial Benders variants.
+
+Expected objective methods:
+
+```text
+FPP-SAA
+FPP-Branch-Benders-RootCuts
+FPP-Branch-Benders-LLBI-RootCuts
+FPP-Branch-Benders-ProjectedCoverageLLBI-exp-RootCuts
+FPP-Branch-Benders-ProjectedPathLLBI-exp-RootCuts
+FPP-Branch-Benders-Combinatorial
+FPP-Branch-Benders-Combinatorial-EtaDesc
+```
+
+CVaR objective methods:
+
+```text
+FPP-SAA-CVaR
+FPP-Branch-Benders-CVaR-RootCuts
+FPP-Branch-Benders-CVaR-LLBI-RootCuts
+FPP-Branch-Benders-CVaR-ProjectedCoverageLLBI-exp-RootCuts
+FPP-Branch-Benders-CVaR-ProjectedPathLLBI-exp-RootCuts
+FPP-Branch-Benders-Combinatorial-CVaR
+FPP-Branch-Benders-Combinatorial-CVaR-EtaDesc
+```
+
+Mean-CVaR objective methods:
+
+```text
+FPP-SAA-MeanCVaR
+FPP-Branch-Benders-MeanCVaR-RootCuts
+FPP-Branch-Benders-MeanCVaR-LLBI-RootCuts
+FPP-Branch-Benders-MeanCVaR-ProjectedCoverageLLBI-exp-RootCuts
+FPP-Branch-Benders-MeanCVaR-ProjectedPathLLBI-exp-RootCuts
+FPP-Branch-Benders-Combinatorial-MeanCVaR
+FPP-Branch-Benders-Combinatorial-MeanCVaR-EtaDesc
+```
+
+`METHOD_FILE` can point at a custom one-method-per-line file. Blank lines and
+`#` comments are ignored. When `SMOKE_METHODS=1`, the launcher ignores
+`METHOD_FILE` and writes a temporary method file under
+`$OUTPUT_DIR/manifests/smoke_methods.txt`; use `SMOKE_METHODS=0` whenever you
+want the explicit `METHOD_FILE` to be honored.
+
 ### Combinatorial Benders Cut Sampling
 
 The combinatorial Branch-and-Benders methods use:
@@ -116,11 +176,13 @@ time the callback separates cuts. The limit is:
 ceil(combinatorial_benders_cut_sampling_ratio * train_scenario_count)
 ```
 
-with a minimum of one cut. For the default 20x20 runs this means:
+with a minimum of one cut. For common training counts this means:
 
 ```text
 train_count = 100 -> at most 10 violated cuts per callback
 train_count = 200 -> at most 20 violated cuts per callback
+train_count = 400 -> at most 40 violated cuts per callback
+train_count = 600 -> at most 60 violated cuts per callback
 ```
 
 The code does not sample these cuts randomly. It orders scenarios by increasing
@@ -155,25 +217,69 @@ change the risk objective or exactly identify the CVaR tail.
 
 ## Default Experiment Grid
 
+The main launcher defaults to `new40x40` with the full method file:
+
 ```text
 training pool: 1..9000
 fixed OOS test set: 9001..10000
-train counts: 100,200,400,800
+instance filter: new40x40
+train counts: 100,200
 alphas: 0.01,0.02,0.03
 cases: 5
 time limit: 1800 seconds
 MIP gap: 0.001
 threads per solve: 1
 max parallel workers: 12
+rerun existing: false
+smoke methods: false
 ```
 
 Expected row counts:
 
 ```text
-all six folders valid: 6480 rows
-four validated folders only: 4320 rows
-20x20 and 20x20_reburn only: 2160 rows
+default new40x40 run: 630 rows
+all six folders valid: 3780 rows
+four validated folders only: 2520 rows
+20x20 and 20x20_reburn only: 1260 rows
 ```
+
+The focused `sub20` launcher defaults to a single `new20x20` instance and is
+intended for incremental method panels:
+
+```text
+instance filter: new20x20
+train counts: 400,600
+alphas: 0.01,0.02,0.03
+cases: 10
+time limit: 1800 seconds
+MIP gap: 0.001
+threads per solve: 1
+max parallel workers: 10
+rerun existing: true
+smoke methods: true
+```
+
+With `SMOKE_METHODS=1`, `sub20` uses the methods currently listed in its
+temporary heredoc. In the current script this panel focuses on SAA-MeanCVaR and
+the LLBI/projected-LLBI root-cut methods:
+
+```text
+FPP-SAA-MeanCVaR
+FPP-Branch-Benders-LLBI-RootCuts
+FPP-Branch-Benders-ProjectedCoverageLLBI-exp-RootCuts
+FPP-Branch-Benders-ProjectedPathLLBI-exp-RootCuts
+FPP-Branch-Benders-CVaR-RootCuts
+FPP-Branch-Benders-CVaR-LLBI-RootCuts
+FPP-Branch-Benders-CVaR-ProjectedCoverageLLBI-exp-RootCuts
+FPP-Branch-Benders-CVaR-ProjectedPathLLBI-exp-RootCuts
+FPP-Branch-Benders-MeanCVaR-RootCuts
+FPP-Branch-Benders-MeanCVaR-LLBI-RootCuts
+FPP-Branch-Benders-MeanCVaR-ProjectedCoverageLLBI-exp-RootCuts
+FPP-Branch-Benders-MeanCVaR-ProjectedPathLLBI-exp-RootCuts
+```
+
+Set `SMOKE_METHODS=0 METHOD_FILE=...` to run a custom subset instead of that
+temporary list.
 
 ## Validate Manifests Without Running Solves
 
@@ -229,6 +335,40 @@ scripts/run_fpp_new_instances_scaling_experiment.sh
 Completed worker rows are skipped by default. Use `RERUN_EXISTING=1` only when
 you want to force reruns.
 
+For `run_fpp_new_instances_scaling_experiment_sub20.sh`, `RERUN_EXISTING=1` is
+the default. This is intentional for repeated incremental panels in the same
+output directory: each launch solves the tasks specified by the current
+manifest instead of reusing stale rows whose `task_id` may now refer to a
+different method.
+
+## Running A Custom Method Panel
+
+To run only the LLBI and projected-LLBI root-cut methods for all three
+objective families:
+
+```bash
+cat > /tmp/fpp_llbi_methods.txt <<'EOF'
+FPP-Branch-Benders-LLBI-RootCuts
+FPP-Branch-Benders-ProjectedCoverageLLBI-exp-RootCuts
+FPP-Branch-Benders-ProjectedPathLLBI-exp-RootCuts
+FPP-Branch-Benders-CVaR-LLBI-RootCuts
+FPP-Branch-Benders-CVaR-ProjectedCoverageLLBI-exp-RootCuts
+FPP-Branch-Benders-CVaR-ProjectedPathLLBI-exp-RootCuts
+FPP-Branch-Benders-MeanCVaR-LLBI-RootCuts
+FPP-Branch-Benders-MeanCVaR-ProjectedCoverageLLBI-exp-RootCuts
+FPP-Branch-Benders-MeanCVaR-ProjectedPathLLBI-exp-RootCuts
+EOF
+
+SMOKE_METHODS=0 \
+METHOD_FILE=/tmp/fpp_llbi_methods.txt \
+RERUN_EXISTING=1 \
+scripts/run_fpp_new_instances_scaling_experiment_sub20.sh
+```
+
+Use a distinct `OUTPUT_DIR` when a run should be kept as a separate experiment.
+Use the same `OUTPUT_DIR` only when you intentionally want to add a method panel
+to an existing batch and consolidate it afterward.
+
 ## Partial Results
 
 If a run is stopped early, merge only completed rows with:
@@ -263,6 +403,19 @@ analysis-ready `batch_results_compact.csv`. The analysis script prefers the
 compact file when it is present. Compact results keep aggregate graph-type
 proportions as numeric train/test/instance columns, while scenario ID lists and
 per-scenario graph classifications remain out of the compact CSV.
+
+When adding incremental method panels into the same `OUTPUT_DIR`, preserve the
+existing `batch_results_all.csv`/`batch_results_compact.csv` before running a
+new panel. After the new worker CSVs are complete, append or merge the new
+logical rows into the existing consolidated file and regenerate the compact CSV.
+The logical row identity is:
+
+```text
+instance_id, landscape, alpha, train_count, test_count, case_id,
+objective_family, method, fpp_mode
+```
+
+This avoids overwriting a previous method panel with the most recent manifest.
 
 ## Generated Files
 
