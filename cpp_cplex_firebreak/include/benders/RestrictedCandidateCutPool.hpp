@@ -19,6 +19,9 @@ struct RestrictedCandidateCutRecord {
 
 class RestrictedCandidateCutPool {
 public:
+    void setWeightMapHash(const std::string& weight_map_hash);
+    const std::string& weightMapHash() const;
+
     bool addCut(
         const BendersCut& cut,
         int round_index,
@@ -41,6 +44,7 @@ public:
     std::map<int, int> cutsByScenario() const;
 
 private:
+    std::string weight_map_hash_;
     std::vector<RestrictedCandidateCutRecord> records_;
     int duplicate_cuts_skipped_ = 0;
 };

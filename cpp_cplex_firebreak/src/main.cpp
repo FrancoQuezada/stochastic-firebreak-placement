@@ -128,6 +128,7 @@ void print_usage(std::ostream& out) {
         << "[--eventually-activate-all] [--restricted-exact-mode|--restricted-heuristic-mode] "
         << "[--stop-after-candidate-rounds R] "
         << "[--forest-path PATH] [--results-path PATH] "
+        << "[--weight-map-file weights.csv] "
         << "[--output-json results/out.json] [--output-csv results/out.csv] "
         << "[--use-lifted-lower-bounds] [--use-root-user-cuts] "
         << "[--root-user-cut-max-rounds 1] [--root-user-cut-tolerance 1e-6] "
@@ -1216,6 +1217,8 @@ int main(int argc, char** argv) {
                     options.solution_json_path = require_value(i, argc, argv, arg);
                 } else if (arg == "--solution-csv") {
                     options.solution_csv_path = require_value(i, argc, argv, arg);
+                } else if (arg == "--weight-map-file") {
+                    options.weight_map_file = require_value(i, argc, argv, arg);
                 } else if (arg == "--initial-candidate-policy") {
                     options.initial_candidate_policy = require_value(i, argc, argv, arg);
                 } else if (arg == "--initial-candidate-size") {

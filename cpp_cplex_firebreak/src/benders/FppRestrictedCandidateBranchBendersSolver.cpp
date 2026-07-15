@@ -26,6 +26,7 @@
 #include "benders/RestrictedCandidateCutPool.hpp"
 #include "risk/RiskMeasure.hpp"
 #include "solver/CplexEnvironment.hpp"
+#include "solver/FppWeightedLossUtils.hpp"
 
 #ifdef FIREBREAK_WITH_CPLEX
 #include <ilcplex/ilocplex.h>
@@ -183,6 +184,62 @@ void validate_instance(const opt::OptimizationInstance& opt) {
     if (opt.budget < 0 || opt.budget > static_cast<int>(opt.eligible_indices.size())) {
         throw std::runtime_error(
             "FPP restricted Branch-Benders budget must be between zero and the eligible-node count.");
+    }
+    if (!opt.compact_cell_weights.empty()) {
+        (void)solver::direct_fpp_compact_weights(opt);
+    }
+}
+
+bool has_nonunit_compact_weights(const opt::OptimizationInstance& opt) {
+    if (opt.compact_cell_weights.empty()) {
+        return false;
+    }
+    const auto& weights = solver::direct_fpp_compact_weights(opt);
+    for (const double weight : weights) {
+        if (std::fabs(weight - 1.0) > 1.0e-9) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void validate_weighted_phase5c1_options(
+    const opt::OptimizationInstance& opt,
+    const FppRestrictedCandidateBranchBendersOptions& options) {
+    if (!has_nonunit_compact_weights(opt)) {
+        return;
+    }
+    if (options.initial_candidate_policy != "explicit-list") {
+        throw std::runtime_error(
+            "Non-homogeneous weighted restricted Branch-Benders Phase 5C1 requires initial_candidate_policy=explicit-list; burn-frequency initialization is deferred.");
+    }
+    if (options.activation_policy != "none" &&
+        options.activation_policy != "activate-all-final") {
+        throw std::runtime_error(
+            "Non-homogeneous weighted restricted Branch-Benders Phase 5C1 supports only structural final full activation; burn-frequency and Benders-coefficient activation are deferred.");
+    }
+    if (!options.eventually_activate_all || options.restricted_heuristic_mode) {
+        throw std::runtime_error(
+            "Non-homogeneous weighted restricted Branch-Benders Phase 5C1 supports exact mode with eventual full activation only.");
+    }
+    if (options.use_lifted_lower_bounds ||
+        options.combinatorial_options.enabled ||
+        options.strengthening_options.use_coverage_llbi ||
+        options.strengthening_options.use_path_llbi ||
+        options.strengthening_options.use_projected_coverage_llbi_exp ||
+        options.strengthening_options.use_projected_path_llbi_exp ||
+        options.strengthening_options.use_projected_coverage_llbi_poly ||
+        options.strengthening_options.use_projected_path_llbi_poly ||
+        options.strengthening_options.use_conditional_zero_benefit_fixing ||
+        options.strengthening_options.use_global_dominance_preprocessing) {
+        throw std::runtime_error(
+            "Non-homogeneous weighted restricted Branch-Benders Phase 5C1 rejects unconverted strengthening/combinatorial modules.");
+    }
+    if (options.candidate_maintenance_policy != "none" ||
+        options.candidate_score_mode != "generic" ||
+        options.export_tail_score_diagnostics) {
+        throw std::runtime_error(
+            "Non-homogeneous weighted restricted Branch-Benders Phase 5C1 rejects unconverted candidate scoring, maintenance, and tail diagnostics.");
     }
 }
 
@@ -1739,6 +1796,7 @@ RestrictedStageSolveResult solve_stage_impl(
     stage.model_result.risk_measure = risk::to_string(risk_config.type);
     stage.model_result.cvar_beta = risk_config.cvarBeta;
     stage.model_result.cvar_lambda = risk_config.cvarLambda;
+    stage.model_result.objective_metric = solver::weighted_objective_metric_label(risk_config);
     stage.model_result.branch_benders_enabled = true;
     stage.model_result.combinatorial_benders_enabled =
         options.combinatorial_options.enabled;
@@ -2169,6 +2227,7 @@ RestrictedStageSolveResult solve_stage_impl(
             risk_config);
 
         stage.model_result.objective_value = risk_evaluation.objective;
+        stage.model_result.solver_weighted_objective = stage.model_result.objective_value;
         stage.model_result.expected_loss_component = risk_evaluation.expected;
         if (risk_enabled) {
             stage.model_result.cvar_loss_component = risk_evaluation.cvar;
@@ -2307,6 +2366,8 @@ RestrictedStageSolveResult solve_stage_impl(
         stage.model_result.compact_node_count = opt.node_mapper.size();
         stage.model_result.eligible_node_count = static_cast<int>(opt.eligible_indices.size());
         stage.model_result.total_scenario_arcs = static_cast<int>(opt.total_arcs);
+        solver::attach_direct_fpp_weight_metadata(stage.model_result, opt);
+        stage.model_result.solver_weighted_objective = stage.model_result.objective_value;
         stage.model_result.notes.push_back("Restricted-candidate FPP Branch-and-Benders stage: " + stage_name + ".");
         stage.model_result.notes.push_back("Master keeps the full eligible firebreak vector and applies candidate upper bounds.");
         stage.model_result.notes.push_back("Lazy Benders cuts are generated over the full eligible y-vector.");
@@ -2423,6 +2484,7 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
     const FppRestrictedCandidateBranchBendersOptions& options) const {
     validate_options(options);
     validate_instance(opt);
+    validate_weighted_phase5c1_options(opt, options);
     const auto risk_config = effective_risk_config_from(options.risk_config);
     const auto global_start = std::chrono::steady_clock::now();
 
@@ -2440,6 +2502,7 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
         initial_active_candidates);
     CandidateBoundController bounds(static_cast<int>(opt.eligible_indices.size()));
     RestrictedCandidateCutPool cut_pool;
+    cut_pool.setWeightMapHash(opt.cell_weight_map.deterministic_hash);
     FppPersistentScenarioSubproblemManager subproblem_manager(opt, options.verbose);
     RestrictedCandidateMaintenanceTracker maintenance_tracker(
         manager.candidateCount(),
@@ -2495,6 +2558,7 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
     result.active_candidate_fraction_final = manager.activeFraction();
     result.eventually_activated_all = manager.allActive();
     result.notes.push_back("FPP restricted Branch-and-Benders solver with Phase 1O persistence diagnostics.");
+    result.notes.push_back("Restricted FPP eta values, candidate cuts, bounds, and objectives are expressed in weighted burned-node loss units when a weight map is attached.");
     if (risk_config.type == risk::RiskMeasureType::Expected) {
         result.notes.push_back("Restricted FPP risk measure: expected burned area.");
     } else if (risk_config.type == risk::RiskMeasureType::CVaR) {

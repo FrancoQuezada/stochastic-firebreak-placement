@@ -476,6 +476,10 @@ TEST_FPP_RESTRICTED_CANDIDATE_BRANCH_BENDERS_SMALL_SOURCES := \
 	src/solver/FppSaaCplexModel.cpp \
 	tests/test_fpp_restricted_candidate_branch_benders_small.cpp
 
+TEST_WEIGHTED_FPP_RESTRICTED_BRANCH_BENDERS_CPLEX_SOURCES := \
+	$(filter-out tests/test_fpp_restricted_candidate_branch_benders_small.cpp,$(TEST_FPP_RESTRICTED_CANDIDATE_BRANCH_BENDERS_SMALL_SOURCES)) \
+	tests/test_weighted_fpp_restricted_branch_benders_cplex.cpp
+
 TEST_WEIGHTED_FPP_BENDERS_CPLEX_SOURCES := \
 	src/benders/BendersCut.cpp \
 	src/benders/FppLiftedLowerBound.cpp \
@@ -734,6 +738,18 @@ $(BUILD_DIR)/test_weighted_fpp_branch_benders_root_cuts: $(TEST_WEIGHTED_FPP_BRA
 	$(CXX) $(COMMON_CPPFLAGS) $(CPLEX_CPPFLAGS) $(COMMON_CXXFLAGS) $^ $(CPLEX_LDFLAGS) -o $@
 
 $(BUILD_DIR)/test_weighted_fpp_branch_benders_cplex: $(TEST_WEIGHTED_FPP_BRANCH_BENDERS_CPLEX_SOURCES)
+	@mkdir -p $(dir $@)
+	$(CXX) $(COMMON_CPPFLAGS) $(CPLEX_CPPFLAGS) $(COMMON_CXXFLAGS) $^ $(CPLEX_LDFLAGS) -o $@
+
+$(BUILD_DIR)/test_weighted_fpp_restricted_branch_benders_cplex: $(TEST_WEIGHTED_FPP_RESTRICTED_BRANCH_BENDERS_CPLEX_SOURCES)
+	@mkdir -p $(dir $@)
+	$(CXX) $(COMMON_CPPFLAGS) $(CPLEX_CPPFLAGS) $(COMMON_CXXFLAGS) $^ $(CPLEX_LDFLAGS) -o $@
+
+$(BUILD_DIR)/test_weighted_restricted_candidate_activation: $(TEST_WEIGHTED_FPP_RESTRICTED_BRANCH_BENDERS_CPLEX_SOURCES)
+	@mkdir -p $(dir $@)
+	$(CXX) $(COMMON_CPPFLAGS) $(CPLEX_CPPFLAGS) $(COMMON_CXXFLAGS) $^ $(CPLEX_LDFLAGS) -o $@
+
+$(BUILD_DIR)/test_weighted_restricted_cut_pool: $(TEST_WEIGHTED_FPP_RESTRICTED_BRANCH_BENDERS_CPLEX_SOURCES)
 	@mkdir -p $(dir $@)
 	$(CXX) $(COMMON_CPPFLAGS) $(CPLEX_CPPFLAGS) $(COMMON_CXXFLAGS) $^ $(CPLEX_LDFLAGS) -o $@
 

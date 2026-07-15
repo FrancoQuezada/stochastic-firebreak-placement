@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <stdexcept>
 
 namespace firebreak::benders {
 
@@ -43,6 +44,22 @@ bool duplicate_cut(const BendersCut& lhs, const BendersCut& rhs) {
 }
 
 }  // namespace
+
+void RestrictedCandidateCutPool::setWeightMapHash(const std::string& weight_map_hash) {
+    if (!weight_map_hash_.empty() && weight_map_hash_ != weight_map_hash) {
+        throw std::runtime_error(
+            "Restricted candidate cut pool cannot be reused with a different weight map hash.");
+    }
+    if (!records_.empty() && weight_map_hash_ != weight_map_hash) {
+        throw std::runtime_error(
+            "Restricted candidate cut pool cannot change weight map hash after cuts have been stored.");
+    }
+    weight_map_hash_ = weight_map_hash;
+}
+
+const std::string& RestrictedCandidateCutPool::weightMapHash() const {
+    return weight_map_hash_;
+}
 
 bool RestrictedCandidateCutPool::addCut(
     const BendersCut& cut,
