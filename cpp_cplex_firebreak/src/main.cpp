@@ -1,4 +1,5 @@
 #include <iostream>
+#include <cstdint>
 #include <filesystem>
 #include <stdexcept>
 #include <string>
@@ -29,6 +30,7 @@
 #include "experiments/OptInstanceRunner.hpp"
 #include "experiments/SmokeRunner.hpp"
 #include "experiments/StaticDpvOutOfSampleRunner.hpp"
+#include "experiments/WeightMapGenerationRunner.hpp"
 #include "io/PathUtils.hpp"
 #include "io/ScenarioFileUtils.hpp"
 #include "risk/RiskMeasure.hpp"
@@ -41,16 +43,21 @@ void print_usage(std::ostream& out) {
         << "[--forest-path PATH] [--results-path PATH] [--output results/out.json]\n"
         << "  firebreak_cpp smoke-new-instances --instances-root new_instances "
         << "[--strict|--strict-metadata] [--output results/new_instances_smoke_summary.csv]\n"
+        << "  firebreak_cpp generate-weight-map --landscape Sub20 "
+        << "--weight-profile homogeneous|heterogeneous|clustered "
+        << "--output-csv results/weights/map.csv --output-json results/weights/map.json "
+        << "[--forest-path PATH] [--results-path PATH] [--weight-seed 123] "
+        << "[--weight-normalize true|false]\n"
         << "  firebreak_cpp evaluate --landscape Sub20 --scenario-ids 1-5 "
         << "--firebreaks 10,20,30 [--forest-path PATH] [--results-path PATH] "
-        << "[--output results/out.json]\n"
+        << "[--weight-map-file weights.csv] [--cvar-beta 0.9] [--output results/out.json]\n"
         << "  firebreak_cpp build-opt-instance --landscape Sub20 --scenario-ids 1,2 "
         << "--alpha 0.01 [--forest-path PATH] [--results-path PATH] "
         << "[--output results/out.json]\n"
         << "  firebreak_cpp solve-fpp-saa --landscape Sub20 --scenario-ids 1,2 "
         << "--alpha 0.01 [--time-limit 60] [--mip-gap 0.001] [--threads 1] "
         << "[--forest-path PATH] [--results-path PATH] "
-        << "[--output results/out.json]\n"
+        << "[--weight-map-file weights.csv] [--output results/out.json]\n"
         << "  firebreak_cpp analyze-graphs --landscape Sub20 "
         << "[--scenario-ids 1,2,3 | --scenario-range 1:1000] "
         << "[--forest-path PATH] [--results-path PATH] "
@@ -60,6 +67,7 @@ void print_usage(std::ostream& out) {
         << "--alpha 0.01 --run-id RUN_ID [--time-limit 60] [--mip-gap 0.001] "
         << "[--threads 1] [--forest-path PATH] [--results-path PATH] "
         << "[--warm-start-solution solution.csv] "
+        << "[--weight-map-file weights.csv] "
         << "[--fpp-formulation base|cut] "
         << "[--risk-measure expected|cvar|mean-cvar] [--cvar-beta 0.9] [--cvar-lambda 1.0] "
         << "[--use-coverage-llbi] [--use-path-llbi] [--path-llbi-max-paths-per-node 8] "
@@ -72,6 +80,7 @@ void print_usage(std::ostream& out) {
         << "[--threads 1] [--max-iterations 20] [--tolerance 1e-6] "
         << "[--risk-measure expected|cvar|mean-cvar] [--cvar-beta 0.9] [--cvar-lambda 1.0] "
         << "[--forest-path PATH] [--results-path PATH] "
+        << "[--weight-map-file weights.csv] "
         << "[--output-json results/out.json] [--output-csv results/out.csv] "
         << "[--export-benders-cuts results/cuts.csv] [--use-lifted-lower-bounds] "
         << "[--export-lifted-lower-bounds results/llbi.csv]\n"
@@ -245,6 +254,24 @@ int parse_int_strict(const std::string& value, const std::string& flag) {
         throw std::runtime_error("Invalid integer value for " + flag + ": " + value);
     } catch (const std::out_of_range&) {
         throw std::runtime_error("Integer value out of range for " + flag + ": " + value);
+    }
+}
+
+std::uint64_t parse_uint64_strict(const std::string& value, const std::string& flag) {
+    if (!value.empty() && value.front() == '-') {
+        throw std::runtime_error("Invalid unsigned integer value for " + flag + ": " + value);
+    }
+    try {
+        std::size_t consumed = 0;
+        const unsigned long long parsed = std::stoull(value, &consumed);
+        if (consumed != value.size()) {
+            throw std::runtime_error("Invalid unsigned integer value for " + flag + ": " + value);
+        }
+        return static_cast<std::uint64_t>(parsed);
+    } catch (const std::invalid_argument&) {
+        throw std::runtime_error("Invalid unsigned integer value for " + flag + ": " + value);
+    } catch (const std::out_of_range&) {
+        throw std::runtime_error("Unsigned integer value out of range for " + flag + ": " + value);
     }
 }
 
@@ -552,6 +579,7 @@ int main(int argc, char** argv) {
         const std::string command = argv[1];
         if (command != "smoke" &&
             command != "smoke-new-instances" &&
+            command != "generate-weight-map" &&
             command != "evaluate" &&
             command != "build-opt-instance" &&
             command != "solve-fpp-saa" &&
@@ -624,6 +652,65 @@ int main(int argc, char** argv) {
             return runner.run(options);
         }
 
+        if (command == "generate-weight-map") {
+            firebreak::experiments::WeightMapGenerationOptions options;
+            for (int i = 2; i < argc; ++i) {
+                const std::string arg = argv[i];
+                if (arg == "--landscape") {
+                    options.landscape = require_value(i, argc, argv, arg);
+                } else if (arg == "--forest-path") {
+                    options.forest_path = require_value(i, argc, argv, arg);
+                } else if (arg == "--results-path") {
+                    options.results_path = require_value(i, argc, argv, arg);
+                } else if (arg == "--weight-profile") {
+                    options.config.profile = require_value(i, argc, argv, arg);
+                } else if (arg == "--weight-seed") {
+                    options.config.seed = parse_uint64_strict(require_value(i, argc, argv, arg), arg);
+                } else if (arg == "--weight-normalize") {
+                    options.config.normalize = parse_bool_arg(require_value(i, argc, argv, arg), arg);
+                } else if (arg == "--weight-min") {
+                    options.config.heterogeneous_min =
+                        parse_double_strict(require_value(i, argc, argv, arg), arg);
+                } else if (arg == "--weight-max") {
+                    options.config.heterogeneous_max =
+                        parse_double_strict(require_value(i, argc, argv, arg), arg);
+                } else if (arg == "--weight-cluster-count") {
+                    options.config.cluster_count =
+                        parse_int_strict(require_value(i, argc, argv, arg), arg);
+                } else if (arg == "--weight-cluster-fraction") {
+                    options.config.cluster_fraction =
+                        parse_double_strict(require_value(i, argc, argv, arg), arg);
+                } else if (arg == "--weight-background-min") {
+                    options.config.background_min =
+                        parse_double_strict(require_value(i, argc, argv, arg), arg);
+                } else if (arg == "--weight-background-max") {
+                    options.config.background_max =
+                        parse_double_strict(require_value(i, argc, argv, arg), arg);
+                } else if (arg == "--weight-cluster-min") {
+                    options.config.cluster_min =
+                        parse_double_strict(require_value(i, argc, argv, arg), arg);
+                } else if (arg == "--weight-cluster-max") {
+                    options.config.cluster_max =
+                        parse_double_strict(require_value(i, argc, argv, arg), arg);
+                } else if (arg == "--weight-cluster-min-separation") {
+                    options.config.cluster_min_separation =
+                        parse_int_strict(require_value(i, argc, argv, arg), arg);
+                } else if (arg == "--output-csv") {
+                    options.output_csv_path = require_value(i, argc, argv, arg);
+                } else if (arg == "--output-json") {
+                    options.output_json_path = require_value(i, argc, argv, arg);
+                } else if (arg == "--help" || arg == "-h") {
+                    print_usage(std::cout);
+                    return 0;
+                } else {
+                    throw std::runtime_error("Unknown argument: " + arg);
+                }
+            }
+
+            firebreak::experiments::WeightMapGenerationRunner runner;
+            return runner.run(options);
+        }
+
         if (command == "evaluate") {
             firebreak::experiments::EvaluationOptions options;
             for (int i = 2; i < argc; ++i) {
@@ -638,6 +725,10 @@ int main(int argc, char** argv) {
                     options.scenario_ids = firebreak::io::parse_scenario_id_list(require_value(i, argc, argv, arg));
                 } else if (arg == "--firebreaks") {
                     options.firebreaks_csv = require_value(i, argc, argv, arg);
+                } else if (arg == "--weight-map-file") {
+                    options.weight_map_file = require_value(i, argc, argv, arg);
+                } else if (arg == "--cvar-beta") {
+                    options.cvar_beta = parse_double_strict(require_value(i, argc, argv, arg), arg);
                 } else if (arg == "--output") {
                     options.output_path = require_value(i, argc, argv, arg);
                 } else if (arg == "--help" || arg == "-h") {
@@ -770,6 +861,8 @@ int main(int argc, char** argv) {
                     options.solution_csv_path = require_value(i, argc, argv, arg);
                 } else if (arg == "--warm-start-solution") {
                     options.warm_start_solution_path = require_value(i, argc, argv, arg);
+                } else if (arg == "--weight-map-file") {
+                    options.weight_map_file = require_value(i, argc, argv, arg);
                 } else if (arg == "--fpp-formulation") {
                     options.fpp_formulation =
                         firebreak::experiments::normalize_fpp_formulation(require_value(i, argc, argv, arg));
@@ -887,6 +980,8 @@ int main(int argc, char** argv) {
                     options.solution_json_path = require_value(i, argc, argv, arg);
                 } else if (arg == "--solution-csv") {
                     options.solution_csv_path = require_value(i, argc, argv, arg);
+                } else if (arg == "--weight-map-file") {
+                    options.weight_map_file = require_value(i, argc, argv, arg);
                 } else if (arg == "--export-benders-cuts") {
                     options.benders_cut_export_path = require_value(i, argc, argv, arg);
                 } else if (arg == "--use-lifted-lower-bounds") {
@@ -1997,6 +2092,8 @@ int main(int argc, char** argv) {
                     options.threads = parse_int_strict(require_value(i, argc, argv, arg), arg);
                 } else if (arg == "--verbose") {
                     options.verbose = true;
+                } else if (arg == "--weight-map-file") {
+                    options.weight_map_file = require_value(i, argc, argv, arg);
                 } else if (arg == "--output") {
                     options.output_path = require_value(i, argc, argv, arg);
                 } else if (arg == "--help" || arg == "-h") {

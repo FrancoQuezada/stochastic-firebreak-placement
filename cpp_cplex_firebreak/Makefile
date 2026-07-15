@@ -90,6 +90,8 @@ MAIN_SOURCES := \
 	src/core/Graph.cpp \
 	src/core/Scenario.cpp \
 	src/core/Instance.cpp \
+	src/core/LandscapeWeightMap.cpp \
+	src/core/LandscapeWeightGenerator.cpp \
 	src/cuts/DominatorCuts.cpp \
 	src/cuts/NodeSeparatorMinCut.cpp \
 	src/cuts/SeparatorCutSeparator.cpp \
@@ -108,6 +110,7 @@ MAIN_SOURCES := \
 	src/risk/RiskMeasure.cpp \
 	src/solver/CplexEnvironment.cpp \
 	src/solver/WarmStart.cpp \
+	src/solver/FppWeightedLossUtils.cpp \
 	src/solver/FppSaaCplexModel.cpp \
 	src/solver/FppCutReachabilityCplexModel.cpp \
 	src/solver/DpvSaaCplexModel.cpp \
@@ -120,6 +123,7 @@ MAIN_SOURCES := \
 	src/io/ResultWriter.cpp \
 	src/experiments/SmokeRunner.cpp \
 	src/experiments/NewInstancesSmokeRunner.cpp \
+	src/experiments/WeightMapGenerationRunner.cpp \
 	src/experiments/BatchExperimentConfig.cpp \
 	src/experiments/SharedSplitUtils.cpp \
 	src/experiments/BatchExperimentRunner.cpp \
@@ -156,6 +160,30 @@ TEST_BURNED_AREA_SOURCES := \
 	src/risk/RiskMeasure.cpp \
 	tests/test_burned_area_evaluator.cpp
 
+TEST_FPP_RECOURSE_EVALUATOR_SOURCES := \
+	src/core/FirebreakSolution.cpp \
+	src/core/Graph.cpp \
+	src/core/Scenario.cpp \
+	src/core/Instance.cpp \
+	src/core/LandscapeWeightMap.cpp \
+	src/eval/BurnedAreaEvaluator.cpp \
+	src/eval/FppRecourseEvaluator.cpp \
+	src/opt/IndexMapper.cpp \
+	src/opt/OptimizationInstance.cpp \
+	src/opt/OptimizationInstanceBuilder.cpp \
+	src/opt/DpvIndexBuilder.cpp \
+	src/risk/RiskMeasure.cpp \
+	tests/test_fpp_recourse_evaluator.cpp
+
+TEST_WEIGHTED_FPP_RECOURSE_EVALUATOR_SOURCES := \
+	src/core/LandscapeWeightMap.cpp \
+	src/core/LandscapeWeightGenerator.cpp \
+	src/eval/FppRecourseEvaluator.cpp \
+	src/opt/IndexMapper.cpp \
+	src/opt/OptimizationInstance.cpp \
+	src/risk/RiskMeasure.cpp \
+	tests/test_weighted_fpp_recourse_evaluator.cpp
+
 TEST_RISK_MEASURE_SOURCES := \
 	src/risk/RiskMeasure.cpp \
 	tests/test_risk_measure.cpp
@@ -164,6 +192,24 @@ TEST_INDEX_MAPPER_SOURCES := \
 	src/opt/IndexMapper.cpp \
 	tests/test_index_mapper.cpp
 
+TEST_LANDSCAPE_WEIGHT_MAP_SOURCES := \
+	src/core/FirebreakSolution.cpp \
+	src/core/Graph.cpp \
+	src/core/Scenario.cpp \
+	src/core/Instance.cpp \
+	src/core/LandscapeWeightMap.cpp \
+	src/opt/IndexMapper.cpp \
+	src/opt/OptimizationInstance.cpp \
+	src/opt/OptimizationInstanceBuilder.cpp \
+	src/opt/DpvIndexBuilder.cpp \
+	tests/test_landscape_weight_map.cpp
+
+TEST_LANDSCAPE_WEIGHT_GENERATOR_SOURCES := \
+	src/core/LandscapeWeightMap.cpp \
+	src/core/LandscapeWeightGenerator.cpp \
+	src/opt/IndexMapper.cpp \
+	tests/test_landscape_weight_generator.cpp
+
 TEST_DPV_INDEX_SOURCES := \
 	src/opt/IndexMapper.cpp \
 	src/opt/OptimizationInstance.cpp \
@@ -171,12 +217,33 @@ TEST_DPV_INDEX_SOURCES := \
 	tests/test_dpv_index_builder.cpp
 
 TEST_FPP_STRUCTURE_SOURCES := \
+	src/core/LandscapeWeightMap.cpp \
+	src/io/PathUtils.cpp \
 	src/opt/IndexMapper.cpp \
 	src/opt/OptimizationInstance.cpp \
 	src/risk/RiskMeasure.cpp \
 	src/solver/CplexEnvironment.cpp \
+	src/solver/FppWeightedLossUtils.cpp \
 	src/solver/FppSaaCplexModel.cpp \
 	tests/test_fpp_saa_model_structure.cpp
+
+TEST_WEIGHTED_FPP_SAA_MODEL_SOURCES := \
+	src/core/LandscapeWeightMap.cpp \
+	src/cuts/DominatorCuts.cpp \
+	src/cuts/NodeSeparatorMinCut.cpp \
+	src/cuts/SeparatorCutSeparator.cpp \
+	src/cuts/SeparatorContextCallback.cpp \
+	src/eval/FppRecourseEvaluator.cpp \
+	src/graph/DinicMaxFlow.cpp \
+	src/io/PathUtils.cpp \
+	src/opt/IndexMapper.cpp \
+	src/opt/OptimizationInstance.cpp \
+	src/risk/RiskMeasure.cpp \
+	src/solver/CplexEnvironment.cpp \
+	src/solver/FppWeightedLossUtils.cpp \
+	src/solver/FppSaaCplexModel.cpp \
+	src/solver/FppCutReachabilityCplexModel.cpp \
+	tests/test_weighted_fpp_saa_model.cpp
 
 TEST_DPV_STRUCTURE_SOURCES := \
 	src/opt/IndexMapper.cpp \
@@ -365,9 +432,13 @@ TEST_FPP_PERSISTENT_SCENARIO_SUBPROBLEM_MANAGER_SOURCES := \
 	src/benders/BendersCut.cpp \
 	src/benders/FppScenarioSubproblem.cpp \
 	src/benders/FppPersistentScenarioSubproblemManager.cpp \
+	src/core/LandscapeWeightMap.cpp \
+	src/io/PathUtils.cpp \
 	src/opt/IndexMapper.cpp \
 	src/opt/OptimizationInstance.cpp \
+	src/risk/RiskMeasure.cpp \
 	src/solver/CplexEnvironment.cpp \
+	src/solver/FppWeightedLossUtils.cpp \
 	tests/test_fpp_persistent_scenario_subproblem_manager.cpp
 
 TEST_FPP_RESTRICTED_CANDIDATE_BRANCH_BENDERS_SMALL_SOURCES := \
@@ -393,14 +464,39 @@ TEST_FPP_RESTRICTED_CANDIDATE_BRANCH_BENDERS_SMALL_SOURCES := \
 	src/cuts/NodeSeparatorMinCut.cpp \
 	src/cuts/SeparatorCutSeparator.cpp \
 	src/cuts/SeparatorContextCallback.cpp \
+	src/core/LandscapeWeightMap.cpp \
 	src/eval/FppRecourseEvaluator.cpp \
 	src/graph/DinicMaxFlow.cpp \
+	src/io/PathUtils.cpp \
 	src/opt/IndexMapper.cpp \
 	src/opt/OptimizationInstance.cpp \
 	src/risk/RiskMeasure.cpp \
 	src/solver/CplexEnvironment.cpp \
+	src/solver/FppWeightedLossUtils.cpp \
 	src/solver/FppSaaCplexModel.cpp \
 	tests/test_fpp_restricted_candidate_branch_benders_small.cpp
+
+TEST_WEIGHTED_FPP_BENDERS_CPLEX_SOURCES := \
+	src/benders/BendersCut.cpp \
+	src/benders/FppLiftedLowerBound.cpp \
+	src/benders/FppScenarioSubproblem.cpp \
+	src/benders/FppBendersMaster.cpp \
+	src/benders/FppBendersSolver.cpp \
+	src/core/LandscapeWeightMap.cpp \
+	src/cuts/DominatorCuts.cpp \
+	src/cuts/NodeSeparatorMinCut.cpp \
+	src/cuts/SeparatorCutSeparator.cpp \
+	src/cuts/SeparatorContextCallback.cpp \
+	src/eval/FppRecourseEvaluator.cpp \
+	src/graph/DinicMaxFlow.cpp \
+	src/io/PathUtils.cpp \
+	src/opt/IndexMapper.cpp \
+	src/opt/OptimizationInstance.cpp \
+	src/risk/RiskMeasure.cpp \
+	src/solver/CplexEnvironment.cpp \
+	src/solver/FppWeightedLossUtils.cpp \
+	src/solver/FppSaaCplexModel.cpp \
+	tests/test_weighted_fpp_benders_cplex.cpp
 
 TEST_DPV_SUBPROBLEM_SOURCES := \
 	src/benders/BendersCut.cpp \
@@ -446,8 +542,13 @@ TEST_EXES := \
 	$(BUILD_DIR)/test_burned_area_evaluator \
 	$(BUILD_DIR)/test_risk_measure \
 	$(BUILD_DIR)/test_index_mapper \
+	$(BUILD_DIR)/test_landscape_weight_map \
+	$(BUILD_DIR)/test_landscape_weight_generator \
 	$(BUILD_DIR)/test_dpv_index_builder \
+	$(BUILD_DIR)/test_fpp_recourse_evaluator \
+	$(BUILD_DIR)/test_weighted_fpp_recourse_evaluator \
 	$(BUILD_DIR)/test_fpp_saa_model_structure \
+	$(BUILD_DIR)/test_weighted_fpp_saa_model \
 	$(BUILD_DIR)/test_dpv_saa_model_structure \
 	$(BUILD_DIR)/test_graph_diagnostics \
 	$(BUILD_DIR)/test_cell2fire_reader_new_instances \
@@ -555,10 +656,22 @@ $(TEST_OBJ_DIR)/%.o: %.cpp
 $(BUILD_DIR)/test_burned_area_evaluator: $(call test_obj,$(TEST_BURNED_AREA_SOURCES))
 	$(CXX) $^ -o $@
 
+$(BUILD_DIR)/test_fpp_recourse_evaluator: $(call test_obj,$(TEST_FPP_RECOURSE_EVALUATOR_SOURCES))
+	$(CXX) $^ -o $@
+
+$(BUILD_DIR)/test_weighted_fpp_recourse_evaluator: $(call test_obj,$(TEST_WEIGHTED_FPP_RECOURSE_EVALUATOR_SOURCES))
+	$(CXX) $^ -o $@
+
 $(BUILD_DIR)/test_risk_measure: $(call test_obj,$(TEST_RISK_MEASURE_SOURCES))
 	$(CXX) $^ -o $@
 
 $(BUILD_DIR)/test_index_mapper: $(call test_obj,$(TEST_INDEX_MAPPER_SOURCES))
+	$(CXX) $^ -o $@
+
+$(BUILD_DIR)/test_landscape_weight_map: $(call test_obj,$(TEST_LANDSCAPE_WEIGHT_MAP_SOURCES))
+	$(CXX) $^ -o $@
+
+$(BUILD_DIR)/test_landscape_weight_generator: $(call test_obj,$(TEST_LANDSCAPE_WEIGHT_GENERATOR_SOURCES))
 	$(CXX) $^ -o $@
 
 $(BUILD_DIR)/test_dpv_index_builder: $(call test_obj,$(TEST_DPV_INDEX_SOURCES))
@@ -566,6 +679,25 @@ $(BUILD_DIR)/test_dpv_index_builder: $(call test_obj,$(TEST_DPV_INDEX_SOURCES))
 
 $(BUILD_DIR)/test_fpp_saa_model_structure: $(call test_obj,$(TEST_FPP_STRUCTURE_SOURCES))
 	$(CXX) $^ -o $@
+
+$(BUILD_DIR)/test_weighted_fpp_saa_model: $(call test_obj,$(TEST_WEIGHTED_FPP_SAA_MODEL_SOURCES))
+	$(CXX) $^ -o $@
+
+$(BUILD_DIR)/test_weighted_fpp_saa_cplex: $(TEST_WEIGHTED_FPP_SAA_MODEL_SOURCES)
+	@mkdir -p $(dir $@)
+	$(CXX) $(COMMON_CPPFLAGS) $(CPLEX_CPPFLAGS) $(COMMON_CXXFLAGS) $^ $(CPLEX_LDFLAGS) -o $@
+
+$(BUILD_DIR)/test_weighted_fpp_benders_subproblem: $(TEST_WEIGHTED_FPP_BENDERS_CPLEX_SOURCES)
+	@mkdir -p $(dir $@)
+	$(CXX) $(COMMON_CPPFLAGS) $(CPLEX_CPPFLAGS) $(COMMON_CXXFLAGS) $^ $(CPLEX_LDFLAGS) -o $@
+
+$(BUILD_DIR)/test_weighted_fpp_benders_cut: $(TEST_WEIGHTED_FPP_BENDERS_CPLEX_SOURCES)
+	@mkdir -p $(dir $@)
+	$(CXX) $(COMMON_CPPFLAGS) $(CPLEX_CPPFLAGS) $(COMMON_CXXFLAGS) $^ $(CPLEX_LDFLAGS) -o $@
+
+$(BUILD_DIR)/test_weighted_fpp_benders_cplex: $(TEST_WEIGHTED_FPP_BENDERS_CPLEX_SOURCES)
+	@mkdir -p $(dir $@)
+	$(CXX) $(COMMON_CPPFLAGS) $(CPLEX_CPPFLAGS) $(COMMON_CXXFLAGS) $^ $(CPLEX_LDFLAGS) -o $@
 
 $(BUILD_DIR)/test_dpv_saa_model_structure: $(call test_obj,$(TEST_DPV_STRUCTURE_SOURCES))
 	$(CXX) $^ -o $@
@@ -671,9 +803,14 @@ require-binary:
 
 test: $(TEST_EXES)
 	./build_gpp/test_index_mapper
+	./build_gpp/test_landscape_weight_map
+	./build_gpp/test_landscape_weight_generator
 	./build_gpp/test_dpv_index_builder
 	./build_gpp/test_burned_area_evaluator
+	./build_gpp/test_fpp_recourse_evaluator
+	./build_gpp/test_weighted_fpp_recourse_evaluator
 	./build_gpp/test_fpp_saa_model_structure
+	./build_gpp/test_weighted_fpp_saa_model
 	./build_gpp/test_graph_diagnostics
 	./build_gpp/test_cell2fire_reader_new_instances
 	./build_gpp/test_solution_io
@@ -779,7 +916,12 @@ clean:
 -include $(NOCPLEX_OBJECTS:.o=.d)
 -include $(patsubst %.cpp,$(TEST_OBJ_DIR)/%.d,$(sort \
 	$(TEST_BURNED_AREA_SOURCES) \
+	$(TEST_FPP_RECOURSE_EVALUATOR_SOURCES) \
+	$(TEST_WEIGHTED_FPP_RECOURSE_EVALUATOR_SOURCES) \
+	$(TEST_RISK_MEASURE_SOURCES) \
 	$(TEST_INDEX_MAPPER_SOURCES) \
+	$(TEST_LANDSCAPE_WEIGHT_MAP_SOURCES) \
+	$(TEST_LANDSCAPE_WEIGHT_GENERATOR_SOURCES) \
 	$(TEST_DPV_INDEX_SOURCES) \
 	$(TEST_FPP_STRUCTURE_SOURCES) \
 	$(TEST_DPV_STRUCTURE_SOURCES) \
@@ -788,9 +930,11 @@ clean:
 	$(TEST_SOLUTION_IO_SOURCES) \
 	$(TEST_SCENARIO_SPLIT_SOURCES) \
 	$(TEST_STATIC_DPV_SOURCES) \
+	$(TEST_STATIC_DPV_MIP_SOURCES) \
 	$(TEST_CUMULATIVE_GRAPH_SOURCES) \
 	$(TEST_GREEDY_SOURCES) \
 	$(TEST_WARM_START_SOURCES) \
+	$(TEST_FPP_COMBINATORIAL_BENDERS_SOURCES) \
 	$(TEST_BATCH_CONFIG_SOURCES) \
 	$(TEST_AGGREGATOR_SOURCES) \
 	$(TEST_MANIFEST_SOURCES) \
@@ -800,11 +944,15 @@ clean:
 	$(TEST_BENDERS_CUT_SOURCES) \
 	$(TEST_BURN_FREQUENCY_CANDIDATE_SCORER_SOURCES) \
 	$(TEST_BENDERS_COEFFICIENT_CANDIDATE_SCORER_SOURCES) \
+	$(TEST_CVAR_TAIL_AWARE_BENDERS_CANDIDATE_SCORER_SOURCES) \
+	$(TEST_CVAR_TAIL_SCORE_DIAGNOSTICS_SOURCES) \
 	$(TEST_RESTRICTED_CANDIDATE_CUT_POOL_SOURCES) \
 	$(TEST_RESTRICTED_CANDIDATE_MANAGER_SOURCES) \
 	$(TEST_RESTRICTED_CANDIDATE_MAINTENANCE_TRACKER_SOURCES) \
 	$(TEST_CANDIDATE_BOUND_CONTROLLER_SOURCES) \
 	$(TEST_FPP_PROJECTED_LLBI_SOURCES) \
+	$(TEST_FPP_PERSISTENT_SCENARIO_SUBPROBLEM_MANAGER_SOURCES) \
 	$(TEST_FPP_RESTRICTED_CANDIDATE_BRANCH_BENDERS_SMALL_SOURCES) \
 	$(TEST_DPV_SUBPROBLEM_SOURCES) \
-	$(TEST_DPV_BENDERS_SMALL_SOURCES)))
+	$(TEST_DPV_BENDERS_SMALL_SOURCES) \
+	$(TEST_DPV_BRANCH_BENDERS_SMALL_SOURCES)))

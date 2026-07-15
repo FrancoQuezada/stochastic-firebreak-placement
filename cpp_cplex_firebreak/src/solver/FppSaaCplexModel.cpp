@@ -3,12 +3,14 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <limits>
 #include <memory>
 #include <sstream>
 #include <stdexcept>
 #include <unordered_map>
 
 #include "solver/CplexEnvironment.hpp"
+#include "solver/FppWeightedLossUtils.hpp"
 
 #ifdef FIREBREAK_WITH_CPLEX
 #include <ilcplex/ilocplex.h>
@@ -42,9 +44,11 @@ void validate_opt_for_fpp_saa(const opt::OptimizationInstance& opt) {
     if (opt.budget > static_cast<int>(opt.eligible_indices.size())) {
         throw std::runtime_error("FPP-SAA budget exceeds the number of eligible firebreak nodes.");
     }
+    if (!opt.compact_cell_weights.empty()) {
+        (void)direct_fpp_compact_weights(opt);
+    }
 }
 
-#ifdef FIREBREAK_WITH_CPLEX
 double scenario_probability_at(
     const opt::OptimizationInstance& opt,
     std::size_t scenario_index) {
@@ -59,6 +63,7 @@ double scenario_probability_at(
     throw std::runtime_error("FPP-SAA formulation found a nonfinite scenario probability.");
 }
 
+#ifdef FIREBREAK_WITH_CPLEX
 void attach_warm_start_metadata(ModelResult& result, const WarmStart& warm_start) {
     result.warm_start_source = warm_start.source_path;
     result.warm_start_valid_nodes = warm_start.original_node_ids;
@@ -89,9 +94,14 @@ FppSaaModelStructure analyze_fpp_saa_model_structure(
     FppSaaModelStructure structure;
     const auto node_count = static_cast<std::size_t>(opt.node_mapper.size());
     const auto scenario_count = opt.scenarios.size();
+    const auto compact_weights = direct_fpp_compact_weights_or_unit(opt);
     const bool uses_cvar =
         risk_config.type == risk::RiskMeasureType::CVaR ||
         risk_config.type == risk::RiskMeasureType::MeanCVaR;
+    const double expected_objective_weight =
+        risk_config.type == risk::RiskMeasureType::MeanCVaR
+            ? (1.0 - risk_config.cvarLambda)
+            : (uses_cvar ? 0.0 : 1.0);
 
     structure.x_variable_count = node_count * scenario_count;
     structure.y_variable_count = opt.eligible_indices.size();
@@ -114,6 +124,35 @@ FppSaaModelStructure analyze_fpp_saa_model_structure(
         structure.propagation_constraint_count +
         structure.cvar_excess_constraint_count;
     structure.y_indices = opt.eligible_indices;
+
+    structure.scenario_loss_coefficients.reserve(node_count * scenario_count);
+    structure.objective_x_coefficients.reserve(node_count * scenario_count);
+    if (uses_cvar) {
+        structure.cvar_loss_coefficients.reserve(node_count * scenario_count);
+    }
+    for (std::size_t s = 0; s < opt.scenarios.size(); ++s) {
+        const double probability = scenario_probability_at(opt, s);
+        for (std::size_t i = 0; i < node_count; ++i) {
+            const double weight = compact_weights[i];
+            structure.scenario_loss_coefficients.push_back({
+                opt.scenarios[s].scenario_id,
+                static_cast<int>(i),
+                weight,
+            });
+            structure.objective_x_coefficients.push_back({
+                opt.scenarios[s].scenario_id,
+                static_cast<int>(i),
+                expected_objective_weight * probability * weight,
+            });
+            if (uses_cvar) {
+                structure.cvar_loss_coefficients.push_back({
+                    opt.scenarios[s].scenario_id,
+                    static_cast<int>(i),
+                    weight,
+                });
+            }
+        }
+    }
 
     const auto y_position_by_node = build_y_position_by_node_index(opt);
     structure.propagation_constraints.reserve(opt.total_arcs);
@@ -176,6 +215,8 @@ ModelResult FppSaaCplexModel::solve(
     }
     const auto structure = analyze_fpp_saa_model_structure(opt, effective_risk_config);
     const int node_count = opt.node_mapper.size();
+    const auto compact_weights = direct_fpp_compact_weights_or_unit(opt);
+    const double max_scenario_loss = direct_fpp_max_scenario_loss_bound(opt);
     const bool uses_cvar =
         effective_risk_config.type == risk::RiskMeasureType::CVaR ||
         effective_risk_config.type == risk::RiskMeasureType::MeanCVaR;
@@ -186,6 +227,7 @@ ModelResult FppSaaCplexModel::solve(
     result.risk_measure = risk::to_string(effective_risk_config.type);
     result.cvar_beta = effective_risk_config.cvarBeta;
     result.cvar_lambda = effective_risk_config.cvarLambda;
+    result.objective_metric = weighted_objective_metric_label(effective_risk_config);
     result.num_variables = structure.total_variable_count;
     result.num_constraints = structure.total_constraint_count;
     if (strengthening_options) {
@@ -231,7 +273,6 @@ ModelResult FppSaaCplexModel::solve(
         IloNumVar risk_threshold;
         IloNumVarArray cvar_excess(env);
         if (uses_cvar) {
-            const double max_scenario_loss = static_cast<double>(node_count);
             risk_threshold = IloNumVar(env, 0.0, max_scenario_loss, ILOFLOAT);
             risk_threshold.setName("risk_threshold");
             cvar_excess = IloNumVarArray(env, static_cast<IloInt>(opt.scenarios.size()));
@@ -249,7 +290,8 @@ ModelResult FppSaaCplexModel::solve(
             for (std::size_t s = 0; s < opt.scenarios.size(); ++s) {
                 const double probability = scenario_probability_at(opt, s);
                 for (int i = 0; i < node_count; ++i) {
-                    objective += probability * x[s][i];
+                    objective +=
+                        probability * compact_weights[static_cast<std::size_t>(i)] * x[s][i];
                 }
             }
         } else {
@@ -263,7 +305,10 @@ ModelResult FppSaaCplexModel::solve(
                 const double probability = scenario_probability_at(opt, s);
                 if (include_expected_term && expected_weight != 0.0) {
                     for (int i = 0; i < node_count; ++i) {
-                        objective += expected_weight * probability * x[s][i];
+                        objective += expected_weight *
+                            probability *
+                            compact_weights[static_cast<std::size_t>(i)] *
+                            x[s][i];
                     }
                 }
                 cvar_tail += probability * cvar_excess[static_cast<IloInt>(s)];
@@ -280,7 +325,8 @@ ModelResult FppSaaCplexModel::solve(
             for (std::size_t s = 0; s < opt.scenarios.size(); ++s) {
                 IloExpr loss_minus_threshold(env);
                 for (int i = 0; i < node_count; ++i) {
-                    loss_minus_threshold += x[s][i];
+                    loss_minus_threshold +=
+                        compact_weights[static_cast<std::size_t>(i)] * x[s][i];
                 }
                 loss_minus_threshold -= risk_threshold;
                 model.add(cvar_excess[static_cast<IloInt>(s)] >= loss_minus_threshold);
@@ -471,7 +517,9 @@ ModelResult FppSaaCplexModel::solve(
             for (std::size_t s = 0; s < opt.scenarios.size(); ++s) {
                 double scenario_loss = 0.0;
                 for (int i = 0; i < node_count; ++i) {
-                    scenario_loss += cplex.getValue(x[s][i]);
+                    scenario_loss +=
+                        compact_weights[static_cast<std::size_t>(i)] *
+                        cplex.getValue(x[s][i]);
                 }
                 const double probability = scenario_probability_at(opt, s);
                 expected_loss_component += probability * scenario_loss;
@@ -489,6 +537,7 @@ ModelResult FppSaaCplexModel::solve(
                     effective_risk_config.cvarBeta);
                 result.cvar_loss_component = metrics.cvar;
             }
+            result.solver_weighted_objective = result.objective_value;
 
             for (std::size_t pos = 0; pos < opt.eligible_indices.size(); ++pos) {
                 if (cplex.getValue(y[static_cast<IloInt>(pos)]) > 0.5) {
@@ -500,12 +549,13 @@ ModelResult FppSaaCplexModel::solve(
         }
 
         if (effective_risk_config.type == risk::RiskMeasureType::Expected) {
-            result.notes.push_back("FPP-SAA objective is expected burned area over loaded scenarios.");
+            result.notes.push_back("FPP-SAA objective is expected weighted burned-node loss over loaded scenarios.");
         } else if (effective_risk_config.type == risk::RiskMeasureType::CVaR) {
-            result.notes.push_back("FPP-SAA objective is pure CVaR of burned area over loaded scenarios.");
+            result.notes.push_back("FPP-SAA objective is pure CVaR of weighted burned-node loss over loaded scenarios.");
         } else {
-            result.notes.push_back("FPP-SAA objective is a mean-CVaR blend of burned area over loaded scenarios.");
+            result.notes.push_back("FPP-SAA objective is a mean-CVaR blend of weighted burned-node loss over loaded scenarios.");
         }
+        attach_direct_fpp_weight_metadata(result, opt);
         result.notes.push_back("Propagation constraints use y_v only when v is eligible.");
         env.end();
         return result;

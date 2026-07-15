@@ -13,6 +13,8 @@ struct EvaluationOptions {
     std::vector<int> scenario_ids;
     std::string firebreaks_csv;
     std::filesystem::path output_path;
+    std::filesystem::path weight_map_file;
+    double cvar_beta = 0.9;
 };
 
 class EvaluationRunner {
@@ -21,4 +23,3 @@ public:
 };
 
 }  // namespace firebreak::experiments
-

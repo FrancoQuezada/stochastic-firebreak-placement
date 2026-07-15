@@ -14,6 +14,7 @@
 #include "benders/FppScenarioSubproblem.hpp"
 #include "risk/RiskMeasure.hpp"
 #include "solver/CplexEnvironment.hpp"
+#include "solver/FppWeightedLossUtils.hpp"
 
 namespace firebreak::benders {
 
@@ -54,6 +55,9 @@ void validate_instance(const opt::OptimizationInstance& opt) {
     }
     if (opt.budget < 0 || opt.budget > static_cast<int>(opt.eligible_indices.size())) {
         throw std::runtime_error("FPP Benders budget must be between zero and the eligible-node count.");
+    }
+    if (!opt.compact_cell_weights.empty()) {
+        (void)solver::direct_fpp_compact_weights(opt);
     }
 }
 
@@ -192,6 +196,7 @@ solver::ModelResult FppBendersSolver::solve(
     result.risk_measure = risk::to_string(risk_config.type);
     result.cvar_beta = risk_config.cvarBeta;
     result.cvar_lambda = risk_config.cvarLambda;
+    result.objective_metric = solver::weighted_objective_metric_label(risk_config);
 
     const auto solve_start = std::chrono::steady_clock::now();
 
@@ -399,6 +404,7 @@ solver::ModelResult FppBendersSolver::solve(
     result.status = termination_status;
     result.solver_status_code = solver_status_code;
     result.objective_value = std::isfinite(incumbent_upper_bound) ? incumbent_upper_bound : 0.0;
+    result.solver_weighted_objective = result.objective_value;
     result.best_bound = last_master_bound;
     result.mip_gap = relative_gap(result.objective_value, result.best_bound);
     result.iterations = completed_iterations;
@@ -448,7 +454,9 @@ solver::ModelResult FppBendersSolver::solve(
     result.notes.push_back("Classical iterative FPP-SAA Benders decomposition; no callbacks or lazy cuts.");
     result.notes.push_back("Master solves binary y and per-scenario eta variables to optimality at each iteration.");
     result.notes.push_back("Scenario subproblems solve the FPP LP relaxation with y_copy fixed to the incumbent y.");
-    result.notes.push_back("FPP recourse objective is unweighted burned area sum_i x_i for each scenario.");
+    solver::attach_direct_fpp_weight_metadata(result, opt);
+    result.solver_weighted_objective = result.objective_value;
+    result.notes.push_back("FPP recourse objective is weighted burned-node loss sum_i w_i x_i for each scenario.");
     result.notes.push_back("Benders cuts use CPLEX equality-row duals directly: eta_s >= Q_s(ybar) + pi*(y-ybar).");
     if (risk_config.type == risk::RiskMeasureType::Expected) {
         result.notes.push_back("Scenario probabilities are applied in the expected-value master objective.");

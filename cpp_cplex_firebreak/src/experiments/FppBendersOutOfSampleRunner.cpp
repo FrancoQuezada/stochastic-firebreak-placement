@@ -23,6 +23,7 @@
 #include "io/SolutionIO.hpp"
 #include "opt/OptimizationInstanceBuilder.hpp"
 #include "solver/CplexEnvironment.hpp"
+#include "solver/FppWeightedLossUtils.hpp"
 
 namespace firebreak::experiments {
 
@@ -114,16 +115,14 @@ risk::RiskMeasureConfig effective_risk_config_from(const risk::RiskMeasureConfig
 }
 
 std::string objective_metric_for_risk(const risk::RiskMeasureConfig& config) {
-    if (config.type == risk::RiskMeasureType::Expected) {
-        return "expected_burned_area_benders_lp_subproblems";
-    }
+    std::string label = solver::weighted_objective_metric_label(config);
     if (config.type == risk::RiskMeasureType::CVaR) {
-        return "cvar_burned_area_beta_" + format_compact_double(config.cvarBeta);
+        label += "_beta_" + format_compact_double(config.cvarBeta);
+    } else if (config.type == risk::RiskMeasureType::MeanCVaR) {
+        label += "_beta_" + format_compact_double(config.cvarBeta) +
+            "_lambda_" + format_compact_double(config.cvarLambda);
     }
-    return "mean_cvar_burned_area_beta_" +
-        format_compact_double(config.cvarBeta) +
-        "_lambda_" +
-        format_compact_double(config.cvarLambda);
+    return label;
 }
 
 std::string method_label_for_risk(const risk::RiskMeasureConfig& config) {
@@ -138,7 +137,8 @@ std::string method_label_for_risk(const risk::RiskMeasureConfig& config) {
 
 void write_benders_cut_export_csv(
     const std::filesystem::path& output_path,
-    const std::vector<solver::BendersAddedCutRecord>& cuts) {
+    const std::vector<solver::BendersAddedCutRecord>& cuts,
+    const solver::ModelResult& solve_result) {
     constexpr double kCoefficientThreshold = 1.0e-12;
     firebreak::io::ensure_parent_directory(output_path);
     std::ofstream out(output_path);
@@ -146,11 +146,19 @@ void write_benders_cut_export_csv(
         throw std::runtime_error("Could not open Benders cut export CSV file: " + output_path.string());
     }
 
-    out << "iteration,scenario_id,subproblem_value,violation,rhs_constant,num_nonzero_coeffs,coefficients\n";
+    out << "iteration,scenario_id,objective_metric,weight_profile,weight_map_hash,"
+        << "subproblem_value,scenario_weighted_recourse_value,cut_value_at_incumbent,"
+        << "violation,cut_violation,rhs_constant,num_nonzero_coeffs,coefficients\n";
     for (const auto& cut : cuts) {
         out << cut.iteration << ","
             << cut.scenario_id << ","
+            << solve_result.objective_metric << ","
+            << solve_result.weight_profile << ","
+            << solve_result.weight_map_hash << ","
             << format_cut_number(cut.subproblem_value) << ","
+            << format_cut_number(cut.subproblem_value) << ","
+            << format_cut_number(cut.subproblem_value) << ","
+            << format_cut_number(cut.violation) << ","
             << format_cut_number(cut.violation) << ","
             << format_cut_number(cut.rhs_constant) << ","
             << count_nonzero_cut_coefficients(cut.coefficients_by_compact_index, kCoefficientThreshold) << ","
@@ -202,6 +210,11 @@ void print_summary(
     std::cout << "Solver status: " << result.solver_status << "\n";
     std::cout << std::fixed << std::setprecision(6);
     std::cout << "Objective in-sample: " << result.objective_in_sample << "\n";
+    std::cout << "Weight profile: " << result.weight_profile << "\n";
+    std::cout << "Weight map hash: " << result.weight_map_hash << "\n";
+    std::cout << "Evaluator weighted objective: " << result.evaluator_weighted_objective << "\n";
+    std::cout << "Objective validation diff: "
+              << result.objective_validation_abs_difference << "\n";
     std::cout << "Best bound: " << result.best_bound << "\n";
     std::cout << "MIP gap: " << result.mip_gap << "\n";
     std::cout << "Iterations: " << result.solver_iterations << "\n";
@@ -221,6 +234,10 @@ void print_summary(
     std::cout << "Train expected burned area: " << result.train_expected_burned_area << "\n";
     std::cout << "Train worst 10% burned area: " << result.train_worst_10pct_burned_area << "\n";
     std::cout << "Test expected burned area: " << result.test_expected_burned_area << "\n";
+    std::cout << "Train expected weighted burn loss: "
+              << result.train_expected_weighted_burn_loss << "\n";
+    std::cout << "Test expected weighted burn loss: "
+              << result.test_expected_weighted_burn_loss << "\n";
     std::cout << "Test worst 10% burned area: " << result.test_worst_10pct_burned_area << "\n";
     std::cout << "Solution JSON: " << firebreak::io::path_to_string(solution_json_path) << "\n";
     std::cout << "Solution CSV: " << firebreak::io::path_to_string(solution_csv_path) << "\n";
@@ -328,6 +345,12 @@ int FppBendersOutOfSampleRunner::run(const FppBendersOutOfSampleOptions& options
 
     opt::OptimizationInstanceBuilder builder;
     auto opt_instance = builder.build(train_instance, options.alpha, false);
+    const auto resolved_weight_map_path = options.weight_map_file.empty()
+        ? std::filesystem::path()
+        : firebreak::io::resolve_input_path(options.weight_map_file.string());
+    firebreak::solver::attach_weight_map_to_optimization_instance(
+        opt_instance,
+        resolved_weight_map_path);
 
     benders::FppBendersOptions solver_options;
     solver_options.max_iterations = options.max_iterations;
@@ -342,8 +365,15 @@ int FppBendersOutOfSampleRunner::run(const FppBendersOutOfSampleOptions& options
     benders::FppBendersSolver solver;
     auto solve_result = solver.solve(opt_instance, solver_options);
     solve_result.method = method_label;
+    firebreak::solver::attach_direct_fpp_weight_metadata(
+        solve_result,
+        opt_instance,
+        resolved_weight_map_path);
     if (!benders_cut_export_path.empty()) {
-        write_benders_cut_export_csv(benders_cut_export_path, solve_result.benders_added_cuts);
+        write_benders_cut_export_csv(
+            benders_cut_export_path,
+            solve_result.benders_added_cuts,
+            solve_result);
     }
     if (!lifted_lower_bound_export_path.empty()) {
         write_lifted_lower_bound_export_csv(
@@ -353,16 +383,22 @@ int FppBendersOutOfSampleRunner::run(const FppBendersOutOfSampleOptions& options
 
     eval::FppRecourseEvaluator recourse_evaluator(opt_instance);
     const auto recourse_validation =
-        recourse_evaluator.evaluate(solve_result.selected_firebreak_indices, false);
-    const double validation_reference = std::isfinite(solve_result.expected_loss_component)
-        ? solve_result.expected_loss_component
-        : solve_result.objective_value;
-    const double evaluator_abs_diff =
-        std::fabs(recourse_validation.expected_burned_area - validation_reference);
-    const double evaluator_rel_diff =
-        evaluator_abs_diff / std::max(1.0, std::fabs(validation_reference));
-    const std::string validation_status =
-        (evaluator_abs_diff > 1.0e-5 && evaluator_rel_diff > 1.0e-6) ? "warn" : "pass";
+        recourse_evaluator.evaluate(
+            solve_result.selected_firebreak_indices,
+            false,
+            effective_risk_config.cvarBeta);
+    const double evaluator_weighted_objective =
+        firebreak::solver::weighted_objective_from_recourse(
+            recourse_validation,
+            effective_risk_config);
+    firebreak::solver::attach_direct_fpp_validation(solve_result, evaluator_weighted_objective);
+    if (solve_result.weight_map_hash != recourse_validation.weight_map_hash) {
+        throw std::runtime_error(
+            "Optimization and train evaluation weight map hashes differ in run-fpp-benders-oos.");
+    }
+    const double evaluator_abs_diff = solve_result.objective_validation_abs_difference;
+    const double evaluator_rel_diff = solve_result.objective_validation_rel_difference;
+    const std::string validation_status = solve_result.validation_status;
 
     io::FirebreakSolutionRecord solution_record;
     solution_record.method = method_label;
@@ -389,6 +425,24 @@ int FppBendersOutOfSampleRunner::run(const FppBendersOutOfSampleOptions& options
     const auto test_load_end = std::chrono::steady_clock::now();
     const double test_loading_seconds = std::chrono::duration<double>(test_load_end - test_load_start).count();
     const auto test_eval = eval::evaluate_instance_burned_area(test_instance, firebreaks);
+    auto test_opt_instance = builder.build(test_instance, options.alpha, false);
+    firebreak::solver::attach_weight_map_to_optimization_instance(
+        test_opt_instance,
+        resolved_weight_map_path);
+    std::vector<int> selected_test_compact_indices;
+    selected_test_compact_indices.reserve(solve_result.selected_firebreak_original_nodes.size());
+    for (const int original_node : solve_result.selected_firebreak_original_nodes) {
+        selected_test_compact_indices.push_back(test_opt_instance.node_mapper.to_index(original_node));
+    }
+    eval::FppRecourseEvaluator test_recourse_evaluator(test_opt_instance);
+    const auto test_weighted_eval = test_recourse_evaluator.evaluate(
+        selected_test_compact_indices,
+        false,
+        effective_risk_config.cvarBeta);
+    if (solve_result.weight_map_hash != test_weighted_eval.weight_map_hash) {
+        throw std::runtime_error(
+            "Optimization and test evaluation weight map hashes differ in run-fpp-benders-oos.");
+    }
 
     io::StandardExperimentResult result;
     result.run_id = options.run_id;
@@ -444,10 +498,25 @@ int FppBendersOutOfSampleRunner::run(const FppBendersOutOfSampleOptions& options
         result.total_observed_scenario_nodes += static_cast<int>(scenario.observed_node_indices.size());
     }
     result.total_scenario_arcs = static_cast<int>(opt_instance.total_arcs);
-    result.evaluator_objective = recourse_validation.expected_burned_area;
+    result.evaluator_objective = solve_result.evaluator_objective;
     result.evaluator_abs_diff = evaluator_abs_diff;
     result.evaluator_rel_diff = evaluator_rel_diff;
     result.validation_status = validation_status;
+    result.weight_profile = solve_result.weight_profile;
+    result.weight_map_file = solve_result.weight_map_file;
+    result.weight_map_hash = solve_result.weight_map_hash;
+    result.weight_normalized = solve_result.weight_normalized;
+    result.weight_mean = solve_result.weight_mean;
+    result.weight_min = solve_result.weight_min;
+    result.weight_max = solve_result.weight_max;
+    result.weight_total = solve_result.weight_total;
+    result.solver_weighted_objective = solve_result.solver_weighted_objective;
+    result.evaluator_weighted_objective = solve_result.evaluator_weighted_objective;
+    result.objective_validation_abs_difference =
+        solve_result.objective_validation_abs_difference;
+    result.objective_validation_rel_difference =
+        solve_result.objective_validation_rel_difference;
+    result.objective_validation_passed = solve_result.objective_validation_passed;
     result.selected_firebreaks = solve_result.selected_firebreak_original_nodes;
     result.train_expected_burned_area = train_eval.expected_burned_area;
     result.train_worst_10pct_burned_area = train_eval.worst_10pct_burned_area;
@@ -457,6 +526,22 @@ int FppBendersOutOfSampleRunner::run(const FppBendersOutOfSampleOptions& options
     result.train_empirical_cvar_burned_area = train_eval.empirical_cvar_90pct_burned_area;
     result.test_empirical_var_burned_area = test_eval.empirical_var_90pct_burned_area;
     result.test_empirical_cvar_burned_area = test_eval.empirical_cvar_90pct_burned_area;
+    result.train_expected_weighted_burn_loss =
+        recourse_validation.expected_weighted_burn_loss;
+    result.test_expected_weighted_burn_loss =
+        test_weighted_eval.expected_weighted_burn_loss;
+    result.train_weighted_var = recourse_validation.weighted_loss_statistics.var;
+    result.test_weighted_var = test_weighted_eval.weighted_loss_statistics.var;
+    result.train_weighted_cvar = recourse_validation.weighted_loss_statistics.cvar;
+    result.test_weighted_cvar = test_weighted_eval.weighted_loss_statistics.cvar;
+    result.train_percentage_landscape_value_burned =
+        recourse_validation.expected_percentage_landscape_value_burned;
+    result.test_percentage_landscape_value_burned =
+        test_weighted_eval.expected_percentage_landscape_value_burned;
+    result.train_percentage_high_value_weight_burned =
+        recourse_validation.expected_percentage_high_value_weight_burned;
+    result.test_percentage_high_value_weight_burned =
+        test_weighted_eval.expected_percentage_high_value_weight_burned;
     result.risk_measure = solve_result.risk_measure;
     result.cvar_beta = solve_result.cvar_beta;
     result.cvar_lambda = solve_result.cvar_lambda;
@@ -473,8 +558,8 @@ int FppBendersOutOfSampleRunner::run(const FppBendersOutOfSampleOptions& options
     result.notes = solve_result.notes;
     result.notes.push_back(
         validation_status == "pass"
-            ? "FppRecourseEvaluator validation passed for final selected firebreaks."
-            : "FppRecourseEvaluator validation warning for final selected firebreaks.");
+            ? "Weighted FppRecourseEvaluator objective validation passed for final selected firebreaks."
+            : "Weighted FppRecourseEvaluator objective validation warning for final selected firebreaks.");
     result.notes.insert(result.notes.end(), notes.begin(), notes.end());
     result.notes.push_back("Benders max iterations: " + std::to_string(options.max_iterations) + ".");
     result.notes.push_back("Benders tolerance: " + std::to_string(options.tolerance) + ".");

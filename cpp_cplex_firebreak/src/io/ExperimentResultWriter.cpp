@@ -986,6 +986,24 @@ void write_experiment_result_json(
     out << "  \"evaluator_objective\": " << format_json_number(result.evaluator_objective) << ",\n";
     out << "  \"evaluator_abs_diff\": " << format_json_number(result.evaluator_abs_diff) << ",\n";
     out << "  \"evaluator_rel_diff\": " << format_json_number(result.evaluator_rel_diff) << ",\n";
+    out << "  \"weight_profile\": \"" << json_escape_local(result.weight_profile) << "\",\n";
+    out << "  \"weight_map_file\": \"" << json_escape_local(result.weight_map_file) << "\",\n";
+    out << "  \"weight_map_hash\": \"" << json_escape_local(result.weight_map_hash) << "\",\n";
+    out << "  \"weight_normalized\": " << (result.weight_normalized ? "true" : "false") << ",\n";
+    out << "  \"weight_mean\": " << format_json_number(result.weight_mean) << ",\n";
+    out << "  \"weight_min\": " << format_json_number(result.weight_min) << ",\n";
+    out << "  \"weight_max\": " << format_json_number(result.weight_max) << ",\n";
+    out << "  \"weight_total\": " << format_json_number(result.weight_total) << ",\n";
+    out << "  \"solver_weighted_objective\": "
+        << format_json_number(result.solver_weighted_objective) << ",\n";
+    out << "  \"evaluator_weighted_objective\": "
+        << format_json_number(result.evaluator_weighted_objective) << ",\n";
+    out << "  \"objective_validation_abs_difference\": "
+        << format_json_number(result.objective_validation_abs_difference) << ",\n";
+    out << "  \"objective_validation_rel_difference\": "
+        << format_json_number(result.objective_validation_rel_difference) << ",\n";
+    out << "  \"objective_validation_passed\": "
+        << (result.objective_validation_passed ? "true" : "false") << ",\n";
     out << "  \"risk_measure\": \"" << json_escape_local(result.risk_measure) << "\",\n";
     out << "  \"cvar_beta\": " << format_json_number(result.cvar_beta) << ",\n";
     out << "  \"cvar_lambda\": " << format_json_number(result.cvar_lambda) << ",\n";
@@ -1000,6 +1018,26 @@ void write_experiment_result_json(
         << format_json_number(result.test_empirical_var_burned_area) << ",\n";
     out << "  \"test_empirical_cvar_burned_area\": "
         << format_json_number(result.test_empirical_cvar_burned_area) << ",\n";
+    out << "  \"train_expected_weighted_burn_loss\": "
+        << format_json_number(result.train_expected_weighted_burn_loss) << ",\n";
+    out << "  \"test_expected_weighted_burn_loss\": "
+        << format_json_number(result.test_expected_weighted_burn_loss) << ",\n";
+    out << "  \"train_weighted_var\": "
+        << format_json_number(result.train_weighted_var) << ",\n";
+    out << "  \"test_weighted_var\": "
+        << format_json_number(result.test_weighted_var) << ",\n";
+    out << "  \"train_weighted_cvar\": "
+        << format_json_number(result.train_weighted_cvar) << ",\n";
+    out << "  \"test_weighted_cvar\": "
+        << format_json_number(result.test_weighted_cvar) << ",\n";
+    out << "  \"train_percentage_landscape_value_burned\": "
+        << format_json_number(result.train_percentage_landscape_value_burned) << ",\n";
+    out << "  \"test_percentage_landscape_value_burned\": "
+        << format_json_number(result.test_percentage_landscape_value_burned) << ",\n";
+    out << "  \"train_percentage_high_value_weight_burned\": "
+        << format_json_number(result.train_percentage_high_value_weight_burned) << ",\n";
+    out << "  \"test_percentage_high_value_weight_burned\": "
+        << format_json_number(result.test_percentage_high_value_weight_burned) << ",\n";
     out << "  \"validation_status\": \"" << json_escape_local(result.validation_status) << "\",\n";
     out << "  \"selected_firebreaks\": ";
     write_json_int_array(out, result.selected_firebreaks);
@@ -1070,6 +1108,8 @@ void append_experiment_result_csv(
         write_header || existing_csv_has_column(output_path, "validation_status");
     const bool include_risk_reporting =
         write_header || existing_csv_has_column(output_path, "risk_measure");
+    const bool include_weight_reporting =
+        write_header || existing_csv_has_column(output_path, "weight_profile");
     const bool include_graph_ratios =
         write_header || existing_csv_has_column(output_path, "train_graph_classification_ratios");
     ensure_parent_directory(output_path);
@@ -1150,8 +1190,18 @@ void append_experiment_result_csv(
             << "dominator_cuts_added,dominator_aggregate_cuts_added,dominator_individual_cuts_added,"
             << "dominator_dag_scenarios,dominator_fallback_scenarios,dominator_preprocessing_time_sec,"
             << "heuristic_time_sec,heuristic_objective,heuristic_exact_evaluations,heuristic_selected_count,"
-            << "evaluator_objective,evaluator_abs_diff,evaluator_rel_diff,validation_status,"
+            << "evaluator_objective,evaluator_abs_diff,evaluator_rel_diff,"
+            << "weight_profile,weight_map_file,weight_map_hash,weight_normalized,"
+            << "weight_mean,weight_min,weight_max,weight_total,"
+            << "solver_weighted_objective,evaluator_weighted_objective,"
+            << "objective_validation_abs_difference,objective_validation_rel_difference,"
+            << "objective_validation_passed,"
+            << "validation_status,"
             << "risk_measure,cvar_beta,cvar_lambda,train_cvar_burned_area,test_cvar_burned_area,"
+            << "train_expected_weighted_burn_loss,test_expected_weighted_burn_loss,"
+            << "train_weighted_var,test_weighted_var,train_weighted_cvar,test_weighted_cvar,"
+            << "train_percentage_landscape_value_burned,test_percentage_landscape_value_burned,"
+            << "train_percentage_high_value_weight_burned,test_percentage_high_value_weight_burned,"
             << "selected_firebreaks,"
             << "warm_start_used,mip_start_accepted,warm_start_source,warm_start_valid_nodes,warm_start_ignored_nodes,warm_start_notes,"
             << "train_expected_burned_area,train_worst_10pct_burned_area,"
@@ -1365,6 +1415,21 @@ void append_experiment_result_csv(
                 << format_csv_number(result.heuristic_objective) << ",";
         }
     }
+    if (include_weight_reporting) {
+        out << csv_escape(result.weight_profile) << ","
+            << csv_escape(result.weight_map_file) << ","
+            << csv_escape(result.weight_map_hash) << ","
+            << (result.weight_normalized ? "true" : "false") << ","
+            << format_csv_number(result.weight_mean) << ","
+            << format_csv_number(result.weight_min) << ","
+            << format_csv_number(result.weight_max) << ","
+            << format_csv_number(result.weight_total) << ","
+            << format_csv_number(result.solver_weighted_objective) << ","
+            << format_csv_number(result.evaluator_weighted_objective) << ","
+            << format_csv_number(result.objective_validation_abs_difference) << ","
+            << format_csv_number(result.objective_validation_rel_difference) << ","
+            << (result.objective_validation_passed ? "true" : "false") << ",";
+    }
     if (include_validation_status) {
         out << csv_escape(result.validation_status) << ",";
     }
@@ -1374,6 +1439,18 @@ void append_experiment_result_csv(
             << format_csv_number(result.cvar_lambda) << ","
             << format_csv_number(result.train_empirical_cvar_burned_area) << ","
             << format_csv_number(result.test_empirical_cvar_burned_area) << ",";
+    }
+    if (include_weight_reporting) {
+        out << format_csv_number(result.train_expected_weighted_burn_loss) << ","
+            << format_csv_number(result.test_expected_weighted_burn_loss) << ","
+            << format_csv_number(result.train_weighted_var) << ","
+            << format_csv_number(result.test_weighted_var) << ","
+            << format_csv_number(result.train_weighted_cvar) << ","
+            << format_csv_number(result.test_weighted_cvar) << ","
+            << format_csv_number(result.train_percentage_landscape_value_burned) << ","
+            << format_csv_number(result.test_percentage_landscape_value_burned) << ","
+            << format_csv_number(result.train_percentage_high_value_weight_burned) << ","
+            << format_csv_number(result.test_percentage_high_value_weight_burned) << ",";
     }
     out << csv_escape(join_ints(result.selected_firebreaks, ";")) << ",";
     if (include_warm_start) {

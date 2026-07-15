@@ -6,6 +6,7 @@
 #include <set>
 #include <stdexcept>
 
+#include "core/LandscapeWeightMap.hpp"
 #include "opt/DpvIndexBuilder.hpp"
 
 namespace firebreak::opt {
@@ -78,6 +79,11 @@ OptimizationInstance OptimizationInstanceBuilder::build(
     insert_observed_nodes(instance, node_universe);
     node_universe = sorted_unique(std::move(node_universe));
     output.node_mapper.build_from_nodes(node_universe);
+    output.cell_weight_map = core::make_homogeneous_weight_map(
+        output.node_mapper.original_nodes());
+    output.compact_cell_weights = core::build_compact_weight_vector(
+        output.cell_weight_map,
+        output.node_mapper);
 
     output.eligible_indices.reserve(output.eligible_original_nodes.size());
     for (const int original_node : output.eligible_original_nodes) {
@@ -137,6 +143,8 @@ OptimizationInstance OptimizationInstanceBuilder::build(
 
     output.metadata_notes.push_back("Scenario probabilities are uniform over the loaded scenarios.");
     output.metadata_notes.push_back("Budget is floor(alpha * NCells).");
+    output.metadata_notes.push_back(
+        "Cell weights default to a homogeneous map over the compact optimization node universe.");
     return output;
 }
 

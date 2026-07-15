@@ -9,6 +9,7 @@
 #include "opt/OptimizationInstance.hpp"
 #include "risk/RiskMeasure.hpp"
 #include "solver/ModelResult.hpp"
+#include "solver/FppWeightedLossUtils.hpp"
 #include "solver/WarmStart.hpp"
 
 namespace firebreak::solver {
@@ -42,6 +43,10 @@ struct FppCutReachabilityModelStructure {
     std::vector<CutPropagationConstraintDescriptor> propagation_constraints;
     std::vector<CutPassThroughConstraintDescriptor> pass_through_constraints;
     std::vector<CutPassThroughConstraintDescriptor> firebreak_upper_bound_constraints;
+    std::vector<ScenarioLossCoefficientDescriptor> scenario_loss_coefficients;
+    std::vector<ScenarioLossCoefficientDescriptor> objective_x_coefficients;
+    std::vector<ScenarioLossCoefficientDescriptor> objective_q_coefficients;
+    std::vector<ScenarioLossCoefficientDescriptor> cvar_loss_coefficients;
 
     bool has_y_for_node_index(int node_index) const;
 };
@@ -58,6 +63,9 @@ struct FppCutReachabilityMipStartValues {
 
 FppCutReachabilityModelStructure analyze_fpp_cut_reachability_model_structure(
     const opt::OptimizationInstance& opt);
+FppCutReachabilityModelStructure analyze_fpp_cut_reachability_model_structure(
+    const opt::OptimizationInstance& opt,
+    const risk::RiskMeasureConfig& risk_config);
 
 FppCutReachabilityMipStartValues build_fpp_cut_reachability_mip_start_values(
     const opt::OptimizationInstance& opt,

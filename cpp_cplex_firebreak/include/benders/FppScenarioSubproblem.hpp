@@ -6,6 +6,7 @@
 
 #include "benders/BendersCut.hpp"
 #include "opt/OptimizationInstance.hpp"
+#include "solver/FppWeightedLossUtils.hpp"
 
 namespace firebreak::benders {
 
@@ -29,6 +30,7 @@ struct FppScenarioSubproblemStructure {
     bool x_variables_are_continuous = true;
     bool y_copy_variables_are_continuous = true;
     bool objective_is_sum_x = true;
+    std::vector<solver::ScenarioLossCoefficientDescriptor> objective_x_coefficients;
     std::vector<FppSubproblemPropagationConstraintDescriptor> propagation_constraints;
 };
 

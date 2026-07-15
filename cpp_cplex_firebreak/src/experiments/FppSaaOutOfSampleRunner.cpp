@@ -25,6 +25,7 @@
 #include "solver/CplexEnvironment.hpp"
 #include "solver/FppCutReachabilityCplexModel.hpp"
 #include "solver/FppSaaCplexModel.hpp"
+#include "solver/FppWeightedLossUtils.hpp"
 #include "solver/WarmStart.hpp"
 
 namespace firebreak::experiments {
@@ -55,16 +56,14 @@ std::string format_compact_double(double value) {
 }
 
 std::string objective_metric_for_risk(const risk::RiskMeasureConfig& config) {
-    if (config.type == risk::RiskMeasureType::Expected) {
-        return "expected_burned_area";
-    }
+    std::string label = solver::weighted_objective_metric_label(config);
     if (config.type == risk::RiskMeasureType::CVaR) {
-        return "cvar_burned_area_beta_" + format_compact_double(config.cvarBeta);
+        label += "_beta_" + format_compact_double(config.cvarBeta);
+    } else if (config.type == risk::RiskMeasureType::MeanCVaR) {
+        label += "_beta_" + format_compact_double(config.cvarBeta) +
+            "_lambda_" + format_compact_double(config.cvarLambda);
     }
-    return "mean_cvar_burned_area_beta_" +
-        format_compact_double(config.cvarBeta) +
-        "_lambda_" +
-        format_compact_double(config.cvarLambda);
+    return label;
 }
 
 std::string append_strengthening_label_suffix(
@@ -163,6 +162,11 @@ void print_summary(
     std::cout << "Solver status: " << result.solver_status << "\n";
     std::cout << std::fixed << std::setprecision(6);
     std::cout << "Objective in-sample: " << result.objective_in_sample << "\n";
+    std::cout << "Weight profile: " << result.weight_profile << "\n";
+    std::cout << "Weight map hash: " << result.weight_map_hash << "\n";
+    std::cout << "Evaluator weighted objective: " << result.evaluator_weighted_objective << "\n";
+    std::cout << "Objective validation diff: "
+              << result.objective_validation_abs_difference << "\n";
     std::cout << "Best bound: " << result.best_bound << "\n";
     std::cout << "MIP gap: " << result.mip_gap << "\n";
     std::cout << "Runtime seconds: " << result.runtime_seconds << "\n";
@@ -174,6 +178,10 @@ void print_summary(
     std::cout << "Train expected burned area: " << result.train_expected_burned_area << "\n";
     std::cout << "Train worst 10% burned area: " << result.train_worst_10pct_burned_area << "\n";
     std::cout << "Test expected burned area: " << result.test_expected_burned_area << "\n";
+    std::cout << "Train expected weighted burn loss: "
+              << result.train_expected_weighted_burn_loss << "\n";
+    std::cout << "Test expected weighted burn loss: "
+              << result.test_expected_weighted_burn_loss << "\n";
     std::cout << "Test worst 10% burned area: " << result.test_worst_10pct_burned_area << "\n";
     std::cout << "Train evaluation runtime seconds: " << result.train_evaluation_runtime_seconds << "\n";
     std::cout << "Test scenario loading runtime seconds: " << result.test_scenario_loading_runtime_seconds << "\n";
@@ -275,6 +283,10 @@ int FppSaaOutOfSampleRunner::run(const FppSaaOutOfSampleOptions& options) const 
 
     opt::OptimizationInstanceBuilder builder;
     auto opt_instance = builder.build(train_instance, options.alpha, false);
+    const auto resolved_weight_map_path = options.weight_map_file.empty()
+        ? std::filesystem::path()
+        : firebreak::io::resolve_input_path(options.weight_map_file.string());
+    solver::attach_weight_map_to_optimization_instance(opt_instance, resolved_weight_map_path);
     const auto dominance_preprocess = benders::apply_fpp_global_dominance_preprocessing(
         opt_instance,
         options.strengthening_options.use_global_dominance_preprocessing);
@@ -343,19 +355,24 @@ int FppSaaOutOfSampleRunner::run(const FppSaaOutOfSampleOptions& options) const 
             dominance_preprocess.notes.begin(),
             dominance_preprocess.notes.end());
     }
+    solver::attach_direct_fpp_weight_metadata(solve_result, opt_instance, resolved_weight_map_path);
 
     eval::FppRecourseEvaluator recourse_evaluator(opt_instance);
     const auto recourse_validation =
-        recourse_evaluator.evaluate(solve_result.selected_firebreak_indices, false);
-    const double validation_reference = std::isfinite(solve_result.expected_loss_component)
-        ? solve_result.expected_loss_component
-        : solve_result.objective_value;
-    const double evaluator_abs_diff =
-        std::fabs(recourse_validation.expected_burned_area - validation_reference);
-    const double evaluator_rel_diff =
-        evaluator_abs_diff / std::max(1.0, std::fabs(validation_reference));
-    const std::string validation_status =
-        (evaluator_abs_diff > 1.0e-5 && evaluator_rel_diff > 1.0e-6) ? "warn" : "pass";
+        recourse_evaluator.evaluate(
+            solve_result.selected_firebreak_indices,
+            false,
+            effective_risk_config.cvarBeta);
+    const double evaluator_weighted_objective =
+        solver::weighted_objective_from_recourse(recourse_validation, effective_risk_config);
+    solver::attach_direct_fpp_validation(solve_result, evaluator_weighted_objective);
+    if (solve_result.weight_map_hash != recourse_validation.weight_map_hash) {
+        throw std::runtime_error(
+            "Optimization and train evaluation weight map hashes differ in run-fpp-saa-oos.");
+    }
+    const double evaluator_abs_diff = solve_result.objective_validation_abs_difference;
+    const double evaluator_rel_diff = solve_result.objective_validation_rel_difference;
+    const std::string validation_status = solve_result.validation_status;
 
     io::FirebreakSolutionRecord solution_record;
     solution_record.method = method_label;
@@ -381,6 +398,22 @@ int FppSaaOutOfSampleRunner::run(const FppSaaOutOfSampleOptions& options) const 
     const auto test_load_end = std::chrono::steady_clock::now();
     const double test_loading_seconds = std::chrono::duration<double>(test_load_end - test_load_start).count();
     const auto test_eval = eval::evaluate_instance_burned_area(test_instance, firebreaks);
+    auto test_opt_instance = builder.build(test_instance, options.alpha, false);
+    solver::attach_weight_map_to_optimization_instance(test_opt_instance, resolved_weight_map_path);
+    std::vector<int> selected_test_compact_indices;
+    selected_test_compact_indices.reserve(solve_result.selected_firebreak_original_nodes.size());
+    for (const int original_node : solve_result.selected_firebreak_original_nodes) {
+        selected_test_compact_indices.push_back(test_opt_instance.node_mapper.to_index(original_node));
+    }
+    eval::FppRecourseEvaluator test_recourse_evaluator(test_opt_instance);
+    const auto test_weighted_eval = test_recourse_evaluator.evaluate(
+        selected_test_compact_indices,
+        false,
+        effective_risk_config.cvarBeta);
+    if (solve_result.weight_map_hash != test_weighted_eval.weight_map_hash) {
+        throw std::runtime_error(
+            "Optimization and test evaluation weight map hashes differ in run-fpp-saa-oos.");
+    }
 
     io::StandardExperimentResult result;
     result.run_id = options.run_id;
@@ -411,10 +444,25 @@ int FppSaaOutOfSampleRunner::run(const FppSaaOutOfSampleOptions& options) const 
         result.total_observed_scenario_nodes += static_cast<int>(scenario.observed_node_indices.size());
     }
     result.total_scenario_arcs = static_cast<int>(opt_instance.total_arcs);
-    result.evaluator_objective = recourse_validation.expected_burned_area;
+    result.evaluator_objective = solve_result.evaluator_objective;
     result.evaluator_abs_diff = evaluator_abs_diff;
     result.evaluator_rel_diff = evaluator_rel_diff;
     result.validation_status = validation_status;
+    result.weight_profile = solve_result.weight_profile;
+    result.weight_map_file = solve_result.weight_map_file;
+    result.weight_map_hash = solve_result.weight_map_hash;
+    result.weight_normalized = solve_result.weight_normalized;
+    result.weight_mean = solve_result.weight_mean;
+    result.weight_min = solve_result.weight_min;
+    result.weight_max = solve_result.weight_max;
+    result.weight_total = solve_result.weight_total;
+    result.solver_weighted_objective = solve_result.solver_weighted_objective;
+    result.evaluator_weighted_objective = solve_result.evaluator_weighted_objective;
+    result.objective_validation_abs_difference =
+        solve_result.objective_validation_abs_difference;
+    result.objective_validation_rel_difference =
+        solve_result.objective_validation_rel_difference;
+    result.objective_validation_passed = solve_result.objective_validation_passed;
     result.selected_firebreaks = solve_result.selected_firebreak_original_nodes;
     result.warm_start_used = solve_result.warm_start_used;
     result.mip_start_accepted = solve_result.mip_start_accepted;
@@ -430,6 +478,22 @@ int FppSaaOutOfSampleRunner::run(const FppSaaOutOfSampleOptions& options) const 
     result.train_empirical_cvar_burned_area = train_eval.empirical_cvar_90pct_burned_area;
     result.test_empirical_var_burned_area = test_eval.empirical_var_90pct_burned_area;
     result.test_empirical_cvar_burned_area = test_eval.empirical_cvar_90pct_burned_area;
+    result.train_expected_weighted_burn_loss =
+        recourse_validation.expected_weighted_burn_loss;
+    result.test_expected_weighted_burn_loss =
+        test_weighted_eval.expected_weighted_burn_loss;
+    result.train_weighted_var = recourse_validation.weighted_loss_statistics.var;
+    result.test_weighted_var = test_weighted_eval.weighted_loss_statistics.var;
+    result.train_weighted_cvar = recourse_validation.weighted_loss_statistics.cvar;
+    result.test_weighted_cvar = test_weighted_eval.weighted_loss_statistics.cvar;
+    result.train_percentage_landscape_value_burned =
+        recourse_validation.expected_percentage_landscape_value_burned;
+    result.test_percentage_landscape_value_burned =
+        test_weighted_eval.expected_percentage_landscape_value_burned;
+    result.train_percentage_high_value_weight_burned =
+        recourse_validation.expected_percentage_high_value_weight_burned;
+    result.test_percentage_high_value_weight_burned =
+        test_weighted_eval.expected_percentage_high_value_weight_burned;
     result.risk_measure = solve_result.risk_measure;
     result.cvar_beta = solve_result.cvar_beta;
     result.cvar_lambda = solve_result.cvar_lambda;

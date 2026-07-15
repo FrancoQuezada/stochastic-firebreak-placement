@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+#include "core/LandscapeWeightMap.hpp"
 #include "opt/IndexMapper.hpp"
 
 namespace firebreak::opt {
@@ -56,6 +57,8 @@ struct OptimizationInstance {
     int budget = 0;
     int n_cells = 0;
     IndexMapper node_mapper;
+    core::LandscapeWeightMap cell_weight_map;
+    std::vector<double> compact_cell_weights;
     std::vector<int> eligible_indices;
     std::vector<int> eligible_original_nodes;
     std::vector<OptimizationScenario> scenarios;
@@ -70,4 +73,3 @@ struct OptimizationInstance {
 };
 
 }  // namespace firebreak::opt
-

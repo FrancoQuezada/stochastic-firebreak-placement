@@ -7,6 +7,7 @@
 
 #include "core/FirebreakSolution.hpp"
 #include "eval/BurnedAreaEvaluator.hpp"
+#include "eval/FppRecourseEvaluator.hpp"
 #include "io/Cell2FireReader.hpp"
 #include "io/PathUtils.hpp"
 #include "io/ResultWriter.hpp"
@@ -14,6 +15,7 @@
 #include "opt/OptimizationInstanceBuilder.hpp"
 #include "solver/CplexEnvironment.hpp"
 #include "solver/FppSaaCplexModel.hpp"
+#include "solver/FppWeightedLossUtils.hpp"
 
 namespace firebreak::experiments {
 
@@ -41,7 +43,8 @@ void write_int_array(std::ostream& out, const std::vector<int>& values) {
 void print_solver_summary(
     std::ostream& out,
     const solver::ModelResult& result,
-    const eval::InstanceBurnedAreaResult& evaluation) {
+    const eval::InstanceBurnedAreaResult& evaluation,
+    const eval::FppRecourseResult& weighted_evaluation) {
     out << "Method: " << result.method << "\n";
     out << "Status: " << result.status << "\n";
     out << std::fixed << std::setprecision(6);
@@ -58,12 +61,18 @@ void print_solver_summary(
     out << "\n";
     out << "Evaluation expected burned area: " << evaluation.expected_burned_area << "\n";
     out << "Evaluation worst 10% burned area: " << evaluation.worst_10pct_burned_area << "\n";
+    out << "Weight profile: " << weighted_evaluation.weight_profile << "\n";
+    out << "Weight map hash: " << weighted_evaluation.weight_map_hash << "\n";
+    out << "Evaluation expected weighted burn loss: "
+        << weighted_evaluation.expected_weighted_burn_loss << "\n";
+    out << "Weighted objective validation: " << result.validation_status << "\n";
 }
 
 void write_fpp_saa_json(
     const std::filesystem::path& output_path,
     const solver::ModelResult& result,
     const eval::InstanceBurnedAreaResult& evaluation,
+    const eval::FppRecourseResult& weighted_evaluation,
     const std::vector<std::string>& notes) {
     firebreak::io::ensure_parent_directory(output_path);
     std::ofstream out(output_path);
@@ -77,6 +86,8 @@ void write_fpp_saa_json(
     out << "    \"method\": \"" << firebreak::io::json_escape(result.method) << "\",\n";
     out << "    \"status\": \"" << firebreak::io::json_escape(result.status) << "\",\n";
     out << "    \"objective_value\": " << result.objective_value << ",\n";
+    out << "    \"objective_metric\": \""
+        << firebreak::io::json_escape(result.objective_metric) << "\",\n";
     out << "    \"best_bound\": " << result.best_bound << ",\n";
     out << "    \"mip_gap\": " << result.mip_gap << ",\n";
     out << "    \"runtime_seconds\": " << result.runtime_seconds << ",\n";
@@ -88,7 +99,41 @@ void write_fpp_saa_json(
     out << ",\n";
     out << "    \"selected_firebreak_original_nodes\": ";
     write_int_array(out, result.selected_firebreak_original_nodes);
-    out << "\n";
+    out << ",\n";
+    out << "    \"weight_profile\": \""
+        << firebreak::io::json_escape(result.weight_profile) << "\",\n";
+    out << "    \"weight_map_file\": \""
+        << firebreak::io::json_escape(result.weight_map_file) << "\",\n";
+    out << "    \"weight_map_hash\": \""
+        << firebreak::io::json_escape(result.weight_map_hash) << "\",\n";
+    out << "    \"weight_normalized\": "
+        << (result.weight_normalized ? "true" : "false") << ",\n";
+    out << "    \"weight_mean\": " << result.weight_mean << ",\n";
+    out << "    \"weight_min\": " << result.weight_min << ",\n";
+    out << "    \"weight_max\": " << result.weight_max << ",\n";
+    out << "    \"weight_total\": " << result.weight_total << ",\n";
+    out << "    \"solver_weighted_objective\": "
+        << result.solver_weighted_objective << ",\n";
+    out << "    \"evaluator_weighted_objective\": "
+        << result.evaluator_weighted_objective << ",\n";
+    out << "    \"objective_validation_abs_difference\": "
+        << result.objective_validation_abs_difference << ",\n";
+    out << "    \"objective_validation_rel_difference\": "
+        << result.objective_validation_rel_difference << ",\n";
+    out << "    \"objective_validation_passed\": "
+        << (result.objective_validation_passed ? "true" : "false") << "\n";
+    out << "  },\n";
+    out << "  \"weighted_evaluation\": {\n";
+    out << "    \"expected_weighted_burn_loss\": "
+        << weighted_evaluation.expected_weighted_burn_loss << ",\n";
+    out << "    \"weighted_var\": "
+        << weighted_evaluation.weighted_loss_statistics.var << ",\n";
+    out << "    \"weighted_cvar\": "
+        << weighted_evaluation.weighted_loss_statistics.cvar << ",\n";
+    out << "    \"percentage_landscape_value_burned\": "
+        << weighted_evaluation.expected_percentage_landscape_value_burned << ",\n";
+    out << "    \"percentage_high_value_weight_burned\": "
+        << weighted_evaluation.expected_percentage_high_value_weight_burned << "\n";
     out << "  },\n";
     out << "  \"burned_area_evaluation\": {\n";
     out << "    \"number_of_scenarios\": " << evaluation.number_of_scenarios << ",\n";
@@ -174,6 +219,10 @@ int FppSaaRunner::run(const FppSaaOptions& options) const {
 
     opt::OptimizationInstanceBuilder builder;
     auto opt_instance = builder.build(loaded_instance, options.alpha, false);
+    const auto resolved_weight_map_path = options.weight_map_file.empty()
+        ? std::filesystem::path()
+        : firebreak::io::resolve_input_path(options.weight_map_file.string());
+    solver::attach_weight_map_to_optimization_instance(opt_instance, resolved_weight_map_path);
 
     solver::FppSaaCplexModel model;
     auto result = model.solve(
@@ -182,15 +231,27 @@ int FppSaaRunner::run(const FppSaaOptions& options) const {
         options.mip_gap,
         options.threads,
         options.verbose);
+    solver::attach_direct_fpp_weight_metadata(result, opt_instance, resolved_weight_map_path);
 
     const core::FirebreakSolution firebreaks(result.selected_firebreak_original_nodes);
     const auto evaluation = eval::evaluate_instance_burned_area(loaded_instance, firebreaks);
+    eval::FppRecourseEvaluator weighted_evaluator(opt_instance);
+    const auto weighted_evaluation =
+        weighted_evaluator.evaluate(result.selected_firebreak_indices, true);
+    const double evaluator_weighted_objective =
+        solver::weighted_objective_from_recourse(
+            weighted_evaluation,
+            firebreak::risk::RiskMeasureConfig());
+    solver::attach_direct_fpp_validation(result, evaluator_weighted_objective);
+    if (result.weight_map_hash != weighted_evaluation.weight_map_hash) {
+        throw std::runtime_error(
+            "Optimization and evaluation weight map hashes differ in solve-fpp-saa.");
+    }
 
-    print_solver_summary(std::cout, result, evaluation);
-    write_fpp_saa_json(output_path, result, evaluation, notes);
+    print_solver_summary(std::cout, result, evaluation, weighted_evaluation);
+    write_fpp_saa_json(output_path, result, evaluation, weighted_evaluation, notes);
     std::cout << "Wrote summary: " << firebreak::io::path_to_string(output_path) << "\n";
     return 0;
 }
 
 }  // namespace firebreak::experiments
-
