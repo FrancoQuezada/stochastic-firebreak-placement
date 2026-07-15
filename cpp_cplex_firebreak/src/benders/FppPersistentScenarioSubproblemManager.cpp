@@ -9,6 +9,7 @@
 #include <utility>
 
 #include "solver/CplexEnvironment.hpp"
+#include "solver/FppWeightedLossUtils.hpp"
 
 #ifdef FIREBREAK_WITH_CPLEX
 #include <ilcplex/ilocplex.h>
@@ -27,6 +28,9 @@ void validate_scenario_position(const opt::OptimizationInstance& opt, int scenar
     }
     if (scenario_position < 0 || scenario_position >= static_cast<int>(opt.scenarios.size())) {
         throw std::runtime_error("Persistent FPP subproblem scenario position is out of range.");
+    }
+    if (!opt.compact_cell_weights.empty()) {
+        (void)solver::direct_fpp_compact_weights(opt);
     }
 }
 
@@ -93,6 +97,7 @@ public:
         : opt_(opt) {
         diagnostics_.scenario_count = static_cast<int>(opt_.scenarios.size());
         diagnostics_.persistent_subproblems_enabled = false;
+        diagnostics_.weight_map_hash = opt_.cell_weight_map.deterministic_hash;
     }
 
     FppSubproblemResult solveScenario(int scenario_position, const std::vector<int>& ybar_binary) {
@@ -130,6 +135,7 @@ public:
           scenario_position_(scenario_position),
           scenario_(opt.scenarios[static_cast<std::size_t>(scenario_position)]),
           y_position_by_node_(build_y_position_by_node_index(opt)),
+          compact_weights_(solver::direct_fpp_compact_weights_or_unit(opt)),
           structure_(analyze_fpp_scenario_subproblem_structure(opt, scenario_position)),
           env_(),
           model_(env_),
@@ -225,6 +231,8 @@ private:
             "CPLEX getDual values from equality rows y_copy_i = ybar_i are used directly as FPP Benders coefficients.");
         cut.notes.push_back(
             "The resulting cut is eta_s >= Q_s(ybar) + sum_i pi_i * (y_i - ybar_i).");
+        cut.notes.push_back(
+            "Q_s(ybar) is expressed in weighted burned-node loss units.");
         result.benders_cut = cut;
         result.notes = cut.notes;
         return result;
@@ -263,7 +271,7 @@ private:
 
         IloExpr objective(env_);
         for (int i = 0; i < node_count; ++i) {
-            objective += x_[i];
+            objective += compact_weights_[static_cast<std::size_t>(i)] * x_[i];
         }
         model_.add(IloMinimize(env_, objective));
         objective.end();
@@ -293,6 +301,7 @@ private:
     int scenario_position_ = -1;
     const opt::OptimizationScenario& scenario_;
     std::unordered_map<int, int> y_position_by_node_;
+    std::vector<double> compact_weights_;
     FppScenarioSubproblemStructure structure_;
     IloEnv env_;
     IloModel model_;
@@ -310,6 +319,7 @@ public:
           verbose_(verbose) {
         diagnostics_.scenario_count = static_cast<int>(opt_.scenarios.size());
         diagnostics_.persistent_subproblems_enabled = true;
+        diagnostics_.weight_map_hash = opt_.cell_weight_map.deterministic_hash;
         subproblems_.reserve(opt_.scenarios.size());
         for (std::size_t s = 0; s < opt_.scenarios.size(); ++s) {
             validate_scenario_position(opt_, static_cast<int>(s));

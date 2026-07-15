@@ -498,6 +498,32 @@ TEST_WEIGHTED_FPP_BENDERS_CPLEX_SOURCES := \
 	src/solver/FppSaaCplexModel.cpp \
 	tests/test_weighted_fpp_benders_cplex.cpp
 
+TEST_WEIGHTED_FPP_BRANCH_BENDERS_CPLEX_SOURCES := \
+	src/benders/BendersCut.cpp \
+	src/benders/FppCombinatorialBenders.cpp \
+	src/benders/FppProjectedLlbi.cpp \
+	src/benders/FppLiftedLowerBound.cpp \
+	src/benders/FppScenarioSubproblem.cpp \
+	src/benders/FppPersistentScenarioSubproblemManager.cpp \
+	src/benders/FppBendersMaster.cpp \
+	src/benders/FppBendersSolver.cpp \
+	src/benders/FppBranchBendersSolver.cpp \
+	src/core/LandscapeWeightMap.cpp \
+	src/cuts/DominatorCuts.cpp \
+	src/cuts/NodeSeparatorMinCut.cpp \
+	src/cuts/SeparatorCutSeparator.cpp \
+	src/cuts/SeparatorContextCallback.cpp \
+	src/eval/FppRecourseEvaluator.cpp \
+	src/graph/DinicMaxFlow.cpp \
+	src/io/PathUtils.cpp \
+	src/opt/IndexMapper.cpp \
+	src/opt/OptimizationInstance.cpp \
+	src/risk/RiskMeasure.cpp \
+	src/solver/CplexEnvironment.cpp \
+	src/solver/FppWeightedLossUtils.cpp \
+	src/solver/FppSaaCplexModel.cpp \
+	tests/test_weighted_fpp_branch_benders_cplex.cpp
+
 TEST_DPV_SUBPROBLEM_SOURCES := \
 	src/benders/BendersCut.cpp \
 	src/benders/DpvLiftedLowerBound.cpp \
@@ -696,6 +722,18 @@ $(BUILD_DIR)/test_weighted_fpp_benders_cut: $(TEST_WEIGHTED_FPP_BENDERS_CPLEX_SO
 	$(CXX) $(COMMON_CPPFLAGS) $(CPLEX_CPPFLAGS) $(COMMON_CXXFLAGS) $^ $(CPLEX_LDFLAGS) -o $@
 
 $(BUILD_DIR)/test_weighted_fpp_benders_cplex: $(TEST_WEIGHTED_FPP_BENDERS_CPLEX_SOURCES)
+	@mkdir -p $(dir $@)
+	$(CXX) $(COMMON_CPPFLAGS) $(CPLEX_CPPFLAGS) $(COMMON_CXXFLAGS) $^ $(CPLEX_LDFLAGS) -o $@
+
+$(BUILD_DIR)/test_weighted_fpp_branch_benders_callback: $(TEST_WEIGHTED_FPP_BRANCH_BENDERS_CPLEX_SOURCES)
+	@mkdir -p $(dir $@)
+	$(CXX) $(COMMON_CPPFLAGS) $(CPLEX_CPPFLAGS) $(COMMON_CXXFLAGS) $^ $(CPLEX_LDFLAGS) -o $@
+
+$(BUILD_DIR)/test_weighted_fpp_branch_benders_root_cuts: $(TEST_WEIGHTED_FPP_BRANCH_BENDERS_CPLEX_SOURCES)
+	@mkdir -p $(dir $@)
+	$(CXX) $(COMMON_CPPFLAGS) $(CPLEX_CPPFLAGS) $(COMMON_CXXFLAGS) $^ $(CPLEX_LDFLAGS) -o $@
+
+$(BUILD_DIR)/test_weighted_fpp_branch_benders_cplex: $(TEST_WEIGHTED_FPP_BRANCH_BENDERS_CPLEX_SOURCES)
 	@mkdir -p $(dir $@)
 	$(CXX) $(COMMON_CPPFLAGS) $(CPLEX_CPPFLAGS) $(COMMON_CXXFLAGS) $^ $(CPLEX_LDFLAGS) -o $@
 

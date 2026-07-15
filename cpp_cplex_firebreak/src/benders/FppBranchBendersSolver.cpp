@@ -22,6 +22,7 @@
 #include "benders/FppProjectedLlbi.hpp"
 #include "risk/RiskMeasure.hpp"
 #include "solver/CplexEnvironment.hpp"
+#include "solver/FppWeightedLossUtils.hpp"
 
 #ifdef FIREBREAK_WITH_CPLEX
 #include <ilcplex/ilocplex.h>
@@ -107,7 +108,40 @@ void validate_instance(const opt::OptimizationInstance& opt) {
     if (opt.budget < 0 || opt.budget > static_cast<int>(opt.eligible_indices.size())) {
         throw std::runtime_error("FPP Branch-Benders budget must be between zero and the eligible-node count.");
     }
+    if (!opt.compact_cell_weights.empty()) {
+        (void)solver::direct_fpp_compact_weights(opt);
+    }
 }
+
+#ifdef FIREBREAK_WITH_CPLEX
+
+bool has_nonunit_compact_weights(const opt::OptimizationInstance& opt) {
+    if (opt.compact_cell_weights.empty()) {
+        return false;
+    }
+    const auto& weights = solver::direct_fpp_compact_weights(opt);
+    for (const double weight : weights) {
+        if (std::fabs(weight - 1.0) > 1.0e-9) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool uses_unconverted_weighted_strengthening(const FppBranchBendersOptions& options) {
+    return options.use_lifted_lower_bounds ||
+           options.combinatorial_options.enabled ||
+           options.strengthening_options.use_coverage_llbi ||
+           options.strengthening_options.use_path_llbi ||
+           options.strengthening_options.use_projected_coverage_llbi_exp ||
+           options.strengthening_options.use_projected_path_llbi_exp ||
+           options.strengthening_options.use_projected_coverage_llbi_poly ||
+           options.strengthening_options.use_projected_path_llbi_poly ||
+           options.strengthening_options.use_conditional_zero_benefit_fixing ||
+           options.strengthening_options.use_global_dominance_preprocessing;
+}
+
+#endif
 
 bool uses_cvar_risk(const risk::RiskMeasureConfig& config) {
     return config.type == risk::RiskMeasureType::CVaR ||
@@ -1183,6 +1217,11 @@ solver::ModelResult FppBranchBendersSolver::solve(
     const FppBranchBendersOptions& options) const {
     validate_options(options);
     validate_instance(opt);
+    if (has_nonunit_compact_weights(opt) &&
+        uses_unconverted_weighted_strengthening(options)) {
+        throw std::runtime_error(
+            "Non-homogeneous weighted FPP Branch-Benders supports only LP lazy cuts and root user cuts in Phase 5B; LLBI, projected LLBI, combinatorial Benders, dominance preprocessing, and conditional fixing are not yet weight-converted.");
+    }
     const auto risk_config = effective_risk_config_from(options.risk_config);
     const bool risk_enabled = uses_cvar_risk(risk_config);
 
@@ -1193,6 +1232,7 @@ solver::ModelResult FppBranchBendersSolver::solve(
     result.risk_measure = risk::to_string(risk_config.type);
     result.cvar_beta = risk_config.cvarBeta;
     result.cvar_lambda = risk_config.cvarLambda;
+    result.objective_metric = solver::weighted_objective_metric_label(risk_config);
     result.branch_benders_enabled = true;
     const double root_user_cut_tolerance = effective_root_user_cut_tolerance(options);
     result.branch_benders_use_root_user_cuts = options.use_root_user_cuts;
@@ -1810,6 +1850,7 @@ solver::ModelResult FppBranchBendersSolver::solve(
             risk_config);
 
         result.objective_value = risk_evaluation.objective;
+        result.solver_weighted_objective = result.objective_value;
         result.expected_loss_component = risk_evaluation.expected;
         if (risk_enabled) {
             result.cvar_loss_component = risk_evaluation.cvar;
@@ -1977,6 +2018,10 @@ solver::ModelResult FppBranchBendersSolver::solve(
         result.branch_benders_root_user_cut_only_at_root_confirmed =
             root_user_stats.only_at_root_confirmed;
         result.branch_benders_root_user_cut_round_log = root_user_stats.round_log;
+        solver::attach_direct_fpp_weight_metadata(result, opt);
+        result.solver_weighted_objective = result.objective_value;
+        result.notes.push_back(
+            "FPP Branch-Benders eta variables, lazy cuts, root user cuts, bounds, and incumbent objective are expressed in weighted burned-node loss units.");
 
         const auto master_structure =
             analyze_fpp_branch_benders_master_structure(opt, risk_config);
