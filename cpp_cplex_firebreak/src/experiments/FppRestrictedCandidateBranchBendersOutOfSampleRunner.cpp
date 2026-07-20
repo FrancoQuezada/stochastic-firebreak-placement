@@ -299,6 +299,26 @@ void attach_restricted_diagnostics(
     io::StandardExperimentResult& result) {
     result.restricted_candidate_enabled = solve_result.restricted_candidate_enabled;
     result.restricted_candidate_exact_mode = solve_result.restricted_candidate_exact_mode;
+    result.restricted_candidate_bounds_enabled =
+        solve_result.candidate_bounds_enabled;
+    result.restricted_candidate_bounds_weighted =
+        solve_result.candidate_bounds_weighted;
+    result.restricted_candidate_bound_type =
+        solve_result.candidate_bound_type;
+    result.restricted_candidate_bound_map_hash =
+        solve_result.candidate_bound_map_hash;
+    result.restricted_candidates_evaluated_by_bound =
+        solve_result.candidates_evaluated_by_bound;
+    result.restricted_candidates_permanently_pruned =
+        solve_result.candidates_permanently_pruned;
+    result.restricted_candidates_not_pruned_due_to_safety =
+        solve_result.candidates_not_pruned_due_to_safety;
+    result.restricted_candidate_early_exactness_certificate_used =
+        solve_result.early_exactness_certificate_used;
+    result.restricted_candidate_full_activation_avoided =
+        solve_result.full_activation_avoided;
+    result.restricted_candidate_unvalidated_bound_rejected =
+        solve_result.unvalidated_bound_rejected;
     result.restricted_candidate_initial_policy = solve_result.initial_candidate_policy;
     result.restricted_candidate_activation_policy = solve_result.activation_policy;
     result.restricted_candidate_initial_active_count =
@@ -652,7 +672,7 @@ int FppRestrictedCandidateBranchBendersOutOfSampleRunner::run(
             options.combinatorial_options,
             options.strengthening_options)) {
         throw std::runtime_error(
-            "Non-homogeneous weighted run-fpp-restricted-branch-benders-oos Phase 5C1 supports only baseline LP lazy cuts and validated root user cuts; LLBI, projected LLBI, combinatorial Benders, dominance preprocessing, and conditional fixing are not yet weight-converted.");
+            "Non-homogeneous weighted run-fpp-restricted-branch-benders-oos Phase 5C2B2 rejects unvalidated permanent-pruning, strengthening, and combinatorial modules; disable LLBI, projected LLBI, combinatorial Benders, dominance preprocessing, and conditional fixing, or use a homogeneous map.");
     }
     const auto dominance_preprocess = benders::apply_fpp_global_dominance_preprocessing(
         opt_instance,

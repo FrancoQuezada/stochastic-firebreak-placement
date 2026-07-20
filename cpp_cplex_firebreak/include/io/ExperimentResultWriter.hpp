@@ -278,6 +278,16 @@ struct StandardExperimentResult {
     std::vector<std::string> warm_start_notes;
     bool restricted_candidate_enabled = false;
     bool restricted_candidate_exact_mode = false;
+    bool restricted_candidate_bounds_enabled = false;
+    bool restricted_candidate_bounds_weighted = false;
+    std::string restricted_candidate_bound_type = "none";
+    std::string restricted_candidate_bound_map_hash;
+    int restricted_candidates_evaluated_by_bound = 0;
+    int restricted_candidates_permanently_pruned = 0;
+    int restricted_candidates_not_pruned_due_to_safety = 0;
+    bool restricted_candidate_early_exactness_certificate_used = false;
+    bool restricted_candidate_full_activation_avoided = false;
+    bool restricted_candidate_unvalidated_bound_rejected = false;
     std::string restricted_candidate_initial_policy;
     std::string restricted_candidate_activation_policy;
     int restricted_candidate_initial_active_count = 0;

@@ -415,6 +415,26 @@ void write_restricted_candidate_json_block(std::ostream& out, const StandardExpe
     out << "  \"restricted_candidate\": {\n";
     out << "    \"enabled\": " << (result.restricted_candidate_enabled ? "true" : "false") << ",\n";
     out << "    \"exact_mode\": " << (result.restricted_candidate_exact_mode ? "true" : "false") << ",\n";
+    out << "    \"candidate_bounds_enabled\": "
+        << (result.restricted_candidate_bounds_enabled ? "true" : "false") << ",\n";
+    out << "    \"candidate_bounds_weighted\": "
+        << (result.restricted_candidate_bounds_weighted ? "true" : "false") << ",\n";
+    out << "    \"candidate_bound_type\": \""
+        << json_escape_local(result.restricted_candidate_bound_type) << "\",\n";
+    out << "    \"candidate_bound_map_hash\": \""
+        << json_escape_local(result.restricted_candidate_bound_map_hash) << "\",\n";
+    out << "    \"candidates_evaluated_by_bound\": "
+        << result.restricted_candidates_evaluated_by_bound << ",\n";
+    out << "    \"candidates_permanently_pruned\": "
+        << result.restricted_candidates_permanently_pruned << ",\n";
+    out << "    \"candidates_not_pruned_due_to_safety\": "
+        << result.restricted_candidates_not_pruned_due_to_safety << ",\n";
+    out << "    \"early_exactness_certificate_used\": "
+        << (result.restricted_candidate_early_exactness_certificate_used ? "true" : "false") << ",\n";
+    out << "    \"full_activation_avoided\": "
+        << (result.restricted_candidate_full_activation_avoided ? "true" : "false") << ",\n";
+    out << "    \"unvalidated_bound_rejected\": "
+        << (result.restricted_candidate_unvalidated_bound_rejected ? "true" : "false") << ",\n";
     out << "    \"initial_candidate_policy\": \""
         << json_escape_local(result.restricted_candidate_initial_policy) << "\",\n";
     out << "    \"activation_policy\": \""

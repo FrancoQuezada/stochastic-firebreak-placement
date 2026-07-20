@@ -388,6 +388,39 @@ void test_weighted_benders_coefficient_activation() {
     assert(!result.candidates_activated_by_benders_coefficients.empty());
     assert(!result.candidates_activated_by_score.empty());
     assert(result.candidate_score_map_hash == opt.cell_weight_map.deterministic_hash);
+    assert(result.candidate_bounds_enabled);
+    assert(result.candidate_bounds_weighted);
+    assert(result.candidate_bound_type == "active-set-upper-bound");
+    assert(result.candidate_bound_map_hash == opt.cell_weight_map.deterministic_hash);
+    assert(result.candidates_evaluated_by_bound ==
+           static_cast<int>(opt.eligible_indices.size()));
+    assert(result.candidates_permanently_pruned == 0);
+    assert(result.candidates_not_pruned_due_to_safety ==
+           static_cast<int>(opt.eligible_indices.size()));
+    assert(!result.early_exactness_certificate_used);
+    assert(!result.full_activation_avoided);
+    assert_close(final_restricted_objective(result), reference.objective_value);
+}
+
+void test_weighted_exact_mode_has_no_silent_permanent_pruning() {
+    const auto opt = make_weighted_branch_instance(false);
+    firebreak::benders::FppRestrictedCandidateBranchBendersSolver solver;
+    const auto reference =
+        solve_unrestricted_callback(opt, firebreak::risk::RiskMeasureConfig());
+
+    auto options = restricted_options(firebreak::risk::RiskMeasureConfig(), {0});
+    options.activation_policy = "benders-coefficients";
+    options.activation_batch_size = 1;
+    options.max_candidate_rounds = 0;
+    const auto result = solver.solve(opt, options);
+
+    assert(result.status == "Optimal");
+    assert(result.full_activation_performed);
+    assert(result.eventually_activated_all);
+    assert(result.candidate_bounds_enabled);
+    assert(result.candidates_permanently_pruned == 0);
+    assert(!result.early_exactness_certificate_used);
+    assert(!result.full_activation_avoided);
     assert_close(final_restricted_objective(result), reference.objective_value);
 }
 
@@ -500,6 +533,19 @@ void test_unsupported_weighted_restricted_options_rejected() {
         [&] { (void)solver.solve(opt, llbi); },
         "lifted lower bounds");
 
+    auto no_full_activation = restricted_options(firebreak::risk::RiskMeasureConfig(), {0});
+    no_full_activation.eventually_activate_all = false;
+    assert_throws(
+        [&] { (void)solver.solve(opt, no_full_activation); },
+        "weighted exact mode without full activation");
+
+    auto heuristic = restricted_options(firebreak::risk::RiskMeasureConfig(), {0});
+    heuristic.restricted_heuristic_mode = true;
+    heuristic.eventually_activate_all = false;
+    assert_throws(
+        [&] { (void)solver.solve(opt, heuristic); },
+        "weighted heuristic mode");
+
     auto maintenance = restricted_options(firebreak::risk::RiskMeasureConfig(), {0});
     maintenance.activation_policy = "benders-coefficients";
     maintenance.activation_batch_size = 1;
@@ -541,6 +587,7 @@ int main() {
     test_root_cuts_preserve_weighted_optimum();
     test_weighted_burn_frequency_initial_and_activation();
     test_weighted_benders_coefficient_activation();
+    test_weighted_exact_mode_has_no_silent_permanent_pruning();
     test_weighted_exact_maintenance_deactivates_and_full_activation_restores();
     test_weighted_tail_aware_activation();
     test_weighted_tail_diagnostic_export_cvar();

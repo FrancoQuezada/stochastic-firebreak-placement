@@ -112,6 +112,16 @@ struct FppRestrictedCandidateRoundLog {
 struct FppRestrictedCandidateBranchBendersResult {
     bool restricted_candidate_enabled = true;
     bool restricted_candidate_exact_mode = true;
+    bool candidate_bounds_enabled = false;
+    bool candidate_bounds_weighted = false;
+    std::string candidate_bound_type = "none";
+    std::string candidate_bound_map_hash;
+    int candidates_evaluated_by_bound = 0;
+    int candidates_permanently_pruned = 0;
+    int candidates_not_pruned_due_to_safety = 0;
+    bool early_exactness_certificate_used = false;
+    bool full_activation_avoided = false;
+    bool unvalidated_bound_rejected = false;
     bool full_activation_performed = false;
     bool eventually_activated_all = false;
     bool restricted_lower_bound_is_global = false;

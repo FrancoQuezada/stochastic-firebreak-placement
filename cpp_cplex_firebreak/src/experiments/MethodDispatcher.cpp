@@ -316,6 +316,26 @@ void attach_restricted_candidate_diagnostics(
     io::StandardExperimentResult& result) {
     result.restricted_candidate_enabled = restricted_result.restricted_candidate_enabled;
     result.restricted_candidate_exact_mode = restricted_result.restricted_candidate_exact_mode;
+    result.restricted_candidate_bounds_enabled =
+        restricted_result.candidate_bounds_enabled;
+    result.restricted_candidate_bounds_weighted =
+        restricted_result.candidate_bounds_weighted;
+    result.restricted_candidate_bound_type =
+        restricted_result.candidate_bound_type;
+    result.restricted_candidate_bound_map_hash =
+        restricted_result.candidate_bound_map_hash;
+    result.restricted_candidates_evaluated_by_bound =
+        restricted_result.candidates_evaluated_by_bound;
+    result.restricted_candidates_permanently_pruned =
+        restricted_result.candidates_permanently_pruned;
+    result.restricted_candidates_not_pruned_due_to_safety =
+        restricted_result.candidates_not_pruned_due_to_safety;
+    result.restricted_candidate_early_exactness_certificate_used =
+        restricted_result.early_exactness_certificate_used;
+    result.restricted_candidate_full_activation_avoided =
+        restricted_result.full_activation_avoided;
+    result.restricted_candidate_unvalidated_bound_rejected =
+        restricted_result.unvalidated_bound_rejected;
     result.restricted_candidate_initial_policy = restricted_result.initial_candidate_policy;
     result.restricted_candidate_activation_policy = restricted_result.activation_policy;
     result.restricted_candidate_initial_active_count =

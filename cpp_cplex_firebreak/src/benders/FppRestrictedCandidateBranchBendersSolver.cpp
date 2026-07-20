@@ -203,7 +203,7 @@ bool has_nonunit_compact_weights(const opt::OptimizationInstance& opt) {
     return false;
 }
 
-void validate_weighted_phase5c2b1_options(
+void validate_weighted_phase5c2b2_options(
     const opt::OptimizationInstance& opt,
     const FppRestrictedCandidateBranchBendersOptions& options) {
     if (!has_nonunit_compact_weights(opt)) {
@@ -211,7 +211,7 @@ void validate_weighted_phase5c2b1_options(
     }
     if (!options.eventually_activate_all || options.restricted_heuristic_mode) {
         throw std::runtime_error(
-            "Non-homogeneous weighted restricted Branch-Benders Phase 5C2B1 supports maintenance only in exact mode with eventual full activation.");
+            "Non-homogeneous weighted restricted Branch-Benders Phase 5C2B2 supports exact operation only with eventual full activation; heuristic candidate truncation is not validated for non-homogeneous weights.");
     }
     if (options.export_tail_score_diagnostics &&
         options.risk_config.type == risk::RiskMeasureType::Expected) {
@@ -229,7 +229,7 @@ void validate_weighted_phase5c2b1_options(
         options.strengthening_options.use_conditional_zero_benefit_fixing ||
         options.strengthening_options.use_global_dominance_preprocessing) {
         throw std::runtime_error(
-            "Non-homogeneous weighted restricted Branch-Benders Phase 5C2B1 rejects unconverted strengthening/combinatorial modules.");
+            "Non-homogeneous weighted restricted Branch-Benders Phase 5C2B2 rejects unvalidated permanent-pruning, strengthening, and combinatorial modules.");
     }
     if (options.candidate_score_mode == "cvar-tail-blend" &&
         options.activation_policy != "benders-coefficients") {
@@ -2495,7 +2495,7 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
     const FppRestrictedCandidateBranchBendersOptions& options) const {
     validate_options(options);
     validate_instance(opt);
-    validate_weighted_phase5c2b1_options(opt, options);
+    validate_weighted_phase5c2b2_options(opt, options);
     const auto risk_config = effective_risk_config_from(options.risk_config);
     const auto global_start = std::chrono::steady_clock::now();
     const bool nonunit_weights = has_nonunit_compact_weights(opt);
@@ -2529,6 +2529,18 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
     result.cvar_beta = risk_config.cvarBeta;
     result.cvar_lambda = risk_config.cvarLambda;
     result.restricted_candidate_exact_mode = options.eventually_activate_all;
+    result.candidate_bounds_enabled = true;
+    result.candidate_bounds_weighted = nonunit_weights;
+    result.candidate_bound_type = "active-set-upper-bound";
+    result.candidate_bound_map_hash = score_weight_map_hash;
+    result.candidates_evaluated_by_bound =
+        static_cast<int>(opt.eligible_indices.size());
+    result.candidates_permanently_pruned = 0;
+    result.candidates_not_pruned_due_to_safety =
+        nonunit_weights ? static_cast<int>(opt.eligible_indices.size()) : 0;
+    result.early_exactness_certificate_used = false;
+    result.full_activation_avoided = false;
+    result.unvalidated_bound_rejected = false;
     result.heuristic_mode_enabled = options.restricted_heuristic_mode;
     result.initial_candidate_policy = options.initial_candidate_policy;
     result.activation_policy = options.activation_policy;
@@ -2611,6 +2623,7 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
             "DPV, reduced-cost activation, and tail-aware activation weighting are disabled; LLBI and root cuts follow their restricted Branch-and-Benders options.");
     }
     result.notes.push_back("Exactness is claimed only after eventual full activation and an optimal final solve.");
+    result.notes.push_back("Phase 5C2B2 candidate bounds are structural active-set upper bounds only; no candidate is permanently pruned by a weighted bound.");
     result.notes.push_back("Restricted-stage cuts are generated over the full y-vector and persisted in a reusable cut pool.");
     if (options.combinatorial_options.enabled) {
         result.notes.push_back(
@@ -2669,6 +2682,8 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
         result.active_candidate_fraction_final = manager.activeFraction();
         result.active_candidate_fraction_at_stop = manager.activeFraction();
         result.eventually_activated_all = manager.allActive();
+        result.full_activation_avoided = !result.full_activation_performed;
+        result.early_exactness_certificate_used = false;
         result.candidate_rounds = static_cast<int>(result.round_log.size());
         result.activation_history = manager.activationHistory();
         result.notes.push_back(reason);
@@ -3412,6 +3427,7 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
         result.active_candidate_count_final = manager.activeCount();
         result.active_candidate_fraction_final = manager.activeFraction();
         result.eventually_activated_all = manager.allActive();
+        result.full_activation_avoided = !result.full_activation_performed;
         result.activation_history = manager.activationHistory();
         refresh_elapsed_time();
         update_cut_pool_diagnostics(result, cut_pool);
@@ -3430,6 +3446,7 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
     }
     result.candidates_activated_by_full_fallback = full_activation_batch;
     result.full_activation_performed = true;
+    result.full_activation_avoided = false;
     result.activation_history = manager.activationHistory();
 
     bounds.apply(manager);
