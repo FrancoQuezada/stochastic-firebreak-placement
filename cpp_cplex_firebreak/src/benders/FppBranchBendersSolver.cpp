@@ -129,8 +129,7 @@ bool has_nonunit_compact_weights(const opt::OptimizationInstance& opt) {
 }
 
 bool uses_unconverted_weighted_strengthening(const FppBranchBendersOptions& options) {
-    return options.use_lifted_lower_bounds ||
-           options.combinatorial_options.enabled ||
+    return options.combinatorial_options.enabled ||
            options.strengthening_options.use_coverage_llbi ||
            options.strengthening_options.use_path_llbi ||
            options.strengthening_options.use_projected_coverage_llbi_exp ||
@@ -1218,7 +1217,7 @@ solver::ModelResult FppBranchBendersSolver::solve(
     if (has_nonunit_compact_weights(opt) &&
         uses_unconverted_weighted_strengthening(options)) {
         throw std::runtime_error(
-            "Non-homogeneous weighted FPP Branch-Benders Phase 6A supports LP lazy cuts, root user cuts, structural global dominance, and conditional zero-benefit diagnostics; LLBI, projected LLBI, and combinatorial Benders remain unconverted.");
+            "Non-homogeneous weighted FPP Branch-Benders Phase 6B1 supports LP lazy cuts, root user cuts, standard downstream-union LLBI, structural global dominance, and conditional zero-benefit diagnostics; Coverage/Path/projected LLBI and combinatorial Benders remain unconverted.");
     }
     const auto risk_config = effective_risk_config_from(options.risk_config);
     const bool risk_enabled = uses_cvar_risk(risk_config);
@@ -1411,6 +1410,23 @@ solver::ModelResult FppBranchBendersSolver::solve(
                 llb_result.total_nonzero_coefficients;
             result.benders_lifted_lower_bound_min_rhs = llb_result.min_rhs;
             result.benders_lifted_lower_bound_max_rhs = llb_result.max_rhs;
+            result.benders_lifted_lower_bound_weighted = llb_result.weighted;
+            result.benders_lifted_lower_bound_weight_map_hash = llb_result.weight_map_hash;
+            result.benders_lifted_lower_bound_scenarios_precomputed =
+                llb_result.scenarios_precomputed;
+            result.benders_lifted_lower_bound_singletons_evaluated =
+                llb_result.singletons_evaluated;
+            result.benders_lifted_lower_bound_no_firebreak_loss_min =
+                llb_result.no_firebreak_loss_min;
+            result.benders_lifted_lower_bound_no_firebreak_loss_max =
+                llb_result.no_firebreak_loss_max;
+            result.benders_lifted_lower_bound_singleton_benefit_min =
+                llb_result.singleton_benefit_min;
+            result.benders_lifted_lower_bound_singleton_benefit_max =
+                llb_result.singleton_benefit_max;
+            result.benders_lifted_lower_bound_constraints_added = lifted_lower_bound_count;
+            result.benders_lifted_lower_bound_cache_hit = llb_result.cache_hit;
+            result.benders_lifted_lower_bound_validity_mode = llb_result.validity_mode;
             result.benders_lifted_lower_bound_notes = llb_result.notes;
         }
 

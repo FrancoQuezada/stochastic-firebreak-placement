@@ -9,6 +9,8 @@
 #include <stdexcept>
 #include <vector>
 
+#include "solver/FppWeightedLossUtils.hpp"
+
 namespace firebreak::benders {
 
 namespace {
@@ -119,12 +121,60 @@ double count_burned_nodes(const std::vector<char>& burned_by_compact_index) {
         static_cast<char>(1)));
 }
 
+double weighted_burn_loss(
+    const std::vector<char>& burned_by_compact_index,
+    const std::vector<double>& compact_weights) {
+    if (burned_by_compact_index.size() != compact_weights.size()) {
+        throw std::runtime_error("FPP weighted burned-loss vector sizes do not match.");
+    }
+    double loss = 0.0;
+    for (std::size_t compact_index = 0; compact_index < burned_by_compact_index.size();
+         ++compact_index) {
+        if (burned_by_compact_index[compact_index]) {
+            loss += compact_weights[compact_index];
+        }
+    }
+    return loss;
+}
+
+bool has_nonunit_weights(const std::vector<double>& compact_weights) {
+    for (const double weight : compact_weights) {
+        if (std::fabs(weight - 1.0) > 1.0e-9) {
+            return true;
+        }
+    }
+    return false;
+}
+
+std::string llbi_weight_map_hash(const opt::OptimizationInstance& opt) {
+    if (!opt.cell_weight_map.deterministic_hash.empty()) {
+        return opt.cell_weight_map.deterministic_hash;
+    }
+    if (opt.compact_cell_weights.empty()) {
+        return "homogeneous-unit";
+    }
+    std::ostringstream out;
+    out << "compact-weights:n=" << opt.compact_cell_weights.size();
+    double total = 0.0;
+    double weighted_index_sum = 0.0;
+    for (std::size_t i = 0; i < opt.compact_cell_weights.size(); ++i) {
+        total += opt.compact_cell_weights[i];
+        weighted_index_sum += static_cast<double>(i + 1) * opt.compact_cell_weights[i];
+    }
+    out << ":sum=" << total << ":idxsum=" << weighted_index_sum;
+    return out.str();
+}
+
 struct FppLiftedScenarioStructure {
     int scenario_id = 0;
     int node_count = 0;
     int ignition_index = -1;
     double f_empty = 0.0;
+    double empty_burned_area = 0.0;
+    bool weighted = false;
+    std::string weight_map_hash;
     std::vector<int> eligible_indices;
+    std::vector<double> compact_weights;
     std::vector<std::vector<int>> adjacency;
     std::vector<char> empty_burned_by_compact_index;
 };
@@ -141,6 +191,9 @@ FppLiftedScenarioStructure build_lifted_scenario_structure(
     structure.node_count = node_count;
     structure.ignition_index = scenario.ignition_index;
     structure.eligible_indices = opt.eligible_indices;
+    structure.compact_weights = solver::direct_fpp_compact_weights_or_unit(opt);
+    structure.weighted = has_nonunit_weights(structure.compact_weights);
+    structure.weight_map_hash = llbi_weight_map_hash(opt);
     structure.adjacency = build_adjacency(scenario, node_count);
 
     const std::vector<char> empty_selection(static_cast<std::size_t>(node_count), 0);
@@ -149,7 +202,10 @@ FppLiftedScenarioStructure build_lifted_scenario_structure(
         structure.adjacency,
         node_count,
         empty_selection);
-    structure.f_empty = count_burned_nodes(structure.empty_burned_by_compact_index);
+    structure.empty_burned_area = count_burned_nodes(structure.empty_burned_by_compact_index);
+    structure.f_empty = weighted_burn_loss(
+        structure.empty_burned_by_compact_index,
+        structure.compact_weights);
     return structure;
 }
 
@@ -171,13 +227,13 @@ FppLiftedLowerBoundInequality build_lifted_lower_bound_from_structure(
         if (compact_index != structure.ignition_index) {
             const auto downstream_nodes =
                 closed_downstream_nodes(compact_index, structure.adjacency);
-            int removed = 0;
+            double removed = 0.0;
             for (const int downstream : downstream_nodes) {
                 if (structure.empty_burned_by_compact_index[static_cast<std::size_t>(downstream)]) {
-                    ++removed;
+                    removed += structure.compact_weights[static_cast<std::size_t>(downstream)];
                 }
             }
-            coefficient = -static_cast<double>(removed);
+            coefficient = -removed;
         }
 
         if (std::fabs(coefficient) > coefficient_threshold) {
@@ -209,13 +265,13 @@ void enumerate_subsets(
     }
 
     const double actual =
-        evaluate_fixed_y_fpp_loss(opt, scenario_position, selected_by_compact).burned_area;
+        evaluate_fixed_y_fpp_loss(opt, scenario_position, selected_by_compact).weighted_burn_loss;
     const double lower_bound = inequality.evaluateAtCompact(selected_by_compact);
     if (actual + tolerance < lower_bound) {
         std::ostringstream message;
         message << "FPP lifted lower-bound inequality violated for scenario "
                 << inequality.scenario_id
-                << ": actual fixed-y burned area=" << actual
+                << ": actual fixed-y weighted burn loss=" << actual
                 << ", lower_bound=" << lower_bound
                 << ", selected original nodes=";
         bool first = true;
@@ -303,6 +359,9 @@ FixedFppLossResult evaluate_fixed_y_fpp_loss(
         node_count,
         selected_firebreak_by_compact_index);
     result.burned_area = count_burned_nodes(result.burned_by_compact_index);
+    result.weighted_burn_loss = weighted_burn_loss(
+        result.burned_by_compact_index,
+        solver::direct_fpp_compact_weights_or_unit(opt));
     return result;
 }
 
@@ -317,7 +376,8 @@ FixedFppLossResult evaluate_optimistic_singleton_fpp_loss(
 
     FixedFppLossResult result;
     result.scenario_id = structure.scenario_id;
-    result.burned_area = structure.f_empty;
+    result.burned_area = structure.empty_burned_area;
+    result.weighted_burn_loss = structure.f_empty;
     result.burned_by_compact_index = structure.empty_burned_by_compact_index;
 
     if (firebreak_compact_index == structure.ignition_index) {
@@ -330,6 +390,9 @@ FixedFppLossResult evaluate_optimistic_singleton_fpp_loss(
         result.burned_by_compact_index[static_cast<std::size_t>(compact_index)] = 0;
     }
     result.burned_area = count_burned_nodes(result.burned_by_compact_index);
+    result.weighted_burn_loss = weighted_burn_loss(
+        result.burned_by_compact_index,
+        structure.compact_weights);
     return result;
 }
 
@@ -354,6 +417,15 @@ FppLiftedLowerBoundPrecomputeResult build_fpp_lifted_lower_bounds(
     result.inequalities.reserve(opt.scenarios.size());
     result.min_rhs = std::numeric_limits<double>::infinity();
     result.max_rhs = -std::numeric_limits<double>::infinity();
+    result.no_firebreak_loss_min = std::numeric_limits<double>::infinity();
+    result.no_firebreak_loss_max = -std::numeric_limits<double>::infinity();
+    result.singleton_benefit_min = std::numeric_limits<double>::infinity();
+    result.singleton_benefit_max = -std::numeric_limits<double>::infinity();
+    const auto compact_weights = solver::direct_fpp_compact_weights_or_unit(opt);
+    result.weighted = has_nonunit_weights(compact_weights);
+    result.weight_map_hash = llbi_weight_map_hash(opt);
+    result.scenarios_precomputed = static_cast<int>(opt.scenarios.size());
+    result.validity_mode = "downstream-union-bound";
 
     for (std::size_t s = 0; s < opt.scenarios.size(); ++s) {
         auto inequality = build_fpp_lifted_lower_bound_for_scenario(
@@ -363,6 +435,27 @@ FppLiftedLowerBoundPrecomputeResult build_fpp_lifted_lower_bounds(
         result.total_nonzero_coefficients += inequality.nonzero_coefficients;
         result.min_rhs = std::min(result.min_rhs, inequality.rhs_constant);
         result.max_rhs = std::max(result.max_rhs, inequality.rhs_constant);
+        result.no_firebreak_loss_min =
+            std::min(result.no_firebreak_loss_min, inequality.rhs_constant);
+        result.no_firebreak_loss_max =
+            std::max(result.no_firebreak_loss_max, inequality.rhs_constant);
+        for (const int compact_index : opt.eligible_indices) {
+            double benefit = 0.0;
+            const auto found = std::find_if(
+                inequality.coefficients_by_compact_index.begin(),
+                inequality.coefficients_by_compact_index.end(),
+                [compact_index](const auto& entry) {
+                    return entry.first == compact_index;
+                });
+            if (found != inequality.coefficients_by_compact_index.end()) {
+                benefit = -found->second;
+            }
+            result.singleton_benefit_min =
+                std::min(result.singleton_benefit_min, benefit);
+            result.singleton_benefit_max =
+                std::max(result.singleton_benefit_max, benefit);
+            ++result.singletons_evaluated;
+        }
         result.notes.insert(
             result.notes.end(),
             inequality.notes.begin(),
@@ -373,9 +466,17 @@ FppLiftedLowerBoundPrecomputeResult build_fpp_lifted_lower_bounds(
     if (result.inequalities.empty()) {
         result.min_rhs = 0.0;
         result.max_rhs = 0.0;
+        result.no_firebreak_loss_min = 0.0;
+        result.no_firebreak_loss_max = 0.0;
+    }
+    if (result.singletons_evaluated == 0) {
+        result.singleton_benefit_min = 0.0;
+        result.singleton_benefit_max = 0.0;
     }
     result.notes.push_back(
-        "FPP lifted lower-bound inequalities use optimistic downstream singleton burned-area losses; singleton LP subproblems are not solved for coefficients.");
+        "FPP lifted lower-bound inequalities use optimistic downstream singleton weighted losses; singleton LP subproblems are not solved for coefficients.");
+    result.notes.push_back(
+        "Validity mode downstream-union-bound: each coefficient is the weighted empty-burned mass in the candidate's closed downstream set, so selected firebreaks subtract at most a union upper bound.");
 
     const auto end = std::chrono::steady_clock::now();
     result.precompute_time_sec = std::chrono::duration<double>(end - start).count();

@@ -245,6 +245,20 @@ TEST_WEIGHTED_FPP_SAA_MODEL_SOURCES := \
 	src/solver/FppCutReachabilityCplexModel.cpp \
 	tests/test_weighted_fpp_saa_model.cpp
 
+TEST_WEIGHTED_STANDARD_LLBI_SOURCES := \
+	src/benders/FppLiftedLowerBound.cpp \
+	src/core/LandscapeWeightMap.cpp \
+	src/io/PathUtils.cpp \
+	src/opt/IndexMapper.cpp \
+	src/opt/OptimizationInstance.cpp \
+	src/risk/RiskMeasure.cpp \
+	src/solver/FppWeightedLossUtils.cpp \
+	tests/test_weighted_standard_llbi.cpp
+
+TEST_WEIGHTED_STANDARD_LLBI_VALIDITY_SOURCES := \
+	$(filter-out tests/test_weighted_standard_llbi.cpp,$(TEST_WEIGHTED_STANDARD_LLBI_SOURCES)) \
+	tests/test_weighted_standard_llbi_validity.cpp
+
 TEST_DPV_STRUCTURE_SOURCES := \
 	src/opt/IndexMapper.cpp \
 	src/opt/OptimizationInstance.cpp \
@@ -653,6 +667,8 @@ TEST_EXES := \
 	$(BUILD_DIR)/test_weighted_fpp_recourse_evaluator \
 	$(BUILD_DIR)/test_fpp_saa_model_structure \
 	$(BUILD_DIR)/test_weighted_fpp_saa_model \
+	$(BUILD_DIR)/test_weighted_standard_llbi \
+	$(BUILD_DIR)/test_weighted_standard_llbi_validity \
 	$(BUILD_DIR)/test_dpv_saa_model_structure \
 	$(BUILD_DIR)/test_graph_diagnostics \
 	$(BUILD_DIR)/test_cell2fire_reader_new_instances \
@@ -798,6 +814,12 @@ $(BUILD_DIR)/test_fpp_saa_model_structure: $(call test_obj,$(TEST_FPP_STRUCTURE_
 $(BUILD_DIR)/test_weighted_fpp_saa_model: $(call test_obj,$(TEST_WEIGHTED_FPP_SAA_MODEL_SOURCES))
 	$(CXX) $^ -o $@
 
+$(BUILD_DIR)/test_weighted_standard_llbi: $(call test_obj,$(TEST_WEIGHTED_STANDARD_LLBI_SOURCES))
+	$(CXX) $^ -o $@
+
+$(BUILD_DIR)/test_weighted_standard_llbi_validity: $(call test_obj,$(TEST_WEIGHTED_STANDARD_LLBI_VALIDITY_SOURCES))
+	$(CXX) $^ -o $@
+
 $(BUILD_DIR)/test_weighted_fpp_saa_cplex: $(TEST_WEIGHTED_FPP_SAA_MODEL_SOURCES)
 	@mkdir -p $(dir $@)
 	$(CXX) $(COMMON_CPPFLAGS) $(CPLEX_CPPFLAGS) $(COMMON_CXXFLAGS) $^ $(CPLEX_LDFLAGS) -o $@
@@ -823,6 +845,10 @@ $(BUILD_DIR)/test_weighted_fpp_branch_benders_root_cuts: $(TEST_WEIGHTED_FPP_BRA
 	$(CXX) $(COMMON_CPPFLAGS) $(CPLEX_CPPFLAGS) $(COMMON_CXXFLAGS) $^ $(CPLEX_LDFLAGS) -o $@
 
 $(BUILD_DIR)/test_weighted_fpp_branch_benders_cplex: $(TEST_WEIGHTED_FPP_BRANCH_BENDERS_CPLEX_SOURCES)
+	@mkdir -p $(dir $@)
+	$(CXX) $(COMMON_CPPFLAGS) $(CPLEX_CPPFLAGS) $(COMMON_CXXFLAGS) $^ $(CPLEX_LDFLAGS) -o $@
+
+$(BUILD_DIR)/test_weighted_standard_llbi_cplex: $(TEST_WEIGHTED_FPP_BRANCH_BENDERS_CPLEX_SOURCES)
 	@mkdir -p $(dir $@)
 	$(CXX) $(COMMON_CPPFLAGS) $(CPLEX_CPPFLAGS) $(COMMON_CXXFLAGS) $^ $(CPLEX_LDFLAGS) -o $@
 
@@ -1003,6 +1029,8 @@ test: $(TEST_EXES)
 	./build_gpp/test_weighted_fpp_recourse_evaluator
 	./build_gpp/test_fpp_saa_model_structure
 	./build_gpp/test_weighted_fpp_saa_model
+	./build_gpp/test_weighted_standard_llbi
+	./build_gpp/test_weighted_standard_llbi_validity
 	./build_gpp/test_graph_diagnostics
 	./build_gpp/test_cell2fire_reader_new_instances
 	./build_gpp/test_solution_io

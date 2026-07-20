@@ -488,6 +488,28 @@ int FppBendersOutOfSampleRunner::run(const FppBendersOutOfSampleOptions& options
         solve_result.benders_lifted_lower_bound_nonzero_coefficients;
     result.benders_lifted_lower_bound_min_rhs = solve_result.benders_lifted_lower_bound_min_rhs;
     result.benders_lifted_lower_bound_max_rhs = solve_result.benders_lifted_lower_bound_max_rhs;
+    result.benders_lifted_lower_bound_weighted =
+        solve_result.benders_lifted_lower_bound_weighted;
+    result.benders_lifted_lower_bound_weight_map_hash =
+        solve_result.benders_lifted_lower_bound_weight_map_hash;
+    result.benders_lifted_lower_bound_scenarios_precomputed =
+        solve_result.benders_lifted_lower_bound_scenarios_precomputed;
+    result.benders_lifted_lower_bound_singletons_evaluated =
+        solve_result.benders_lifted_lower_bound_singletons_evaluated;
+    result.benders_lifted_lower_bound_no_firebreak_loss_min =
+        solve_result.benders_lifted_lower_bound_no_firebreak_loss_min;
+    result.benders_lifted_lower_bound_no_firebreak_loss_max =
+        solve_result.benders_lifted_lower_bound_no_firebreak_loss_max;
+    result.benders_lifted_lower_bound_singleton_benefit_min =
+        solve_result.benders_lifted_lower_bound_singleton_benefit_min;
+    result.benders_lifted_lower_bound_singleton_benefit_max =
+        solve_result.benders_lifted_lower_bound_singleton_benefit_max;
+    result.benders_lifted_lower_bound_constraints_added =
+        solve_result.benders_lifted_lower_bound_constraints_added;
+    result.benders_lifted_lower_bound_cache_hit =
+        solve_result.benders_lifted_lower_bound_cache_hit;
+    result.benders_lifted_lower_bound_validity_mode =
+        solve_result.benders_lifted_lower_bound_validity_mode;
     result.benders_lifted_lower_bound_notes = solve_result.benders_lifted_lower_bound_notes;
     result.benders_iteration_log = solve_result.benders_iteration_log;
     result.fpp_mode = "fpp_benders_explicit_loop";

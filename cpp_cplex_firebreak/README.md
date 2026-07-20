@@ -119,6 +119,16 @@ It includes, for each objective family, the root-cut baseline, lifted lower
 bound inequalities, projected coverage LLBI, projected path LLBI, and
 combinatorial Benders variants.
 
+Weighted landscape status:
+
+- Standard FPP LLBI is weight-aware for explicit-loop and callback
+  Branch-and-Benders (`docs/WEIGHTED_LANDSCAPES_PHASE6B1.md`).
+- The weighted standard LLBI formula uses downstream empty-burned weighted mass,
+  not exact singleton LP subproblem solves.
+- Restricted-candidate LLBI, CoverageLLBI, PathLLBI, projected LLBI,
+  combinatorial Benders/lifting, DPV, and Static-DPV remain blocked for
+  non-homogeneous weights until separately validated.
+
 Expected objective methods:
 
 ```text

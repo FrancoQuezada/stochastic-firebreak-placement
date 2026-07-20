@@ -227,7 +227,7 @@ void validate_weighted_phase5c2b2_options(
         options.strengthening_options.use_projected_coverage_llbi_poly ||
         options.strengthening_options.use_projected_path_llbi_poly) {
         throw std::runtime_error(
-            "Non-homogeneous weighted restricted Branch-Benders Phase 6A allows structural global dominance and conditional zero-benefit diagnostics; LLBI, projected LLBI, and combinatorial Benders remain unconverted.");
+            "Non-homogeneous weighted restricted Branch-Benders Phase 6B1 allows structural global dominance and conditional zero-benefit diagnostics; restricted standard LLBI remains disabled because inactive candidate coefficients are not retained safely. Coverage/Path/projected LLBI and combinatorial Benders remain unconverted.");
     }
     if (options.candidate_score_mode == "cvar-tail-blend" &&
         options.activation_policy != "benders-coefficients") {
@@ -1985,6 +1985,26 @@ RestrictedStageSolveResult solve_stage_impl(
                 llb_result.total_nonzero_coefficients;
             stage.model_result.benders_lifted_lower_bound_min_rhs = llb_result.min_rhs;
             stage.model_result.benders_lifted_lower_bound_max_rhs = llb_result.max_rhs;
+            stage.model_result.benders_lifted_lower_bound_weighted = llb_result.weighted;
+            stage.model_result.benders_lifted_lower_bound_weight_map_hash =
+                llb_result.weight_map_hash;
+            stage.model_result.benders_lifted_lower_bound_scenarios_precomputed =
+                llb_result.scenarios_precomputed;
+            stage.model_result.benders_lifted_lower_bound_singletons_evaluated =
+                llb_result.singletons_evaluated;
+            stage.model_result.benders_lifted_lower_bound_no_firebreak_loss_min =
+                llb_result.no_firebreak_loss_min;
+            stage.model_result.benders_lifted_lower_bound_no_firebreak_loss_max =
+                llb_result.no_firebreak_loss_max;
+            stage.model_result.benders_lifted_lower_bound_singleton_benefit_min =
+                llb_result.singleton_benefit_min;
+            stage.model_result.benders_lifted_lower_bound_singleton_benefit_max =
+                llb_result.singleton_benefit_max;
+            stage.model_result.benders_lifted_lower_bound_constraints_added =
+                lifted_lower_bound_count;
+            stage.model_result.benders_lifted_lower_bound_cache_hit = llb_result.cache_hit;
+            stage.model_result.benders_lifted_lower_bound_validity_mode =
+                llb_result.validity_mode;
             stage.model_result.benders_lifted_lower_bound_notes = llb_result.notes;
         }
 

@@ -224,6 +224,24 @@ solver::ModelResult FppBendersSolver::solve(
             llb_result.total_nonzero_coefficients;
         result.benders_lifted_lower_bound_min_rhs = llb_result.min_rhs;
         result.benders_lifted_lower_bound_max_rhs = llb_result.max_rhs;
+        result.benders_lifted_lower_bound_weighted = llb_result.weighted;
+        result.benders_lifted_lower_bound_weight_map_hash = llb_result.weight_map_hash;
+        result.benders_lifted_lower_bound_scenarios_precomputed =
+            llb_result.scenarios_precomputed;
+        result.benders_lifted_lower_bound_singletons_evaluated =
+            llb_result.singletons_evaluated;
+        result.benders_lifted_lower_bound_no_firebreak_loss_min =
+            llb_result.no_firebreak_loss_min;
+        result.benders_lifted_lower_bound_no_firebreak_loss_max =
+            llb_result.no_firebreak_loss_max;
+        result.benders_lifted_lower_bound_singleton_benefit_min =
+            llb_result.singleton_benefit_min;
+        result.benders_lifted_lower_bound_singleton_benefit_max =
+            llb_result.singleton_benefit_max;
+        result.benders_lifted_lower_bound_constraints_added =
+            master.getLiftedLowerBoundCount();
+        result.benders_lifted_lower_bound_cache_hit = llb_result.cache_hit;
+        result.benders_lifted_lower_bound_validity_mode = llb_result.validity_mode;
         result.benders_lifted_lower_bound_notes = llb_result.notes;
         result.notes.push_back(
             "Optional FPP lifted lower-bound inequalities were added to the Benders master.");

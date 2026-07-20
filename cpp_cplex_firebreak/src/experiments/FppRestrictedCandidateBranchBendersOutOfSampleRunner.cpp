@@ -680,7 +680,7 @@ int FppRestrictedCandidateBranchBendersOutOfSampleRunner::run(
             options.combinatorial_options,
             options.strengthening_options)) {
         throw std::runtime_error(
-            "Non-homogeneous weighted run-fpp-restricted-branch-benders-oos Phase 6A allows structural global dominance and conditional zero-benefit diagnostics; LLBI, projected LLBI, and combinatorial Benders remain unconverted.");
+            "Non-homogeneous weighted run-fpp-restricted-branch-benders-oos Phase 6B1 allows structural global dominance and conditional zero-benefit diagnostics; restricted standard LLBI remains disabled because inactive candidate coefficients are not retained safely. Coverage/Path/projected LLBI and combinatorial Benders remain unconverted.");
     }
     const auto dominance_preprocess = benders::apply_fpp_global_dominance_preprocessing(
         opt_instance,
@@ -875,6 +875,28 @@ int FppRestrictedCandidateBranchBendersOutOfSampleRunner::run(
         reported_stage.benders_lifted_lower_bound_min_rhs;
     result.benders_lifted_lower_bound_max_rhs =
         reported_stage.benders_lifted_lower_bound_max_rhs;
+    result.benders_lifted_lower_bound_weighted =
+        reported_stage.benders_lifted_lower_bound_weighted;
+    result.benders_lifted_lower_bound_weight_map_hash =
+        reported_stage.benders_lifted_lower_bound_weight_map_hash;
+    result.benders_lifted_lower_bound_scenarios_precomputed =
+        reported_stage.benders_lifted_lower_bound_scenarios_precomputed;
+    result.benders_lifted_lower_bound_singletons_evaluated =
+        reported_stage.benders_lifted_lower_bound_singletons_evaluated;
+    result.benders_lifted_lower_bound_no_firebreak_loss_min =
+        reported_stage.benders_lifted_lower_bound_no_firebreak_loss_min;
+    result.benders_lifted_lower_bound_no_firebreak_loss_max =
+        reported_stage.benders_lifted_lower_bound_no_firebreak_loss_max;
+    result.benders_lifted_lower_bound_singleton_benefit_min =
+        reported_stage.benders_lifted_lower_bound_singleton_benefit_min;
+    result.benders_lifted_lower_bound_singleton_benefit_max =
+        reported_stage.benders_lifted_lower_bound_singleton_benefit_max;
+    result.benders_lifted_lower_bound_constraints_added =
+        reported_stage.benders_lifted_lower_bound_constraints_added;
+    result.benders_lifted_lower_bound_cache_hit =
+        reported_stage.benders_lifted_lower_bound_cache_hit;
+    result.benders_lifted_lower_bound_validity_mode =
+        reported_stage.benders_lifted_lower_bound_validity_mode;
     result.benders_lifted_lower_bound_notes =
         reported_stage.benders_lifted_lower_bound_notes;
     result.branch_benders_enabled = reported_stage.branch_benders_enabled;

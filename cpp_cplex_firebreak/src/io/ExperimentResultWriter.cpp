@@ -218,6 +218,7 @@ bool has_benders_diagnostics(const StandardExperimentResult& result) {
            result.benders_use_lifted_lower_bounds ||
            result.benders_lifted_lower_bound_count > 0 ||
            result.benders_lifted_lower_bound_nonzero_coefficients > 0 ||
+           result.benders_lifted_lower_bound_constraints_added > 0 ||
            !result.benders_lifted_lower_bound_notes.empty();
 }
 
@@ -264,6 +265,28 @@ void write_benders_json_block(std::ostream& out, const StandardExperimentResult&
         << format_json_number(result.benders_lifted_lower_bound_min_rhs) << ",\n";
     out << "    \"lifted_lower_bound_max_rhs\": "
         << format_json_number(result.benders_lifted_lower_bound_max_rhs) << ",\n";
+    out << "    \"lifted_lower_bound_weighted\": "
+        << (result.benders_lifted_lower_bound_weighted ? "true" : "false") << ",\n";
+    out << "    \"lifted_lower_bound_weight_map_hash\": \""
+        << json_escape_local(result.benders_lifted_lower_bound_weight_map_hash) << "\",\n";
+    out << "    \"lifted_lower_bound_scenarios_precomputed\": "
+        << result.benders_lifted_lower_bound_scenarios_precomputed << ",\n";
+    out << "    \"lifted_lower_bound_singletons_evaluated\": "
+        << result.benders_lifted_lower_bound_singletons_evaluated << ",\n";
+    out << "    \"lifted_lower_bound_no_firebreak_loss_min\": "
+        << format_json_number(result.benders_lifted_lower_bound_no_firebreak_loss_min) << ",\n";
+    out << "    \"lifted_lower_bound_no_firebreak_loss_max\": "
+        << format_json_number(result.benders_lifted_lower_bound_no_firebreak_loss_max) << ",\n";
+    out << "    \"lifted_lower_bound_singleton_benefit_min\": "
+        << format_json_number(result.benders_lifted_lower_bound_singleton_benefit_min) << ",\n";
+    out << "    \"lifted_lower_bound_singleton_benefit_max\": "
+        << format_json_number(result.benders_lifted_lower_bound_singleton_benefit_max) << ",\n";
+    out << "    \"lifted_lower_bound_constraints_added\": "
+        << result.benders_lifted_lower_bound_constraints_added << ",\n";
+    out << "    \"lifted_lower_bound_cache_hit\": "
+        << (result.benders_lifted_lower_bound_cache_hit ? "true" : "false") << ",\n";
+    out << "    \"lifted_lower_bound_validity_mode\": \""
+        << json_escape_local(result.benders_lifted_lower_bound_validity_mode) << "\",\n";
     out << "    \"lifted_lower_bound_notes\": ";
     write_json_string_array(out, result.benders_lifted_lower_bound_notes);
     out << ",\n";
@@ -1195,6 +1218,8 @@ void append_experiment_result_csv(
         write_header || existing_csv_has_column(output_path, "benders_master_solve_time_sec");
     const bool include_lifted_lower_bound_summary =
         write_header || existing_csv_has_column(output_path, "benders_use_lifted_lower_bounds");
+    const bool include_lifted_lower_bound_extended =
+        write_header || existing_csv_has_column(output_path, "benders_lifted_lower_bound_weighted");
     const bool include_branch_benders_summary =
         write_header || existing_csv_has_column(output_path, "branch_benders_lazy_cuts_added");
     const bool include_branch_benders_timing_summary =
@@ -1239,6 +1264,16 @@ void append_experiment_result_csv(
             << "benders_max_subproblem_time_sec,"
             << "benders_use_lifted_lower_bounds,benders_lifted_lower_bound_count,"
             << "benders_lifted_lower_bound_precompute_time_sec,"
+            << "benders_lifted_lower_bound_weighted,benders_lifted_lower_bound_weight_map_hash,"
+            << "benders_lifted_lower_bound_scenarios_precomputed,"
+            << "benders_lifted_lower_bound_singletons_evaluated,"
+            << "benders_lifted_lower_bound_no_firebreak_loss_min,"
+            << "benders_lifted_lower_bound_no_firebreak_loss_max,"
+            << "benders_lifted_lower_bound_singleton_benefit_min,"
+            << "benders_lifted_lower_bound_singleton_benefit_max,"
+            << "benders_lifted_lower_bound_constraints_added,"
+            << "benders_lifted_lower_bound_cache_hit,"
+            << "benders_lifted_lower_bound_validity_mode,"
             << "branch_benders_lazy_cuts_added,branch_benders_candidate_incumbents_checked,"
             << "branch_benders_max_cut_violation,"
             << "branch_benders_candidate_callback_calls,branch_benders_subproblems_attempted,"
@@ -1376,6 +1411,19 @@ void append_experiment_result_csv(
         out << (result.benders_use_lifted_lower_bounds ? "true" : "false") << ","
             << result.benders_lifted_lower_bound_count << ","
             << format_csv_number(result.benders_lifted_lower_bound_precompute_time_sec) << ",";
+    }
+    if (include_lifted_lower_bound_extended) {
+        out << (result.benders_lifted_lower_bound_weighted ? "true" : "false") << ","
+            << csv_escape(result.benders_lifted_lower_bound_weight_map_hash) << ","
+            << result.benders_lifted_lower_bound_scenarios_precomputed << ","
+            << result.benders_lifted_lower_bound_singletons_evaluated << ","
+            << format_csv_number(result.benders_lifted_lower_bound_no_firebreak_loss_min) << ","
+            << format_csv_number(result.benders_lifted_lower_bound_no_firebreak_loss_max) << ","
+            << format_csv_number(result.benders_lifted_lower_bound_singleton_benefit_min) << ","
+            << format_csv_number(result.benders_lifted_lower_bound_singleton_benefit_max) << ","
+            << result.benders_lifted_lower_bound_constraints_added << ","
+            << (result.benders_lifted_lower_bound_cache_hit ? "true" : "false") << ","
+            << csv_escape(result.benders_lifted_lower_bound_validity_mode) << ",";
     }
     if (include_branch_benders_summary) {
         out << result.branch_benders_lazy_cuts_added << ","

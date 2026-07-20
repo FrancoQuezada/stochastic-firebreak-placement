@@ -139,7 +139,8 @@ double exact_weighted_recourse(
 firebreak::solver::ModelResult solve_callback(
     const firebreak::opt::OptimizationInstance& opt,
     const firebreak::risk::RiskMeasureConfig& risk_config,
-    bool use_root_user_cuts) {
+    bool use_root_user_cuts,
+    bool use_lifted_lower_bounds = false) {
     firebreak::benders::FppBranchBendersSolver solver;
     firebreak::benders::FppBranchBendersOptions options;
     options.tolerance = 1.0e-7;
@@ -148,6 +149,7 @@ firebreak::solver::ModelResult solve_callback(
     options.threads = 1;
     options.risk_config = risk_config;
     options.use_root_user_cuts = use_root_user_cuts;
+    options.use_lifted_lower_bounds = use_lifted_lower_bounds;
     options.root_user_cut_max_rounds = 2;
     options.root_user_cut_tolerance = 1.0e-7;
     return solver.solve(opt, options);
@@ -323,22 +325,32 @@ void test_expected_cvar_mean_cvar_callback_equivalence() {
     compare_direct_explicit_callback(make_weighted_risk_instance(), mean_cvar, true);
 }
 
-void test_unsupported_weighted_strengthening_rejected() {
+void test_weighted_standard_llbi_cplex() {
     const auto opt = make_weighted_branch_instance(false);
-    firebreak::benders::FppBranchBendersSolver solver;
-    firebreak::benders::FppBranchBendersOptions options;
-    options.tolerance = 1.0e-7;
-    options.time_limit_seconds = 30.0;
-    options.mip_gap = 0.0;
-    options.threads = 1;
-    options.use_lifted_lower_bounds = true;
-    bool threw = false;
-    try {
-        (void)solver.solve(opt, options);
-    } catch (const std::runtime_error&) {
-        threw = true;
-    }
-    assert(threw);
+    firebreak::solver::FppSaaCplexModel direct;
+    const auto direct_result = direct.solve(
+        opt,
+        30.0,
+        0.0,
+        1,
+        false);
+    const auto llbi_result =
+        solve_callback(opt, firebreak::risk::RiskMeasureConfig(), false, true);
+    assert(llbi_result.status == "Optimal");
+    assert_close(llbi_result.objective_value, direct_result.objective_value);
+    assert(llbi_result.benders_use_lifted_lower_bounds);
+    assert(llbi_result.benders_lifted_lower_bound_weighted);
+    assert(llbi_result.benders_lifted_lower_bound_count ==
+           static_cast<int>(opt.scenarios.size()));
+    assert(llbi_result.benders_lifted_lower_bound_constraints_added ==
+           llbi_result.benders_lifted_lower_bound_count);
+    assert(llbi_result.benders_lifted_lower_bound_scenarios_precomputed ==
+           static_cast<int>(opt.scenarios.size()));
+    assert(llbi_result.benders_lifted_lower_bound_singletons_evaluated ==
+           static_cast<int>(opt.scenarios.size() * opt.eligible_indices.size()));
+    assert(llbi_result.benders_lifted_lower_bound_validity_mode ==
+           "downstream-union-bound");
+    assert(!llbi_result.benders_lifted_lower_bound_weight_map_hash.empty());
 }
 
 }  // namespace
@@ -353,7 +365,7 @@ int main() {
     test_root_fractional_cut_validity();
     test_homogeneous_regression();
     test_expected_cvar_mean_cvar_callback_equivalence();
-    test_unsupported_weighted_strengthening_rejected();
+    test_weighted_standard_llbi_cplex();
     std::cout << "All weighted FPP Branch-Benders callback tests passed.\n";
     return 0;
 #endif

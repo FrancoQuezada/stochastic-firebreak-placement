@@ -11,6 +11,7 @@ namespace firebreak::benders {
 struct FixedFppLossResult {
     int scenario_id = 0;
     double burned_area = 0.0;
+    double weighted_burn_loss = 0.0;
     std::vector<char> burned_by_compact_index;
 };
 
@@ -34,6 +35,16 @@ struct FppLiftedLowerBoundPrecomputeResult {
     int total_nonzero_coefficients = 0;
     double min_rhs = 0.0;
     double max_rhs = 0.0;
+    bool weighted = false;
+    std::string weight_map_hash;
+    int scenarios_precomputed = 0;
+    int singletons_evaluated = 0;
+    double no_firebreak_loss_min = 0.0;
+    double no_firebreak_loss_max = 0.0;
+    double singleton_benefit_min = 0.0;
+    double singleton_benefit_max = 0.0;
+    bool cache_hit = false;
+    std::string validity_mode;
     std::vector<std::string> notes;
 };
 

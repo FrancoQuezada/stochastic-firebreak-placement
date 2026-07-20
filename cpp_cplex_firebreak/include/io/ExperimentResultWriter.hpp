@@ -106,6 +106,21 @@ struct StandardExperimentResult {
     int benders_lifted_lower_bound_nonzero_coefficients = 0;
     double benders_lifted_lower_bound_min_rhs = std::numeric_limits<double>::quiet_NaN();
     double benders_lifted_lower_bound_max_rhs = std::numeric_limits<double>::quiet_NaN();
+    bool benders_lifted_lower_bound_weighted = false;
+    std::string benders_lifted_lower_bound_weight_map_hash;
+    int benders_lifted_lower_bound_scenarios_precomputed = 0;
+    int benders_lifted_lower_bound_singletons_evaluated = 0;
+    double benders_lifted_lower_bound_no_firebreak_loss_min =
+        std::numeric_limits<double>::quiet_NaN();
+    double benders_lifted_lower_bound_no_firebreak_loss_max =
+        std::numeric_limits<double>::quiet_NaN();
+    double benders_lifted_lower_bound_singleton_benefit_min =
+        std::numeric_limits<double>::quiet_NaN();
+    double benders_lifted_lower_bound_singleton_benefit_max =
+        std::numeric_limits<double>::quiet_NaN();
+    int benders_lifted_lower_bound_constraints_added = 0;
+    bool benders_lifted_lower_bound_cache_hit = false;
+    std::string benders_lifted_lower_bound_validity_mode;
     std::vector<std::string> benders_lifted_lower_bound_notes;
     std::vector<solver::BendersIterationLog> benders_iteration_log;
     bool branch_benders_enabled = false;
