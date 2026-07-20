@@ -1000,6 +1000,10 @@ void write_experiment_result_json(
         << json_escape_local(result.combinatorial_mode) << "\",\n";
     out << "  \"combinatorial_weight_map_hash\": \""
         << json_escape_local(result.combinatorial_weight_map_hash) << "\",\n";
+    out << "  \"combinatorial_scenario_order\": \""
+        << json_escape_local(result.combinatorial_scenario_order) << "\",\n";
+    out << "  \"combinatorial_cut_sampling_ratio\": "
+        << format_json_number(result.combinatorial_cut_sampling_ratio) << ",\n";
     out << "  \"combinatorial_candidate_callbacks\": "
         << result.combinatorial_candidate_callbacks << ",\n";
     out << "  \"combinatorial_scenarios_evaluated\": "
@@ -1112,6 +1116,38 @@ void write_experiment_result_json(
         << format_json_number(result.combinatorial_fractional_max_tightness_error) << ",\n";
     out << "  \"combinatorial_fractional_separation_time_sec\": "
         << format_json_number(result.combinatorial_fractional_separation_time_sec) << ",\n";
+    out << "  \"combinatorial_realized_sample_size\": "
+        << result.combinatorial_realized_sample_size << ",\n";
+    out << "  \"combinatorial_sampling_exact_fallback\": "
+        << (result.combinatorial_sampling_exact_fallback ? "true" : "false") << ",\n";
+    out << "  \"combinatorial_scenario_policy_exact\": "
+        << (result.combinatorial_scenario_policy_exact ? "true" : "false") << ",\n";
+    out << "  \"combinatorial_scenario_policy_heuristic\": "
+        << (result.combinatorial_scenario_policy_heuristic ? "true" : "false") << ",\n";
+    out << "  \"combinatorial_full_verification_before_acceptance\": "
+        << (result.combinatorial_full_verification_before_acceptance ? "true" : "false") << ",\n";
+    out << "  \"combinatorial_candidate_initial_sample_scenarios_evaluated\": "
+        << result.combinatorial_candidate_initial_sample_scenarios_evaluated << ",\n";
+    out << "  \"combinatorial_candidate_fallback_scenarios_evaluated\": "
+        << result.combinatorial_candidate_fallback_scenarios_evaluated << ",\n";
+    out << "  \"combinatorial_candidate_full_sweeps\": "
+        << result.combinatorial_candidate_full_sweeps << ",\n";
+    out << "  \"combinatorial_candidates_rejected_in_initial_sample\": "
+        << result.combinatorial_candidates_rejected_in_initial_sample << ",\n";
+    out << "  \"combinatorial_candidates_rejected_in_fallback\": "
+        << result.combinatorial_candidates_rejected_in_fallback << ",\n";
+    out << "  \"combinatorial_candidates_fully_verified\": "
+        << result.combinatorial_candidates_fully_verified << ",\n";
+    out << "  \"combinatorial_sampled_violations\": "
+        << result.combinatorial_sampled_violations << ",\n";
+    out << "  \"combinatorial_fallback_violations\": "
+        << result.combinatorial_fallback_violations << ",\n";
+    out << "  \"combinatorial_scenarios_skipped_after_candidate_rejection\": "
+        << result.combinatorial_scenarios_skipped_after_candidate_rejection << ",\n";
+    out << "  \"combinatorial_sampling_time_sec\": "
+        << format_json_number(result.combinatorial_sampling_time_sec) << ",\n";
+    out << "  \"combinatorial_ordering_time_sec\": "
+        << format_json_number(result.combinatorial_ordering_time_sec) << ",\n";
     out << "  \"coverage_llbi_enabled\": " << (result.coverage_llbi_enabled ? "true" : "false") << ",\n";
     out << "  \"coverage_llbi_num_zeta_vars\": " << result.coverage_llbi_num_zeta_vars << ",\n";
     out << "  \"coverage_llbi_num_constraints\": " << result.coverage_llbi_num_constraints << ",\n";
@@ -1585,6 +1621,8 @@ void append_experiment_result_csv(
             << "combinatorial_benders_validity_mode,"
             << "combinatorial_weighted,combinatorial_mode,"
             << "combinatorial_weight_map_hash,"
+            << "combinatorial_scenario_order,"
+            << "combinatorial_cut_sampling_ratio,"
             << "combinatorial_candidate_callbacks,"
             << "combinatorial_scenarios_evaluated,"
             << "combinatorial_weighted_recourse_evaluations,"
@@ -1640,6 +1678,22 @@ void append_experiment_result_csv(
             << "combinatorial_fractional_max_violation,"
             << "combinatorial_fractional_max_tightness_error,"
             << "combinatorial_fractional_separation_time_sec,"
+            << "combinatorial_realized_sample_size,"
+            << "combinatorial_sampling_exact_fallback,"
+            << "combinatorial_scenario_policy_exact,"
+            << "combinatorial_scenario_policy_heuristic,"
+            << "combinatorial_full_verification_before_acceptance,"
+            << "combinatorial_candidate_initial_sample_scenarios_evaluated,"
+            << "combinatorial_candidate_fallback_scenarios_evaluated,"
+            << "combinatorial_candidate_full_sweeps,"
+            << "combinatorial_candidates_rejected_in_initial_sample,"
+            << "combinatorial_candidates_rejected_in_fallback,"
+            << "combinatorial_candidates_fully_verified,"
+            << "combinatorial_sampled_violations,"
+            << "combinatorial_fallback_violations,"
+            << "combinatorial_scenarios_skipped_after_candidate_rejection,"
+            << "combinatorial_sampling_time_sec,"
+            << "combinatorial_ordering_time_sec,"
             << "coverage_llbi_enabled,coverage_llbi_num_zeta_vars,coverage_llbi_num_constraints,"
             << "coverage_llbi_precompute_time_sec,"
             << "coverage_llbi_weighted,coverage_llbi_weight_map_hash,"
@@ -1877,6 +1931,8 @@ void append_experiment_result_csv(
             << (result.combinatorial_weighted ? "true" : "false") << ","
             << csv_escape(result.combinatorial_mode) << ","
             << csv_escape(result.combinatorial_weight_map_hash) << ","
+            << csv_escape(result.combinatorial_scenario_order) << ","
+            << format_csv_number(result.combinatorial_cut_sampling_ratio) << ","
             << result.combinatorial_candidate_callbacks << ","
             << result.combinatorial_scenarios_evaluated << ","
             << result.combinatorial_weighted_recourse_evaluations << ","
@@ -1934,7 +1990,23 @@ void append_experiment_result_csv(
             << result.combinatorial_fractional_duplicate_cuts << ","
             << format_csv_number(result.combinatorial_fractional_max_violation) << ","
             << format_csv_number(result.combinatorial_fractional_max_tightness_error) << ","
-            << format_csv_number(result.combinatorial_fractional_separation_time_sec) << ",";
+            << format_csv_number(result.combinatorial_fractional_separation_time_sec) << ","
+            << result.combinatorial_realized_sample_size << ","
+            << (result.combinatorial_sampling_exact_fallback ? "true" : "false") << ","
+            << (result.combinatorial_scenario_policy_exact ? "true" : "false") << ","
+            << (result.combinatorial_scenario_policy_heuristic ? "true" : "false") << ","
+            << (result.combinatorial_full_verification_before_acceptance ? "true" : "false") << ","
+            << result.combinatorial_candidate_initial_sample_scenarios_evaluated << ","
+            << result.combinatorial_candidate_fallback_scenarios_evaluated << ","
+            << result.combinatorial_candidate_full_sweeps << ","
+            << result.combinatorial_candidates_rejected_in_initial_sample << ","
+            << result.combinatorial_candidates_rejected_in_fallback << ","
+            << result.combinatorial_candidates_fully_verified << ","
+            << result.combinatorial_sampled_violations << ","
+            << result.combinatorial_fallback_violations << ","
+            << result.combinatorial_scenarios_skipped_after_candidate_rejection << ","
+            << format_csv_number(result.combinatorial_sampling_time_sec) << ","
+            << format_csv_number(result.combinatorial_ordering_time_sec) << ",";
     }
     if (include_fpp_strengthening_summary) {
         out << (result.coverage_llbi_enabled ? "true" : "false") << ","

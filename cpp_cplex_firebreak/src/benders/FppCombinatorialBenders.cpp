@@ -60,16 +60,6 @@ std::vector<double> binary_to_double(const std::vector<int>& values) {
     return as_double;
 }
 
-int sampled_cut_limit(double ratio, std::size_t scenario_count) {
-    if (scenario_count == 0) {
-        return 0;
-    }
-    if (ratio >= 1.0) {
-        return static_cast<int>(scenario_count);
-    }
-    return std::max(1, static_cast<int>(std::ceil(ratio * scenario_count)));
-}
-
 bool has_nonunit_weights(const std::vector<double>& weights) {
     for (const double weight : weights) {
         if (std::fabs(weight - 1.0) > 1.0e-9) {
@@ -245,6 +235,25 @@ FppCombinatorialBendersScenarioOrder parse_fpp_combinatorial_benders_scenario_or
 std::vector<int> order_fpp_combinatorial_scenarios_by_eta(
     const std::vector<double>& eta_values_by_scenario,
     FppCombinatorialBendersScenarioOrder order) {
+    std::vector<int> scenario_ids;
+    scenario_ids.reserve(eta_values_by_scenario.size());
+    for (std::size_t s = 0; s < eta_values_by_scenario.size(); ++s) {
+        scenario_ids.push_back(static_cast<int>(s));
+    }
+    return order_fpp_combinatorial_scenarios_by_eta(
+        eta_values_by_scenario,
+        scenario_ids,
+        order);
+}
+
+std::vector<int> order_fpp_combinatorial_scenarios_by_eta(
+    const std::vector<double>& eta_values_by_scenario,
+    const std::vector<int>& scenario_ids_by_position,
+    FppCombinatorialBendersScenarioOrder order) {
+    if (scenario_ids_by_position.size() != eta_values_by_scenario.size()) {
+        throw std::runtime_error(
+            "FPP combinatorial Benders scenario ordering received mismatched eta and scenario-id vectors.");
+    }
     std::vector<int> ordered;
     ordered.reserve(eta_values_by_scenario.size());
     for (std::size_t s = 0; s < eta_values_by_scenario.size(); ++s) {
@@ -253,7 +262,7 @@ std::vector<int> order_fpp_combinatorial_scenarios_by_eta(
     std::sort(
         ordered.begin(),
         ordered.end(),
-        [&eta_values_by_scenario, order](int lhs, int rhs) {
+        [&eta_values_by_scenario, &scenario_ids_by_position, order](int lhs, int rhs) {
             const double lhs_eta = eta_values_by_scenario[static_cast<std::size_t>(lhs)];
             const double rhs_eta = eta_values_by_scenario[static_cast<std::size_t>(rhs)];
             if (std::fabs(lhs_eta - rhs_eta) > 1.0e-12) {
@@ -262,17 +271,33 @@ std::vector<int> order_fpp_combinatorial_scenarios_by_eta(
                 }
                 return lhs_eta < rhs_eta;
             }
+            const int lhs_id = scenario_ids_by_position[static_cast<std::size_t>(lhs)];
+            const int rhs_id = scenario_ids_by_position[static_cast<std::size_t>(rhs)];
+            if (lhs_id != rhs_id) {
+                return lhs_id < rhs_id;
+            }
             return lhs < rhs;
         });
     return ordered;
 }
 
-void validate_fpp_combinatorial_benders_options(
-    const FppCombinatorialBendersOptions& options) {
-    if (options.cut_sampling_ratio <= 0.0 || options.cut_sampling_ratio > 1.0) {
+int fpp_combinatorial_realized_sample_size(
+    std::size_t scenario_count,
+    double cut_sampling_ratio) {
+    if (cut_sampling_ratio <= 0.0 || cut_sampling_ratio > 1.0) {
         throw std::runtime_error(
             "FPP combinatorial Benders cut sampling ratio must be in (0, 1].");
     }
+    if (scenario_count == 0) {
+        return 0;
+    }
+    return std::max(1, static_cast<int>(std::ceil(
+                           cut_sampling_ratio * static_cast<double>(scenario_count))));
+}
+
+void validate_fpp_combinatorial_benders_options(
+    const FppCombinatorialBendersOptions& options) {
+    (void)fpp_combinatorial_realized_sample_size(1, options.cut_sampling_ratio);
 }
 
 bool is_fpp_phase6c1_weighted_combinatorial_baseline(
@@ -301,6 +326,14 @@ bool is_fpp_phase6c2b_weighted_combinatorial_mode(
            is_phase6c2a_supported_lift_mode(options.lift_mode) &&
            options.scenario_order == FppCombinatorialBendersScenarioOrder::EtaAscending &&
            std::fabs(options.cut_sampling_ratio - 1.0) <= 1.0e-12;
+}
+
+bool is_fpp_phase6c2c_weighted_combinatorial_mode(
+    const FppCombinatorialBendersOptions& options) {
+    return options.enabled &&
+           is_phase6c2a_supported_lift_mode(options.lift_mode) &&
+           options.cut_sampling_ratio > 0.0 &&
+           options.cut_sampling_ratio <= 1.0;
 }
 
 void validate_fpp_phase6c1_weighted_combinatorial_baseline(
@@ -408,6 +441,43 @@ void validate_fpp_phase6c2b_weighted_combinatorial_mode(
     if (strengthening_options.use_conditional_zero_benefit_fixing) {
         throw std::runtime_error(
             "Non-homogeneous weighted FPP combinatorial Benders Phase 6C2B does not combine with conditional zero-benefit fixing.");
+    }
+}
+
+void validate_fpp_phase6c2c_weighted_combinatorial_mode(
+    const FppCombinatorialBendersOptions& options,
+    bool use_root_user_cuts,
+    bool use_lifted_lower_bounds,
+    const FppStrengtheningOptions& strengthening_options) {
+    if (!options.enabled) {
+        return;
+    }
+    if (!is_fpp_phase6c2c_weighted_combinatorial_mode(options)) {
+        throw std::runtime_error(
+            "Non-homogeneous weighted FPP combinatorial Benders Phase 6C2C supports lift_mode=none|heuristic|posterior, scenario_order=eta-asc|eta-desc, and cut_sampling_ratio in (0,1] with exact sampling-first fallback.");
+    }
+    validate_fpp_combinatorial_benders_options(options);
+    if (use_root_user_cuts) {
+        throw std::runtime_error(
+            "Non-homogeneous weighted FPP combinatorial Benders Phase 6C2C does not combine with LP-dual root user cuts; the repository has no separate combinatorial root-only cut mechanism in this phase.");
+    }
+    if (use_lifted_lower_bounds ||
+        strengthening_options.use_coverage_llbi ||
+        strengthening_options.use_path_llbi ||
+        strengthening_options.use_projected_coverage_llbi_exp ||
+        strengthening_options.use_projected_path_llbi_exp ||
+        strengthening_options.use_projected_coverage_llbi_poly ||
+        strengthening_options.use_projected_path_llbi_poly) {
+        throw std::runtime_error(
+            "Non-homogeneous weighted FPP combinatorial Benders Phase 6C2C does not combine with LLBI or projected LLBI families.");
+    }
+    if (strengthening_options.use_global_dominance_preprocessing) {
+        throw std::runtime_error(
+            "Non-homogeneous weighted FPP combinatorial Benders Phase 6C2C keeps global dominance disabled with combinatorial separation.");
+    }
+    if (strengthening_options.use_conditional_zero_benefit_fixing) {
+        throw std::runtime_error(
+            "Non-homogeneous weighted FPP combinatorial Benders Phase 6C2C does not combine with conditional zero-benefit fixing.");
     }
 }
 
@@ -665,15 +735,41 @@ FppCombinatorialBendersSeparator::separateViolatedCuts(
     }
     FppCombinatorialSeparationSummary summary;
     const auto start = std::chrono::steady_clock::now();
+    const auto ordering_start = std::chrono::steady_clock::now();
+    std::vector<int> scenario_ids;
+    scenario_ids.reserve(opt_.scenarios.size());
+    for (const auto& scenario : opt_.scenarios) {
+        scenario_ids.push_back(scenario.scenario_id);
+    }
     const std::vector<int> order =
-        order_fpp_combinatorial_scenarios_by_eta(eta_values_by_scenario, scenario_order);
+        order_fpp_combinatorial_scenarios_by_eta(
+            eta_values_by_scenario,
+            scenario_ids,
+            scenario_order);
+    summary.ordering_time_sec =
+        std::chrono::duration<double>(
+            std::chrono::steady_clock::now() - ordering_start).count();
 
-    const int max_violated = sampled_cut_limit(cut_sampling_ratio, opt_.scenarios.size());
-    for (const int scenario_position : order) {
-        if (summary.violated_cuts >= max_violated) {
-            break;
-        }
+    const auto sampling_start = std::chrono::steady_clock::now();
+    const int sample_size = fpp_combinatorial_realized_sample_size(
+        opt_.scenarios.size(),
+        cut_sampling_ratio);
+    summary.realized_sample_size = sample_size;
+    summary.sampling_exact_fallback = cut_sampling_ratio < 1.0 - 1.0e-12;
+    summary.scenario_policy_exact = true;
+    summary.scenario_policy_heuristic = false;
+    summary.full_verification_before_acceptance = true;
+    summary.sampling_time_sec =
+        std::chrono::duration<double>(
+            std::chrono::steady_clock::now() - sampling_start).count();
+
+    auto evaluate_one = [&](int scenario_position, bool fallback) {
         ++summary.scenarios_checked;
+        if (fallback) {
+            ++summary.fallback_scenarios_evaluated;
+        } else {
+            ++summary.initial_sample_scenarios_evaluated;
+        }
         auto cut = separateScenario(
             scenario_position,
             y_values_by_eligible_position,
@@ -721,15 +817,43 @@ FppCombinatorialBendersSeparator::separateViolatedCuts(
         }
         if (cut.violation > tolerance) {
             ++summary.violated_cuts;
+            if (fallback) {
+                ++summary.fallback_violations;
+            } else {
+                ++summary.sampled_violations;
+            }
             summary.total_paths += cut.activation_paths;
             summary.total_nonzeros += cut.nonzeros;
             summary.cuts.push_back(std::move(cut));
         } else {
             ++summary.nonviolated_cuts;
         }
+    };
+
+    const int ordered_count = static_cast<int>(order.size());
+    const int initial_count = std::min(sample_size, ordered_count);
+    for (int pos = 0; pos < initial_count; ++pos) {
+        evaluate_one(order[static_cast<std::size_t>(pos)], false);
+    }
+    if (summary.sampled_violations > 0) {
+        summary.candidates_rejected_in_initial_sample = 1;
+        summary.scenarios_skipped_after_candidate_rejection =
+            ordered_count - summary.scenarios_checked;
+    } else {
+        for (int pos = initial_count; pos < ordered_count; ++pos) {
+            evaluate_one(order[static_cast<std::size_t>(pos)], true);
+        }
+        if (summary.fallback_violations > 0) {
+            summary.candidates_rejected_in_fallback = 1;
+        } else {
+            summary.candidates_fully_verified = 1;
+        }
+    }
+    if (summary.scenarios_checked == ordered_count) {
+        summary.candidate_full_sweeps = 1;
     }
     summary.scenarios_skipped =
-        static_cast<int>(opt_.scenarios.size()) - summary.scenarios_checked;
+        ordered_count - summary.scenarios_checked;
     summary.separation_time_sec =
         std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
     return summary;

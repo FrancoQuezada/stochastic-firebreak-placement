@@ -346,6 +346,18 @@ TEST_WEIGHTED_FPP_COMBINATORIAL_FRACTIONAL_VALIDITY_SOURCES := \
 	$(filter-out tests/test_weighted_fpp_combinatorial_lifting.cpp,$(TEST_WEIGHTED_FPP_COMBINATORIAL_LIFTING_SOURCES)) \
 	tests/test_weighted_fpp_combinatorial_fractional_validity.cpp
 
+TEST_WEIGHTED_FPP_COMBINATORIAL_SCENARIO_ORDERING_SOURCES := \
+	$(filter-out tests/test_weighted_fpp_combinatorial_cut.cpp,$(TEST_WEIGHTED_FPP_COMBINATORIAL_CUT_SOURCES)) \
+	tests/test_weighted_fpp_combinatorial_scenario_ordering.cpp
+
+TEST_WEIGHTED_FPP_COMBINATORIAL_SAMPLING_SOURCES := \
+	$(filter-out tests/test_weighted_fpp_combinatorial_cut.cpp,$(TEST_WEIGHTED_FPP_COMBINATORIAL_CUT_SOURCES)) \
+	tests/test_weighted_fpp_combinatorial_sampling.cpp
+
+TEST_WEIGHTED_FPP_COMBINATORIAL_SAMPLING_EXACTNESS_SOURCES := \
+	$(filter-out tests/test_weighted_fpp_combinatorial_cut.cpp,$(TEST_WEIGHTED_FPP_COMBINATORIAL_CUT_SOURCES)) \
+	tests/test_weighted_fpp_combinatorial_sampling_exactness.cpp
+
 TEST_WEIGHTED_FPP_COMBINATORIAL_CPLEX_SOURCES = \
 	$(filter-out tests/test_weighted_fpp_branch_benders_cplex.cpp,$(TEST_WEIGHTED_FPP_BRANCH_BENDERS_CPLEX_SOURCES)) \
 	tests/test_weighted_fpp_combinatorial_cplex.cpp
@@ -353,6 +365,10 @@ TEST_WEIGHTED_FPP_COMBINATORIAL_CPLEX_SOURCES = \
 TEST_WEIGHTED_FPP_COMBINATORIAL_LIFTING_CPLEX_SOURCES = \
 	$(filter-out tests/test_weighted_fpp_combinatorial_cplex.cpp,$(TEST_WEIGHTED_FPP_COMBINATORIAL_CPLEX_SOURCES)) \
 	tests/test_weighted_fpp_combinatorial_lifting_cplex.cpp
+
+TEST_WEIGHTED_FPP_COMBINATORIAL_SAMPLING_CPLEX_SOURCES = \
+	$(filter-out tests/test_weighted_fpp_combinatorial_cplex.cpp,$(TEST_WEIGHTED_FPP_COMBINATORIAL_CPLEX_SOURCES)) \
+	tests/test_weighted_fpp_combinatorial_sampling_cplex.cpp
 
 TEST_WEIGHTED_PATH_LLBI_SOURCES := \
 	src/benders/FppLiftedLowerBound.cpp \
@@ -809,6 +825,9 @@ TEST_EXES := \
 	$(BUILD_DIR)/test_weighted_fpp_combinatorial_lifting_counterexamples \
 	$(BUILD_DIR)/test_weighted_fpp_combinatorial_initial_cuts \
 	$(BUILD_DIR)/test_weighted_fpp_combinatorial_fractional_validity \
+	$(BUILD_DIR)/test_weighted_fpp_combinatorial_scenario_ordering \
+	$(BUILD_DIR)/test_weighted_fpp_combinatorial_sampling \
+	$(BUILD_DIR)/test_weighted_fpp_combinatorial_sampling_exactness \
 	$(BUILD_DIR)/test_weighted_path_llbi \
 	$(BUILD_DIR)/test_weighted_path_llbi_validity \
 	$(BUILD_DIR)/test_dpv_saa_model_structure \
@@ -1007,6 +1026,15 @@ $(BUILD_DIR)/test_weighted_fpp_combinatorial_initial_cuts: $(call test_obj,$(TES
 $(BUILD_DIR)/test_weighted_fpp_combinatorial_fractional_validity: $(call test_obj,$(TEST_WEIGHTED_FPP_COMBINATORIAL_FRACTIONAL_VALIDITY_SOURCES))
 	$(CXX) $^ -o $@
 
+$(BUILD_DIR)/test_weighted_fpp_combinatorial_scenario_ordering: $(call test_obj,$(TEST_WEIGHTED_FPP_COMBINATORIAL_SCENARIO_ORDERING_SOURCES))
+	$(CXX) $^ -o $@
+
+$(BUILD_DIR)/test_weighted_fpp_combinatorial_sampling: $(call test_obj,$(TEST_WEIGHTED_FPP_COMBINATORIAL_SAMPLING_SOURCES))
+	$(CXX) $^ -o $@
+
+$(BUILD_DIR)/test_weighted_fpp_combinatorial_sampling_exactness: $(call test_obj,$(TEST_WEIGHTED_FPP_COMBINATORIAL_SAMPLING_EXACTNESS_SOURCES))
+	$(CXX) $^ -o $@
+
 $(BUILD_DIR)/test_weighted_path_llbi: $(call test_obj,$(TEST_WEIGHTED_PATH_LLBI_SOURCES))
 	$(CXX) $^ -o $@
 
@@ -1094,6 +1122,10 @@ $(BUILD_DIR)/test_weighted_fpp_combinatorial_cplex: $(TEST_WEIGHTED_FPP_COMBINAT
 	$(CXX) $(COMMON_CPPFLAGS) $(CPLEX_CPPFLAGS) $(COMMON_CXXFLAGS) $^ $(CPLEX_LDFLAGS) -o $@
 
 $(BUILD_DIR)/test_weighted_fpp_combinatorial_lifting_cplex: $(TEST_WEIGHTED_FPP_COMBINATORIAL_LIFTING_CPLEX_SOURCES)
+	@mkdir -p $(dir $@)
+	$(CXX) $(COMMON_CPPFLAGS) $(CPLEX_CPPFLAGS) $(COMMON_CXXFLAGS) $^ $(CPLEX_LDFLAGS) -o $@
+
+$(BUILD_DIR)/test_weighted_fpp_combinatorial_sampling_cplex: $(TEST_WEIGHTED_FPP_COMBINATORIAL_SAMPLING_CPLEX_SOURCES)
 	@mkdir -p $(dir $@)
 	$(CXX) $(COMMON_CPPFLAGS) $(CPLEX_CPPFLAGS) $(COMMON_CXXFLAGS) $^ $(CPLEX_LDFLAGS) -o $@
 
@@ -1263,6 +1295,9 @@ test: $(TEST_EXES)
 	./build_gpp/test_weighted_fpp_combinatorial_lifting_counterexamples
 	./build_gpp/test_weighted_fpp_combinatorial_initial_cuts
 	./build_gpp/test_weighted_fpp_combinatorial_fractional_validity
+	./build_gpp/test_weighted_fpp_combinatorial_scenario_ordering
+	./build_gpp/test_weighted_fpp_combinatorial_sampling
+	./build_gpp/test_weighted_fpp_combinatorial_sampling_exactness
 	./build_gpp/test_weighted_path_llbi
 	./build_gpp/test_weighted_path_llbi_validity
 	./build_gpp/test_graph_diagnostics

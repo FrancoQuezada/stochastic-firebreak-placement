@@ -139,15 +139,17 @@ Weighted landscape status:
   (`docs/WEIGHTED_LANDSCAPES_PHASE6B3B.md`).
 - Combinatorial Benders is weight-aware in callback Branch-and-Benders for
   integer incumbents, binary initial cuts, and fractional path user cuts with
-  `lift_mode=none`, `heuristic`, or `posterior`, under the exact no-sampling
-  policy (`scenario_order=eta-asc`, `cut_sampling_ratio=1`;
-  `docs/WEIGHTED_LANDSCAPES_PHASE6C1.md`,
+  `lift_mode=none`, `heuristic`, or `posterior`. Scenario ordering
+  `eta-asc|eta-desc` and `cut_sampling_ratio in (0,1]` are exact for integer
+  candidates through sampling-first separation with full fallback before
+  candidate acceptance
+  (`docs/WEIGHTED_LANDSCAPES_PHASE6C1.md`,
   `docs/WEIGHTED_LANDSCAPES_PHASE6C2A.md`,
-  `docs/WEIGHTED_LANDSCAPES_PHASE6C2B.md`).
-- Combinatorial sampling, eta-desc ordering, LP-dual root user cuts combined
-  with combinatorial Benders, restricted-candidate projected LLBI, DPV, and
-  Static-DPV remain blocked for non-homogeneous weights until separately
-  validated.
+  `docs/WEIGHTED_LANDSCAPES_PHASE6C2B.md`,
+  `docs/WEIGHTED_LANDSCAPES_PHASE6C2C.md`).
+- LP-dual root user cuts combined with combinatorial Benders,
+  restricted-candidate combinatorial Benders, DPV, and Static-DPV remain
+  blocked for non-homogeneous weights until separately validated.
 
 Expected objective methods:
 
@@ -199,29 +201,37 @@ The combinatorial Branch-and-Benders methods use:
 combinatorial_benders_cut_sampling_ratio = 0.10
 ```
 
-This ratio limits how many violated combinatorial Benders cuts are added each
-time the callback separates cuts. The limit is:
+For integer candidate callbacks this ratio controls the number of scenarios
+checked in the initial deterministic sample. The realized sample size is:
 
 ```text
 ceil(combinatorial_benders_cut_sampling_ratio * train_scenario_count)
 ```
 
-with a minimum of one cut. For common training counts this means:
+with a minimum of one scenario. If the initial sample contains a violated
+scenario, the candidate is rejected and the remaining scenarios may be deferred
+for that candidate. If the initial sample contains no violation, the callback
+performs a full deterministic fallback sweep over all remaining scenarios before
+allowing the candidate. Thus ratios below one change verification order and may
+reject some candidates earlier, but do not allow accepting an incumbent with
+unchecked scenarios.
+
+For common training counts this means:
 
 ```text
-train_count = 100 -> at most 10 violated cuts per callback
-train_count = 200 -> at most 20 violated cuts per callback
-train_count = 400 -> at most 40 violated cuts per callback
-train_count = 600 -> at most 60 violated cuts per callback
+train_count = 100 -> 10 initially sampled scenarios per callback
+train_count = 200 -> 20 initially sampled scenarios per callback
+train_count = 400 -> 40 initially sampled scenarios per callback
+train_count = 600 -> 60 initially sampled scenarios per callback
 ```
 
-The code does not sample these cuts randomly. It orders scenarios by increasing
-eta value and separates in that order until the limit of violated cuts is
-reached. The same ratio is used for lazy cuts at integer candidate solutions
-and, when `combinatorial_benders_separate_fractional=true`, for user cuts at
-fractional relaxations. For CVaR methods such as
-`FPP-Branch-Benders-Combinatorial-CVaR`, this parameter does not define the CVaR
-tail; it only controls callback cut aggressiveness.
+The code does not sample randomly. It first orders scenarios by the current
+master `eta_s` value, with deterministic tie-breaking by scenario ID, then uses
+the first `ceil(ratio * train_count)` scenarios as the initial sample. The
+ordered fallback list preserves every omitted scenario exactly once. For CVaR
+methods such as `FPP-Branch-Benders-Combinatorial-CVaR`, this parameter does
+not define the CVaR tail; all scenario recourse constraints remain subject to
+full verification before candidate acceptance.
 
 The scenario ordering is configurable with:
 
@@ -239,11 +249,11 @@ FPP-Branch-Benders-Combinatorial-MeanCVaR-EtaDesc
 ```
 
 Each one is identical to its corresponding base combinatorial method except
-that violated combinatorial cuts are searched after ordering scenarios by
-decreasing eta value. For the expected-value variant, this is an alternative
-cut-priority rule. For CVaR and mean-CVaR variants, it is a tail-oriented
-heuristic based on the master's current scenario-loss approximation; it does not
-change the risk objective or exactly identify the CVaR tail.
+that combinatorial cuts are searched after ordering scenarios by decreasing
+current `eta_s`. `eta-asc` checks smaller current recourse estimates first;
+`eta-desc` checks larger current recourse estimates first. Neither ordering
+changes the risk objective, scenario probabilities, cut coefficients, or the
+requirement that an accepted integer candidate be fully verified.
 
 ## Default Experiment Grid
 

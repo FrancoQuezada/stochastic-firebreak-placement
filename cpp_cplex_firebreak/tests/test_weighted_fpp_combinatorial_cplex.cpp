@@ -177,12 +177,12 @@ void test_phase6c2b_option_rejection() {
     firebreak::benders::FppBranchBendersSolver solver;
     firebreak::benders::FppBranchBendersOptions options;
     options.combinatorial_options = baseline_options();
-    options.combinatorial_options.cut_sampling_ratio = 0.5;
+    options.combinatorial_options.cut_sampling_ratio = 1.5;
     bool threw = false;
     try {
         (void)solver.solve(opt, options);
     } catch (const std::runtime_error& error) {
-        threw = std::string(error.what()).find("Phase 6C2B") != std::string::npos;
+        threw = std::string(error.what()).find("cut sampling ratio") != std::string::npos;
     }
     assert(threw);
 }

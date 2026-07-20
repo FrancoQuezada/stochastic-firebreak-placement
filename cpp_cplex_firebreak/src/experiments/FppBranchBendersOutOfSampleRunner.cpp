@@ -106,7 +106,7 @@ bool uses_unconverted_weighted_strengthening(
     const benders::FppCombinatorialBendersOptions& combinatorial_options,
     const benders::FppStrengtheningOptions& strengthening_options) {
     if (combinatorial_options.enabled) {
-        benders::validate_fpp_phase6c2b_weighted_combinatorial_mode(
+        benders::validate_fpp_phase6c2c_weighted_combinatorial_mode(
             combinatorial_options,
             use_root_user_cuts,
             use_lifted_lower_bounds,
@@ -677,6 +677,10 @@ int FppBranchBendersOutOfSampleRunner::run(
     result.combinatorial_mode = solve_result.combinatorial_mode;
     result.combinatorial_weight_map_hash =
         solve_result.combinatorial_weight_map_hash;
+    result.combinatorial_scenario_order =
+        solve_result.combinatorial_scenario_order;
+    result.combinatorial_cut_sampling_ratio =
+        solve_result.combinatorial_cut_sampling_ratio;
     result.combinatorial_candidate_callbacks =
         solve_result.combinatorial_candidate_callbacks;
     result.combinatorial_scenarios_evaluated =
@@ -786,6 +790,38 @@ int FppBranchBendersOutOfSampleRunner::run(
         solve_result.combinatorial_fractional_max_tightness_error;
     result.combinatorial_fractional_separation_time_sec =
         solve_result.combinatorial_fractional_separation_time_sec;
+    result.combinatorial_realized_sample_size =
+        solve_result.combinatorial_realized_sample_size;
+    result.combinatorial_sampling_exact_fallback =
+        solve_result.combinatorial_sampling_exact_fallback;
+    result.combinatorial_scenario_policy_exact =
+        solve_result.combinatorial_scenario_policy_exact;
+    result.combinatorial_scenario_policy_heuristic =
+        solve_result.combinatorial_scenario_policy_heuristic;
+    result.combinatorial_full_verification_before_acceptance =
+        solve_result.combinatorial_full_verification_before_acceptance;
+    result.combinatorial_candidate_initial_sample_scenarios_evaluated =
+        solve_result.combinatorial_candidate_initial_sample_scenarios_evaluated;
+    result.combinatorial_candidate_fallback_scenarios_evaluated =
+        solve_result.combinatorial_candidate_fallback_scenarios_evaluated;
+    result.combinatorial_candidate_full_sweeps =
+        solve_result.combinatorial_candidate_full_sweeps;
+    result.combinatorial_candidates_rejected_in_initial_sample =
+        solve_result.combinatorial_candidates_rejected_in_initial_sample;
+    result.combinatorial_candidates_rejected_in_fallback =
+        solve_result.combinatorial_candidates_rejected_in_fallback;
+    result.combinatorial_candidates_fully_verified =
+        solve_result.combinatorial_candidates_fully_verified;
+    result.combinatorial_sampled_violations =
+        solve_result.combinatorial_sampled_violations;
+    result.combinatorial_fallback_violations =
+        solve_result.combinatorial_fallback_violations;
+    result.combinatorial_scenarios_skipped_after_candidate_rejection =
+        solve_result.combinatorial_scenarios_skipped_after_candidate_rejection;
+    result.combinatorial_sampling_time_sec =
+        solve_result.combinatorial_sampling_time_sec;
+    result.combinatorial_ordering_time_sec =
+        solve_result.combinatorial_ordering_time_sec;
     result.coverage_llbi_enabled = solve_result.coverage_llbi_enabled;
     result.coverage_llbi_num_zeta_vars = solve_result.coverage_llbi_num_zeta_vars;
     result.coverage_llbi_num_constraints = solve_result.coverage_llbi_num_constraints;

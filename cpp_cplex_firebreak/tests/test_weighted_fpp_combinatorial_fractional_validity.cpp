@@ -131,7 +131,7 @@ void test_full_fractional_summary_policy() {
     options.cut_sampling_ratio = 1.0;
     options.initial_cuts = true;
     options.separate_fractional = true;
-    firebreak::benders::validate_fpp_phase6c2b_weighted_combinatorial_mode(
+    firebreak::benders::validate_fpp_phase6c2c_weighted_combinatorial_mode(
         options,
         false,
         false,

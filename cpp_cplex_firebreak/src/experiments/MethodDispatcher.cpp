@@ -1267,6 +1267,10 @@ io::StandardExperimentResult MethodDispatcher::run_method(const MethodDispatchRe
     result.combinatorial_mode = solver_result.combinatorial_mode;
     result.combinatorial_weight_map_hash =
         solver_result.combinatorial_weight_map_hash;
+    result.combinatorial_scenario_order =
+        solver_result.combinatorial_scenario_order;
+    result.combinatorial_cut_sampling_ratio =
+        solver_result.combinatorial_cut_sampling_ratio;
     result.combinatorial_candidate_callbacks =
         solver_result.combinatorial_candidate_callbacks;
     result.combinatorial_scenarios_evaluated =
@@ -1376,6 +1380,38 @@ io::StandardExperimentResult MethodDispatcher::run_method(const MethodDispatchRe
         solver_result.combinatorial_fractional_max_tightness_error;
     result.combinatorial_fractional_separation_time_sec =
         solver_result.combinatorial_fractional_separation_time_sec;
+    result.combinatorial_realized_sample_size =
+        solver_result.combinatorial_realized_sample_size;
+    result.combinatorial_sampling_exact_fallback =
+        solver_result.combinatorial_sampling_exact_fallback;
+    result.combinatorial_scenario_policy_exact =
+        solver_result.combinatorial_scenario_policy_exact;
+    result.combinatorial_scenario_policy_heuristic =
+        solver_result.combinatorial_scenario_policy_heuristic;
+    result.combinatorial_full_verification_before_acceptance =
+        solver_result.combinatorial_full_verification_before_acceptance;
+    result.combinatorial_candidate_initial_sample_scenarios_evaluated =
+        solver_result.combinatorial_candidate_initial_sample_scenarios_evaluated;
+    result.combinatorial_candidate_fallback_scenarios_evaluated =
+        solver_result.combinatorial_candidate_fallback_scenarios_evaluated;
+    result.combinatorial_candidate_full_sweeps =
+        solver_result.combinatorial_candidate_full_sweeps;
+    result.combinatorial_candidates_rejected_in_initial_sample =
+        solver_result.combinatorial_candidates_rejected_in_initial_sample;
+    result.combinatorial_candidates_rejected_in_fallback =
+        solver_result.combinatorial_candidates_rejected_in_fallback;
+    result.combinatorial_candidates_fully_verified =
+        solver_result.combinatorial_candidates_fully_verified;
+    result.combinatorial_sampled_violations =
+        solver_result.combinatorial_sampled_violations;
+    result.combinatorial_fallback_violations =
+        solver_result.combinatorial_fallback_violations;
+    result.combinatorial_scenarios_skipped_after_candidate_rejection =
+        solver_result.combinatorial_scenarios_skipped_after_candidate_rejection;
+    result.combinatorial_sampling_time_sec =
+        solver_result.combinatorial_sampling_time_sec;
+    result.combinatorial_ordering_time_sec =
+        solver_result.combinatorial_ordering_time_sec;
     result.coverage_llbi_enabled = solver_result.coverage_llbi_enabled;
     result.coverage_llbi_num_zeta_vars = solver_result.coverage_llbi_num_zeta_vars;
     result.coverage_llbi_num_constraints = solver_result.coverage_llbi_num_constraints;

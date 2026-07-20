@@ -68,6 +68,22 @@ struct FppCombinatorialSeparationSummary {
     std::vector<FppCombinatorialCut> cuts;
     int scenarios_checked = 0;
     int scenarios_skipped = 0;
+    int realized_sample_size = 0;
+    bool sampling_exact_fallback = false;
+    bool scenario_policy_exact = true;
+    bool scenario_policy_heuristic = false;
+    bool full_verification_before_acceptance = true;
+    int initial_sample_scenarios_evaluated = 0;
+    int fallback_scenarios_evaluated = 0;
+    int candidate_full_sweeps = 0;
+    int candidates_rejected_in_initial_sample = 0;
+    int candidates_rejected_in_fallback = 0;
+    int candidates_fully_verified = 0;
+    int sampled_violations = 0;
+    int fallback_violations = 0;
+    int scenarios_skipped_after_candidate_rejection = 0;
+    double sampling_time_sec = 0.0;
+    double ordering_time_sec = 0.0;
     int violated_cuts = 0;
     int nonviolated_cuts = 0;
     double max_violation = 0.0;
@@ -162,6 +178,22 @@ struct FppCombinatorialBendersStats {
     double fractional_max_violation = 0.0;
     double fractional_max_tightness_error = 0.0;
     double fractional_separation_time_sec = 0.0;
+    int realized_sample_size = 0;
+    bool sampling_exact_fallback = false;
+    bool scenario_policy_exact = true;
+    bool scenario_policy_heuristic = false;
+    bool full_verification_before_acceptance = true;
+    int candidate_initial_sample_scenarios_evaluated = 0;
+    int candidate_fallback_scenarios_evaluated = 0;
+    int candidate_full_sweeps = 0;
+    int candidates_rejected_in_initial_sample = 0;
+    int candidates_rejected_in_fallback = 0;
+    int candidates_fully_verified = 0;
+    int sampled_violations = 0;
+    int fallback_violations = 0;
+    int scenarios_skipped_after_candidate_rejection = 0;
+    double sampling_time_sec = 0.0;
+    double ordering_time_sec = 0.0;
 
     double average_paths_per_cut() const;
     double average_cut_nonzeros() const;
@@ -181,6 +213,13 @@ FppCombinatorialBendersScenarioOrder parse_fpp_combinatorial_benders_scenario_or
 std::vector<int> order_fpp_combinatorial_scenarios_by_eta(
     const std::vector<double>& eta_values_by_scenario,
     FppCombinatorialBendersScenarioOrder order);
+std::vector<int> order_fpp_combinatorial_scenarios_by_eta(
+    const std::vector<double>& eta_values_by_scenario,
+    const std::vector<int>& scenario_ids_by_position,
+    FppCombinatorialBendersScenarioOrder order);
+int fpp_combinatorial_realized_sample_size(
+    std::size_t scenario_count,
+    double cut_sampling_ratio);
 
 void validate_fpp_combinatorial_benders_options(
     const FppCombinatorialBendersOptions& options);
@@ -207,6 +246,15 @@ bool is_fpp_phase6c2b_weighted_combinatorial_mode(
     const FppCombinatorialBendersOptions& options);
 
 void validate_fpp_phase6c2b_weighted_combinatorial_mode(
+    const FppCombinatorialBendersOptions& options,
+    bool use_root_user_cuts,
+    bool use_lifted_lower_bounds,
+    const FppStrengtheningOptions& strengthening_options);
+
+bool is_fpp_phase6c2c_weighted_combinatorial_mode(
+    const FppCombinatorialBendersOptions& options);
+
+void validate_fpp_phase6c2c_weighted_combinatorial_mode(
     const FppCombinatorialBendersOptions& options,
     bool use_root_user_cuts,
     bool use_lifted_lower_bounds,

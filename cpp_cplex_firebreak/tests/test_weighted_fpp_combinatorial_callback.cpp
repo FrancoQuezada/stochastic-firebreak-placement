@@ -68,7 +68,7 @@ void expect_rejected(
     const std::string& expected_text) {
     bool threw = false;
     try {
-        firebreak::benders::validate_fpp_phase6c2b_weighted_combinatorial_mode(
+        firebreak::benders::validate_fpp_phase6c2c_weighted_combinatorial_mode(
             options,
             root_cuts,
             llbi,
@@ -83,7 +83,7 @@ void test_all_scenarios_checked_without_sampling() {
     const auto opt = make_multi_scenario_instance();
     firebreak::benders::FppCombinatorialBendersSeparator separator(opt);
     const auto options = baseline_options();
-    firebreak::benders::validate_fpp_phase6c2b_weighted_combinatorial_mode(
+    firebreak::benders::validate_fpp_phase6c2c_weighted_combinatorial_mode(
         options,
         false,
         false,
@@ -99,6 +99,10 @@ void test_all_scenarios_checked_without_sampling() {
         1.0e-7);
     assert(summary.scenarios_checked == 3);
     assert(summary.scenarios_skipped == 0);
+    assert(summary.realized_sample_size == 3);
+    assert(!summary.sampling_exact_fallback);
+    assert(summary.candidate_full_sweeps == 1);
+    assert(summary.candidates_fully_verified == 0);
     assert(summary.weighted_recourse_evaluations == 3);
     assert(summary.violated_cuts == 3);
     assert(summary.tight_cuts == 3);
@@ -111,11 +115,15 @@ void test_phase6c2b_initial_fractional_modes_and_rejections() {
 
     auto sampled = options;
     sampled.cut_sampling_ratio = 0.5;
-    expect_rejected(sampled, false, false, strengthening, "cut_sampling_ratio=1");
+    firebreak::benders::validate_fpp_phase6c2c_weighted_combinatorial_mode(
+        sampled,
+        false,
+        false,
+        strengthening);
 
     auto heuristic = options;
     heuristic.lift_mode = firebreak::benders::FppCombinatorialBendersLiftMode::Heuristic;
-    firebreak::benders::validate_fpp_phase6c2b_weighted_combinatorial_mode(
+    firebreak::benders::validate_fpp_phase6c2c_weighted_combinatorial_mode(
         heuristic,
         false,
         false,
@@ -123,7 +131,7 @@ void test_phase6c2b_initial_fractional_modes_and_rejections() {
 
     auto posterior = options;
     posterior.lift_mode = firebreak::benders::FppCombinatorialBendersLiftMode::Posterior;
-    firebreak::benders::validate_fpp_phase6c2b_weighted_combinatorial_mode(
+    firebreak::benders::validate_fpp_phase6c2c_weighted_combinatorial_mode(
         posterior,
         false,
         false,
@@ -131,7 +139,7 @@ void test_phase6c2b_initial_fractional_modes_and_rejections() {
 
     auto fractional = options;
     fractional.separate_fractional = true;
-    firebreak::benders::validate_fpp_phase6c2b_weighted_combinatorial_mode(
+    firebreak::benders::validate_fpp_phase6c2c_weighted_combinatorial_mode(
         fractional,
         false,
         false,
@@ -139,7 +147,7 @@ void test_phase6c2b_initial_fractional_modes_and_rejections() {
 
     auto initial = options;
     initial.initial_cuts = true;
-    firebreak::benders::validate_fpp_phase6c2b_weighted_combinatorial_mode(
+    firebreak::benders::validate_fpp_phase6c2c_weighted_combinatorial_mode(
         initial,
         false,
         false,
@@ -148,7 +156,7 @@ void test_phase6c2b_initial_fractional_modes_and_rejections() {
     auto initial_fractional = heuristic;
     initial_fractional.initial_cuts = true;
     initial_fractional.separate_fractional = true;
-    firebreak::benders::validate_fpp_phase6c2b_weighted_combinatorial_mode(
+    firebreak::benders::validate_fpp_phase6c2c_weighted_combinatorial_mode(
         initial_fractional,
         false,
         false,
@@ -157,13 +165,25 @@ void test_phase6c2b_initial_fractional_modes_and_rejections() {
     auto eta_desc = options;
     eta_desc.scenario_order =
         firebreak::benders::FppCombinatorialBendersScenarioOrder::EtaDescending;
-    expect_rejected(eta_desc, false, false, strengthening, "scenario_order=eta-asc");
+    firebreak::benders::validate_fpp_phase6c2c_weighted_combinatorial_mode(
+        eta_desc,
+        false,
+        false,
+        strengthening);
+
+    auto zero_ratio = options;
+    zero_ratio.cut_sampling_ratio = 0.0;
+    expect_rejected(zero_ratio, false, false, strengthening, "cut_sampling_ratio");
+
+    auto above_one = options;
+    above_one.cut_sampling_ratio = 1.01;
+    expect_rejected(above_one, false, false, strengthening, "cut_sampling_ratio");
 
     expect_rejected(options, true, false, strengthening, "root user cuts");
     expect_rejected(options, false, true, strengthening, "LLBI");
 
     strengthening.use_global_dominance_preprocessing = true;
-    expect_rejected(options, false, false, strengthening, "global dominance disabled");
+    expect_rejected(options, false, false, strengthening, "global dominance");
 
     strengthening = firebreak::benders::FppStrengtheningOptions();
     strengthening.use_projected_path_llbi_exp = true;

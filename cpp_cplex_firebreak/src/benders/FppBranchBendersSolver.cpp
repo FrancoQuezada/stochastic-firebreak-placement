@@ -133,7 +133,7 @@ bool has_nonunit_compact_weights(const opt::OptimizationInstance& opt) {
 
 bool uses_unconverted_weighted_strengthening(const FppBranchBendersOptions& options) {
     if (options.combinatorial_options.enabled) {
-        validate_fpp_phase6c2b_weighted_combinatorial_mode(
+        validate_fpp_phase6c2c_weighted_combinatorial_mode(
             options.combinatorial_options,
             options.use_root_user_cuts,
             options.use_lifted_lower_bounds,
@@ -529,6 +529,22 @@ void accumulate_combinatorial_summary(
     const FppCombinatorialSeparationSummary& summary,
     bool fractional,
     int cuts_added) {
+    if (stats.realized_sample_size == 0 ||
+        (summary.realized_sample_size > 0 &&
+         summary.realized_sample_size < stats.realized_sample_size)) {
+        stats.realized_sample_size = summary.realized_sample_size;
+    }
+    stats.sampling_exact_fallback =
+        stats.sampling_exact_fallback || summary.sampling_exact_fallback;
+    stats.scenario_policy_exact =
+        stats.scenario_policy_exact && summary.scenario_policy_exact;
+    stats.scenario_policy_heuristic =
+        stats.scenario_policy_heuristic || summary.scenario_policy_heuristic;
+    stats.full_verification_before_acceptance =
+        stats.full_verification_before_acceptance &&
+        summary.full_verification_before_acceptance;
+    stats.sampling_time_sec += summary.sampling_time_sec;
+    stats.ordering_time_sec += summary.ordering_time_sec;
     stats.scenarios_checked += summary.scenarios_checked;
     stats.separation_time_sec += summary.separation_time_sec;
     stats.propagation_time_sec += summary.propagation_time_sec;
@@ -573,6 +589,20 @@ void accumulate_combinatorial_summary(
         stats.fractional_separation_time_sec += summary.separation_time_sec;
     } else {
         stats.integer_cuts_added += cuts_added;
+        stats.candidate_initial_sample_scenarios_evaluated +=
+            summary.initial_sample_scenarios_evaluated;
+        stats.candidate_fallback_scenarios_evaluated +=
+            summary.fallback_scenarios_evaluated;
+        stats.candidate_full_sweeps += summary.candidate_full_sweeps;
+        stats.candidates_rejected_in_initial_sample +=
+            summary.candidates_rejected_in_initial_sample;
+        stats.candidates_rejected_in_fallback +=
+            summary.candidates_rejected_in_fallback;
+        stats.candidates_fully_verified += summary.candidates_fully_verified;
+        stats.sampled_violations += summary.sampled_violations;
+        stats.fallback_violations += summary.fallback_violations;
+        stats.scenarios_skipped_after_candidate_rejection +=
+            summary.scenarios_skipped_after_candidate_rejection;
     }
     for (const auto& cut : summary.cuts) {
         stats.total_paths_per_cut += static_cast<double>(cut.activation_paths);
@@ -1300,7 +1330,7 @@ solver::ModelResult FppBranchBendersSolver::solve(
     if (has_nonunit_compact_weights(opt) &&
         uses_unconverted_weighted_strengthening(options)) {
         throw std::runtime_error(
-            "Non-homogeneous weighted FPP Branch-Benders Phase 6C2B supports LP lazy cuts, root user cuts, standard downstream-union LLBI, extended CoverageLLBI, extended PathLLBI, projected CoverageLLBI, projected PathLLBI, structural global dominance, conditional zero-benefit diagnostics, and combinatorial Benders with lift_mode=none|heuristic|posterior, complete scenario evaluation, optional binary initial cuts, and optional fractional path user cuts.");
+            "Non-homogeneous weighted FPP Branch-Benders Phase 6C2C supports LP lazy cuts, root user cuts, standard downstream-union LLBI, extended CoverageLLBI, extended PathLLBI, projected CoverageLLBI, projected PathLLBI, structural global dominance, conditional zero-benefit diagnostics, and combinatorial Benders with lift_mode=none|heuristic|posterior, eta-asc|eta-desc ordering, exact sampling-first fallback, optional binary initial cuts, and optional fractional path user cuts.");
     }
     const auto risk_config = effective_risk_config_from(options.risk_config);
     const bool risk_enabled = uses_cvar_risk(risk_config);
@@ -1996,6 +2026,18 @@ solver::ModelResult FppBranchBendersSolver::solve(
             to_string(options.combinatorial_options.scenario_order);
         callback_stats.combinatorial_stats.cut_sampling_ratio =
             options.combinatorial_options.cut_sampling_ratio;
+        callback_stats.combinatorial_stats.realized_sample_size =
+            options.combinatorial_options.enabled
+                ? fpp_combinatorial_realized_sample_size(
+                      opt.scenarios.size(),
+                      options.combinatorial_options.cut_sampling_ratio)
+                : 0;
+        callback_stats.combinatorial_stats.sampling_exact_fallback =
+            options.combinatorial_options.enabled &&
+            options.combinatorial_options.cut_sampling_ratio < 1.0 - 1.0e-12;
+        callback_stats.combinatorial_stats.scenario_policy_exact = true;
+        callback_stats.combinatorial_stats.scenario_policy_heuristic = false;
+        callback_stats.combinatorial_stats.full_verification_before_acceptance = true;
         callback_stats.combinatorial_stats.fractional_separation_enabled =
             options.combinatorial_options.separate_fractional;
         callback_stats.combinatorial_stats.initial_cuts_enabled =
@@ -2298,6 +2340,10 @@ solver::ModelResult FppBranchBendersSolver::solve(
         result.combinatorial_mode = result.combinatorial_benders_mode;
         result.combinatorial_weight_map_hash =
             result.combinatorial_benders_weight_map_hash;
+        result.combinatorial_scenario_order =
+            result.combinatorial_benders_scenario_order;
+        result.combinatorial_cut_sampling_ratio =
+            result.combinatorial_benders_cut_sampling_ratio;
         result.combinatorial_candidate_callbacks =
             result.branch_benders_candidate_callback_calls;
         result.combinatorial_scenarios_evaluated =
@@ -2410,6 +2456,41 @@ solver::ModelResult FppBranchBendersSolver::solve(
             callback_stats.combinatorial_stats.fractional_max_tightness_error;
         result.combinatorial_fractional_separation_time_sec =
             callback_stats.combinatorial_stats.fractional_separation_time_sec;
+        result.combinatorial_realized_sample_size =
+            callback_stats.combinatorial_stats.realized_sample_size;
+        result.combinatorial_sampling_exact_fallback =
+            callback_stats.combinatorial_stats.sampling_exact_fallback;
+        result.combinatorial_scenario_policy_exact =
+            callback_stats.combinatorial_stats.scenario_policy_exact;
+        result.combinatorial_scenario_policy_heuristic =
+            callback_stats.combinatorial_stats.scenario_policy_heuristic;
+        result.combinatorial_full_verification_before_acceptance =
+            callback_stats.combinatorial_stats.full_verification_before_acceptance;
+        result.combinatorial_candidate_initial_sample_scenarios_evaluated =
+            callback_stats.combinatorial_stats
+                .candidate_initial_sample_scenarios_evaluated;
+        result.combinatorial_candidate_fallback_scenarios_evaluated =
+            callback_stats.combinatorial_stats
+                .candidate_fallback_scenarios_evaluated;
+        result.combinatorial_candidate_full_sweeps =
+            callback_stats.combinatorial_stats.candidate_full_sweeps;
+        result.combinatorial_candidates_rejected_in_initial_sample =
+            callback_stats.combinatorial_stats.candidates_rejected_in_initial_sample;
+        result.combinatorial_candidates_rejected_in_fallback =
+            callback_stats.combinatorial_stats.candidates_rejected_in_fallback;
+        result.combinatorial_candidates_fully_verified =
+            callback_stats.combinatorial_stats.candidates_fully_verified;
+        result.combinatorial_sampled_violations =
+            callback_stats.combinatorial_stats.sampled_violations;
+        result.combinatorial_fallback_violations =
+            callback_stats.combinatorial_stats.fallback_violations;
+        result.combinatorial_scenarios_skipped_after_candidate_rejection =
+            callback_stats.combinatorial_stats
+                .scenarios_skipped_after_candidate_rejection;
+        result.combinatorial_sampling_time_sec =
+            callback_stats.combinatorial_stats.sampling_time_sec;
+        result.combinatorial_ordering_time_sec =
+            callback_stats.combinatorial_stats.ordering_time_sec;
         result.projected_coverage_llbi_enabled =
             projected_stats.projected_coverage_llbi_enabled;
         result.projected_path_llbi_enabled =
