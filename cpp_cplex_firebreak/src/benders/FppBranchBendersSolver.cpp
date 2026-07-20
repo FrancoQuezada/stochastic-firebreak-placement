@@ -131,9 +131,7 @@ bool has_nonunit_compact_weights(const opt::OptimizationInstance& opt) {
 
 bool uses_unconverted_weighted_strengthening(const FppBranchBendersOptions& options) {
     return options.combinatorial_options.enabled ||
-           options.strengthening_options.use_projected_coverage_llbi_exp ||
            options.strengthening_options.use_projected_path_llbi_exp ||
-           options.strengthening_options.use_projected_coverage_llbi_poly ||
            options.strengthening_options.use_projected_path_llbi_poly;
 }
 
@@ -1220,7 +1218,7 @@ solver::ModelResult FppBranchBendersSolver::solve(
     if (has_nonunit_compact_weights(opt) &&
         uses_unconverted_weighted_strengthening(options)) {
         throw std::runtime_error(
-            "Non-homogeneous weighted FPP Branch-Benders Phase 6B2B supports LP lazy cuts, root user cuts, standard downstream-union LLBI, extended CoverageLLBI, extended PathLLBI, structural global dominance, and conditional zero-benefit diagnostics; projected LLBI and combinatorial Benders remain unconverted.");
+            "Non-homogeneous weighted FPP Branch-Benders Phase 6B3A supports LP lazy cuts, root user cuts, standard downstream-union LLBI, extended CoverageLLBI, extended PathLLBI, projected CoverageLLBI, structural global dominance, and conditional zero-benefit diagnostics; projected PathLLBI and combinatorial Benders remain unconverted.");
     }
     const auto risk_config = effective_risk_config_from(options.risk_config);
     const bool risk_enabled = uses_cvar_risk(risk_config);
@@ -1502,6 +1500,24 @@ solver::ModelResult FppBranchBendersSolver::solve(
             projected_stats.projected_poly_enumeration_limit;
         result.projected_exp_enumeration_limit =
             projected_stats.projected_exp_enumeration_limit;
+        result.projected_coverage_llbi_weighted =
+            projected_stats.projected_coverage_llbi_weighted;
+        result.projected_coverage_llbi_mode =
+            projected_stats.projected_coverage_llbi_mode;
+        result.projected_coverage_llbi_weight_map_hash =
+            projected_stats.projected_coverage_llbi_weight_map_hash;
+        result.projected_coverage_llbi_scenarios_precomputed =
+            projected_stats.projected_coverage_llbi_scenarios_precomputed;
+        result.projected_coverage_llbi_baseline_cells =
+            projected_stats.projected_coverage_llbi_baseline_cells;
+        result.projected_coverage_llbi_nonempty_coverage_sets =
+            projected_stats.projected_coverage_llbi_nonempty_coverage_sets;
+        result.projected_coverage_llbi_total_incidence_terms =
+            projected_stats.projected_coverage_llbi_total_incidence_terms;
+        result.projected_coverage_llbi_precompute_time_sec =
+            projected_stats.projected_coverage_llbi_precompute_time_sec;
+        result.projected_coverage_llbi_validity_mode =
+            projected_stats.projected_coverage_llbi_validity_mode;
         result.conditional_zero_benefit_enabled =
             options.strengthening_options.use_conditional_zero_benefit_fixing;
         if (options.strengthening_options.use_conditional_zero_benefit_fixing) {
@@ -1516,6 +1532,7 @@ solver::ModelResult FppBranchBendersSolver::solve(
         access.y_position_by_node = y_position_by_node;
 
         std::vector<FppProjectedLlbiSeparatedCut> projected_export_cuts;
+        std::set<std::string> projected_cut_signatures;
         if (projected_mode == FppProjectedLlbiMode::Poly) {
             const auto projected_cuts =
                 build_fpp_projected_llbi_poly_cuts(opt, projected_options, &projected_stats);
@@ -1530,6 +1547,14 @@ solver::ModelResult FppBranchBendersSolver::solve(
                 if (scenario_position < 0) {
                     throw std::runtime_error(
                         "Projected LLBI poly cut references an unknown scenario id.");
+                }
+                const auto signature = cut_signature(cut);
+                const auto [_, inserted] = projected_cut_signatures.insert(signature);
+                if (!inserted) {
+                    if (projected_stats.projected_coverage_llbi_enabled) {
+                        ++projected_stats.projected_coverage_llbi_duplicate_cuts;
+                    }
+                    continue;
                 }
                 add_benders_cut_to_model(
                     env,
@@ -1560,6 +1585,10 @@ solver::ModelResult FppBranchBendersSolver::solve(
                 projected_stats.projected_llbi_avg_nonzeros_per_cut =
                     static_cast<double>(projected_stats.projected_llbi_total_nonzeros) /
                     static_cast<double>(projected_stats.projected_llbi_cuts_added);
+            }
+            if (projected_stats.projected_coverage_llbi_enabled) {
+                projected_stats.projected_coverage_llbi_cuts_added =
+                    projected_stats.projected_llbi_coverage_cuts_added;
             }
         }
 
@@ -1631,6 +1660,35 @@ solver::ModelResult FppBranchBendersSolver::solve(
                     eta_values);
                 projected_stats.projected_llbi_separation_time_sec +=
                     separated.separation_time_sec;
+                if (projected_stats.projected_coverage_llbi_enabled) {
+                    projected_stats.projected_coverage_llbi_weighted =
+                        separated.projected_coverage_llbi_weighted;
+                    projected_stats.projected_coverage_llbi_mode =
+                        separated.projected_coverage_llbi_mode;
+                    projected_stats.projected_coverage_llbi_weight_map_hash =
+                        separated.projected_coverage_llbi_weight_map_hash;
+                    projected_stats.projected_coverage_llbi_scenarios_precomputed =
+                        separated.projected_coverage_llbi_scenarios_precomputed;
+                    projected_stats.projected_coverage_llbi_baseline_cells =
+                        separated.projected_coverage_llbi_baseline_cells;
+                    projected_stats.projected_coverage_llbi_nonempty_coverage_sets =
+                        separated.projected_coverage_llbi_nonempty_coverage_sets;
+                    projected_stats.projected_coverage_llbi_total_incidence_terms =
+                        separated.projected_coverage_llbi_total_incidence_terms;
+                    projected_stats.projected_coverage_llbi_precompute_time_sec +=
+                        separated.projected_coverage_llbi_precompute_time_sec;
+                    projected_stats.projected_coverage_llbi_validity_mode =
+                        separated.projected_coverage_llbi_validity_mode;
+                    ++projected_stats.projected_coverage_llbi_separation_calls;
+                    projected_stats.projected_coverage_llbi_separation_time_sec +=
+                        separated.separation_time_sec;
+                    projected_stats.projected_coverage_llbi_cuts_generated +=
+                        separated.violated_cuts_found;
+                    projected_stats.projected_coverage_llbi_max_violation =
+                        std::max(
+                            projected_stats.projected_coverage_llbi_max_violation,
+                            separated.max_violation);
+                }
                 projected_stats.projected_llbi_violated_cuts_found +=
                     separated.violated_cuts_found;
                 if (!std::isnan(separated.min_violation)) {
@@ -1653,6 +1711,14 @@ solver::ModelResult FppBranchBendersSolver::solve(
                 }
 
                 for (const auto& separated_cut : separated.cuts) {
+                    const auto signature = cut_signature(separated_cut.cut);
+                    const auto [_, inserted] = projected_cut_signatures.insert(signature);
+                    if (!inserted) {
+                        if (projected_stats.projected_coverage_llbi_enabled) {
+                            ++projected_stats.projected_coverage_llbi_duplicate_cuts;
+                        }
+                        continue;
+                    }
                     add_benders_cut_to_model(
                         env,
                         model,
@@ -1663,6 +1729,7 @@ solver::ModelResult FppBranchBendersSolver::solve(
                     ++projected_stats.projected_llbi_cuts_added;
                     if (projected_stats.projected_coverage_llbi_enabled) {
                         ++projected_stats.projected_llbi_coverage_cuts_added;
+                        ++projected_stats.projected_coverage_llbi_cuts_added;
                     }
                     if (projected_stats.projected_path_llbi_enabled) {
                         ++projected_stats.projected_llbi_path_cuts_added;
@@ -2044,6 +2111,36 @@ solver::ModelResult FppBranchBendersSolver::solve(
             projected_stats.projected_exp_enumeration_truncated;
         result.projected_exp_enumeration_limit =
             projected_stats.projected_exp_enumeration_limit;
+        result.projected_coverage_llbi_weighted =
+            projected_stats.projected_coverage_llbi_weighted;
+        result.projected_coverage_llbi_mode =
+            projected_stats.projected_coverage_llbi_mode;
+        result.projected_coverage_llbi_weight_map_hash =
+            projected_stats.projected_coverage_llbi_weight_map_hash;
+        result.projected_coverage_llbi_scenarios_precomputed =
+            projected_stats.projected_coverage_llbi_scenarios_precomputed;
+        result.projected_coverage_llbi_baseline_cells =
+            projected_stats.projected_coverage_llbi_baseline_cells;
+        result.projected_coverage_llbi_nonempty_coverage_sets =
+            projected_stats.projected_coverage_llbi_nonempty_coverage_sets;
+        result.projected_coverage_llbi_total_incidence_terms =
+            projected_stats.projected_coverage_llbi_total_incidence_terms;
+        result.projected_coverage_llbi_separation_calls =
+            projected_stats.projected_coverage_llbi_separation_calls;
+        result.projected_coverage_llbi_cuts_generated =
+            projected_stats.projected_coverage_llbi_cuts_generated;
+        result.projected_coverage_llbi_cuts_added =
+            projected_stats.projected_coverage_llbi_cuts_added;
+        result.projected_coverage_llbi_duplicate_cuts =
+            projected_stats.projected_coverage_llbi_duplicate_cuts;
+        result.projected_coverage_llbi_max_violation =
+            projected_stats.projected_coverage_llbi_max_violation;
+        result.projected_coverage_llbi_precompute_time_sec =
+            projected_stats.projected_coverage_llbi_precompute_time_sec;
+        result.projected_coverage_llbi_separation_time_sec =
+            projected_stats.projected_coverage_llbi_separation_time_sec;
+        result.projected_coverage_llbi_validity_mode =
+            projected_stats.projected_coverage_llbi_validity_mode;
         result.branch_benders_use_root_user_cuts = options.use_root_user_cuts;
         result.branch_benders_root_user_cut_max_rounds = options.root_user_cut_max_rounds;
         result.branch_benders_root_user_cut_tolerance = root_user_cut_tolerance;

@@ -106,9 +106,7 @@ bool uses_unconverted_weighted_strengthening(
     const benders::FppStrengtheningOptions& strengthening_options) {
     (void)use_lifted_lower_bounds;
     return combinatorial_options.enabled ||
-           strengthening_options.use_projected_coverage_llbi_exp ||
            strengthening_options.use_projected_path_llbi_exp ||
-           strengthening_options.use_projected_coverage_llbi_poly ||
            strengthening_options.use_projected_path_llbi_poly;
 }
 
@@ -411,7 +409,7 @@ int FppBranchBendersOutOfSampleRunner::run(
             options.combinatorial_options,
             options.strengthening_options)) {
         throw std::runtime_error(
-            "Non-homogeneous weighted run-fpp-branch-benders-oos Phase 6B2B supports LP lazy cuts, root user cuts, standard downstream-union LLBI, extended CoverageLLBI, extended PathLLBI, structural global dominance, and conditional zero-benefit diagnostics; projected LLBI and combinatorial Benders remain unconverted.");
+            "Non-homogeneous weighted run-fpp-branch-benders-oos Phase 6B3A supports LP lazy cuts, root user cuts, standard downstream-union LLBI, extended CoverageLLBI, extended PathLLBI, projected CoverageLLBI, structural global dominance, and conditional zero-benefit diagnostics; projected PathLLBI and combinatorial Benders remain unconverted.");
     }
     const auto dominance_preprocess = benders::apply_fpp_global_dominance_preprocessing(
         opt_instance,
@@ -744,6 +742,36 @@ int FppBranchBendersOutOfSampleRunner::run(
         solve_result.projected_exp_enumeration_truncated;
     result.projected_exp_enumeration_limit =
         solve_result.projected_exp_enumeration_limit;
+    result.projected_coverage_llbi_weighted =
+        solve_result.projected_coverage_llbi_weighted;
+    result.projected_coverage_llbi_mode =
+        solve_result.projected_coverage_llbi_mode;
+    result.projected_coverage_llbi_weight_map_hash =
+        solve_result.projected_coverage_llbi_weight_map_hash;
+    result.projected_coverage_llbi_scenarios_precomputed =
+        solve_result.projected_coverage_llbi_scenarios_precomputed;
+    result.projected_coverage_llbi_baseline_cells =
+        solve_result.projected_coverage_llbi_baseline_cells;
+    result.projected_coverage_llbi_nonempty_coverage_sets =
+        solve_result.projected_coverage_llbi_nonempty_coverage_sets;
+    result.projected_coverage_llbi_total_incidence_terms =
+        solve_result.projected_coverage_llbi_total_incidence_terms;
+    result.projected_coverage_llbi_separation_calls =
+        solve_result.projected_coverage_llbi_separation_calls;
+    result.projected_coverage_llbi_cuts_generated =
+        solve_result.projected_coverage_llbi_cuts_generated;
+    result.projected_coverage_llbi_cuts_added =
+        solve_result.projected_coverage_llbi_cuts_added;
+    result.projected_coverage_llbi_duplicate_cuts =
+        solve_result.projected_coverage_llbi_duplicate_cuts;
+    result.projected_coverage_llbi_max_violation =
+        solve_result.projected_coverage_llbi_max_violation;
+    result.projected_coverage_llbi_precompute_time_sec =
+        solve_result.projected_coverage_llbi_precompute_time_sec;
+    result.projected_coverage_llbi_separation_time_sec =
+        solve_result.projected_coverage_llbi_separation_time_sec;
+    result.projected_coverage_llbi_validity_mode =
+        solve_result.projected_coverage_llbi_validity_mode;
     result.global_dominance_enabled = solve_result.global_dominance_enabled;
     result.global_dominance_structural_weight_safe =
         solve_result.global_dominance_structural_weight_safe;

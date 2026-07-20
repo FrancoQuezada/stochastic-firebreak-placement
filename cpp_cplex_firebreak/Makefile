@@ -273,6 +273,22 @@ TEST_WEIGHTED_COVERAGE_LLBI_VALIDITY_SOURCES := \
 	$(filter-out tests/test_weighted_coverage_llbi.cpp,$(TEST_WEIGHTED_COVERAGE_LLBI_SOURCES)) \
 	tests/test_weighted_coverage_llbi_validity.cpp
 
+TEST_WEIGHTED_PROJECTED_COVERAGE_LLBI_SOURCES := \
+	src/benders/BendersCut.cpp \
+	src/benders/FppLiftedLowerBound.cpp \
+	src/benders/FppProjectedLlbi.cpp \
+	src/core/LandscapeWeightMap.cpp \
+	src/io/PathUtils.cpp \
+	src/opt/IndexMapper.cpp \
+	src/opt/OptimizationInstance.cpp \
+	src/risk/RiskMeasure.cpp \
+	src/solver/FppWeightedLossUtils.cpp \
+	tests/test_weighted_projected_coverage_llbi.cpp
+
+TEST_WEIGHTED_PROJECTED_COVERAGE_LLBI_VALIDITY_SOURCES := \
+	$(filter-out tests/test_weighted_projected_coverage_llbi.cpp,$(TEST_WEIGHTED_PROJECTED_COVERAGE_LLBI_SOURCES)) \
+	tests/test_weighted_projected_coverage_llbi_validity.cpp
+
 TEST_WEIGHTED_PATH_LLBI_SOURCES := \
 	src/benders/FppLiftedLowerBound.cpp \
 	src/core/LandscapeWeightMap.cpp \
@@ -648,6 +664,10 @@ TEST_WEIGHTED_COVERAGE_LLBI_CPLEX_SOURCES := \
 	$(filter-out tests/test_weighted_fpp_branch_benders_cplex.cpp,$(TEST_WEIGHTED_FPP_BRANCH_BENDERS_CPLEX_SOURCES)) \
 	tests/test_weighted_coverage_llbi_cplex.cpp
 
+TEST_WEIGHTED_PROJECTED_COVERAGE_LLBI_CPLEX_SOURCES := \
+	$(filter-out tests/test_weighted_fpp_branch_benders_cplex.cpp,$(TEST_WEIGHTED_FPP_BRANCH_BENDERS_CPLEX_SOURCES)) \
+	tests/test_weighted_projected_coverage_llbi_cplex.cpp
+
 TEST_WEIGHTED_PATH_LLBI_CPLEX_SOURCES := \
 	$(filter-out tests/test_weighted_fpp_branch_benders_cplex.cpp,$(TEST_WEIGHTED_FPP_BRANCH_BENDERS_CPLEX_SOURCES)) \
 	tests/test_weighted_path_llbi_cplex.cpp
@@ -707,6 +727,8 @@ TEST_EXES := \
 	$(BUILD_DIR)/test_weighted_standard_llbi_validity \
 	$(BUILD_DIR)/test_weighted_coverage_llbi \
 	$(BUILD_DIR)/test_weighted_coverage_llbi_validity \
+	$(BUILD_DIR)/test_weighted_projected_coverage_llbi \
+	$(BUILD_DIR)/test_weighted_projected_coverage_llbi_validity \
 	$(BUILD_DIR)/test_weighted_path_llbi \
 	$(BUILD_DIR)/test_weighted_path_llbi_validity \
 	$(BUILD_DIR)/test_dpv_saa_model_structure \
@@ -866,6 +888,12 @@ $(BUILD_DIR)/test_weighted_coverage_llbi: $(call test_obj,$(TEST_WEIGHTED_COVERA
 $(BUILD_DIR)/test_weighted_coverage_llbi_validity: $(call test_obj,$(TEST_WEIGHTED_COVERAGE_LLBI_VALIDITY_SOURCES))
 	$(CXX) $^ -o $@
 
+$(BUILD_DIR)/test_weighted_projected_coverage_llbi: $(call test_obj,$(TEST_WEIGHTED_PROJECTED_COVERAGE_LLBI_SOURCES))
+	$(CXX) $^ -o $@
+
+$(BUILD_DIR)/test_weighted_projected_coverage_llbi_validity: $(call test_obj,$(TEST_WEIGHTED_PROJECTED_COVERAGE_LLBI_VALIDITY_SOURCES))
+	$(CXX) $^ -o $@
+
 $(BUILD_DIR)/test_weighted_path_llbi: $(call test_obj,$(TEST_WEIGHTED_PATH_LLBI_SOURCES))
 	$(CXX) $^ -o $@
 
@@ -937,6 +965,10 @@ $(BUILD_DIR)/test_weighted_conditional_zero_benefit_fixing_cplex: $(TEST_WEIGHTE
 	$(CXX) $(COMMON_CPPFLAGS) $(CPLEX_CPPFLAGS) $(COMMON_CXXFLAGS) $^ $(CPLEX_LDFLAGS) -o $@
 
 $(BUILD_DIR)/test_weighted_coverage_llbi_cplex: $(TEST_WEIGHTED_COVERAGE_LLBI_CPLEX_SOURCES)
+	@mkdir -p $(dir $@)
+	$(CXX) $(COMMON_CPPFLAGS) $(CPLEX_CPPFLAGS) $(COMMON_CXXFLAGS) $^ $(CPLEX_LDFLAGS) -o $@
+
+$(BUILD_DIR)/test_weighted_projected_coverage_llbi_cplex: $(TEST_WEIGHTED_PROJECTED_COVERAGE_LLBI_CPLEX_SOURCES)
 	@mkdir -p $(dir $@)
 	$(CXX) $(COMMON_CPPFLAGS) $(CPLEX_CPPFLAGS) $(COMMON_CXXFLAGS) $^ $(CPLEX_LDFLAGS) -o $@
 
@@ -1093,6 +1125,8 @@ test: $(TEST_EXES)
 	./build_gpp/test_weighted_standard_llbi_validity
 	./build_gpp/test_weighted_coverage_llbi
 	./build_gpp/test_weighted_coverage_llbi_validity
+	./build_gpp/test_weighted_projected_coverage_llbi
+	./build_gpp/test_weighted_projected_coverage_llbi_validity
 	./build_gpp/test_weighted_path_llbi
 	./build_gpp/test_weighted_path_llbi_validity
 	./build_gpp/test_graph_diagnostics
@@ -1253,6 +1287,9 @@ clean:
 	$(TEST_WEIGHTED_RESTRICTED_TAIL_DIAGNOSTICS_SOURCES) \
 	$(TEST_WEIGHTED_RESTRICTED_CANDIDATE_BOUNDS_SOURCES) \
 	$(TEST_WEIGHTED_RESTRICTED_BOUND_COUNTEREXAMPLES_SOURCES) \
+	$(TEST_WEIGHTED_PROJECTED_COVERAGE_LLBI_SOURCES) \
+	$(TEST_WEIGHTED_PROJECTED_COVERAGE_LLBI_VALIDITY_SOURCES) \
+	$(TEST_WEIGHTED_PROJECTED_COVERAGE_LLBI_CPLEX_SOURCES) \
 	$(TEST_WEIGHTED_GLOBAL_CANDIDATE_DOMINANCE_SOURCES) \
 	$(TEST_WEIGHTED_CONDITIONAL_ZERO_BENEFIT_FIXING_SOURCES) \
 	$(TEST_WEIGHTED_GLOBAL_CANDIDATE_DOMINANCE_CPLEX_SOURCES) \

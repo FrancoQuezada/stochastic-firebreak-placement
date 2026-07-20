@@ -89,6 +89,44 @@ void update_violation_stats(
     result.sum_violation += violation;
 }
 
+void populate_projected_coverage_stats_from_data(
+    FppProjectedLlbiStats& stats,
+    const FppCoverageLlbiData& data,
+    const std::string& mode,
+    const std::string& validity_mode) {
+    stats.projected_coverage_llbi_weighted = data.weighted;
+    stats.projected_coverage_llbi_mode = mode;
+    stats.projected_coverage_llbi_weight_map_hash = data.weight_map_hash;
+    stats.projected_coverage_llbi_scenarios_precomputed = data.scenarios_precomputed;
+    stats.projected_coverage_llbi_baseline_cells = data.baseline_cells;
+    stats.projected_coverage_llbi_nonempty_coverage_sets =
+        data.nonempty_coverage_sets;
+    stats.projected_coverage_llbi_total_incidence_terms =
+        data.total_incidence_terms;
+    stats.projected_coverage_llbi_precompute_time_sec = data.precompute_time_sec;
+    stats.projected_coverage_llbi_validity_mode = validity_mode;
+}
+
+void populate_projected_coverage_result_from_data(
+    FppProjectedLlbiSeparationResult& result,
+    const FppCoverageLlbiData& data,
+    const std::string& mode,
+    const std::string& validity_mode) {
+    result.projected_coverage_llbi_weighted = data.weighted;
+    result.projected_coverage_llbi_mode = mode;
+    result.projected_coverage_llbi_weight_map_hash = data.weight_map_hash;
+    result.projected_coverage_llbi_scenarios_precomputed =
+        data.scenarios_precomputed;
+    result.projected_coverage_llbi_baseline_cells = data.baseline_cells;
+    result.projected_coverage_llbi_nonempty_coverage_sets =
+        data.nonempty_coverage_sets;
+    result.projected_coverage_llbi_total_incidence_terms =
+        data.total_incidence_terms;
+    result.projected_coverage_llbi_precompute_time_sec =
+        data.precompute_time_sec;
+    result.projected_coverage_llbi_validity_mode = validity_mode;
+}
+
 std::vector<std::vector<int>> scenario_successors(
     const opt::OptimizationScenario& scenario,
     int node_count) {
@@ -136,7 +174,7 @@ BendersCut build_projected_coverage_cut_from_support_zero(
     std::unordered_map<int, double> coefficients;
     for (const auto& node_record : scenario_record.nodes) {
         for (const int candidate : node_record.covering_candidate_compact_nodes) {
-            add_negative_coeff(coefficients, candidate, 1.0);
+            add_negative_coeff(coefficients, candidate, node_record.cell_weight);
         }
     }
 
@@ -192,12 +230,12 @@ FppProjectedLlbiSeparatedCut separate_coverage_scenario(
             cover_sum += y_values_by_compact_node[static_cast<std::size_t>(candidate)];
         }
         if (cover_sum >= 1.0 - options.violation_tolerance) {
-            saturated_constant += 1.0;
-            rhs_at_ybar -= 1.0;
+            saturated_constant += node_record.cell_weight;
+            rhs_at_ybar -= node_record.cell_weight;
         } else {
-            rhs_at_ybar -= cover_sum;
+            rhs_at_ybar -= node_record.cell_weight * cover_sum;
             for (const int candidate : node_record.covering_candidate_compact_nodes) {
-                add_negative_coeff(coefficients, candidate, 1.0);
+                add_negative_coeff(coefficients, candidate, node_record.cell_weight);
             }
         }
     }
@@ -384,6 +422,13 @@ std::vector<BendersCut> build_fpp_projected_llbi_poly_cuts(
     const auto family = active_projected_llbi_family(options);
     if (family == FppProjectedLlbiFamily::Coverage) {
         const auto data = build_fpp_coverage_llbi_data(opt, true);
+        if (stats) {
+            populate_projected_coverage_stats_from_data(
+                *stats,
+                data,
+                "poly-all-unsaturated-support",
+                "weighted-subset-of-exact-per-cell-capped-coverage-projection");
+        }
         for (const auto& scenario_record : data.scenarios) {
             if (static_cast<int>(cuts.size()) >= options.poly_max_cuts) {
                 if (stats) {
@@ -417,6 +462,12 @@ std::vector<BendersCut> build_fpp_projected_llbi_poly_cuts(
     if (stats) {
         stats->projected_poly_candidate_cuts_generated = static_cast<int>(cuts.size());
         stats->projected_poly_candidate_cuts_added = static_cast<int>(cuts.size());
+        if (family == FppProjectedLlbiFamily::Coverage) {
+            stats->projected_coverage_llbi_cuts_generated =
+                static_cast<int>(cuts.size());
+            stats->projected_coverage_llbi_cuts_added =
+                static_cast<int>(cuts.size());
+        }
     }
     return cuts;
 }
@@ -441,6 +492,11 @@ FppProjectedLlbiSeparationResult separate_fpp_projected_llbi_cuts(
     const auto family = active_projected_llbi_family(options);
     if (family == FppProjectedLlbiFamily::Coverage) {
         const auto data = build_fpp_coverage_llbi_data(opt, true);
+        populate_projected_coverage_result_from_data(
+            result,
+            data,
+            "exp-exact-separated",
+            "weighted-exact-per-cell-capped-coverage-projection");
         for (const auto& scenario_record : data.scenarios) {
             ++result.scenarios_checked;
             auto separated = separate_coverage_scenario(

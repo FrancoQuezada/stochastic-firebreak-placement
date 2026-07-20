@@ -1094,6 +1094,36 @@ void write_experiment_result_json(
         << (result.projected_exp_enumeration_truncated ? "true" : "false") << ",\n";
     out << "  \"projected_exp_enumeration_limit\": "
         << result.projected_exp_enumeration_limit << ",\n";
+    out << "  \"projected_coverage_llbi_weighted\": "
+        << (result.projected_coverage_llbi_weighted ? "true" : "false") << ",\n";
+    out << "  \"projected_coverage_llbi_mode\": \""
+        << json_escape_local(result.projected_coverage_llbi_mode) << "\",\n";
+    out << "  \"projected_coverage_llbi_weight_map_hash\": \""
+        << json_escape_local(result.projected_coverage_llbi_weight_map_hash) << "\",\n";
+    out << "  \"projected_coverage_llbi_scenarios_precomputed\": "
+        << result.projected_coverage_llbi_scenarios_precomputed << ",\n";
+    out << "  \"projected_coverage_llbi_baseline_cells\": "
+        << result.projected_coverage_llbi_baseline_cells << ",\n";
+    out << "  \"projected_coverage_llbi_nonempty_coverage_sets\": "
+        << result.projected_coverage_llbi_nonempty_coverage_sets << ",\n";
+    out << "  \"projected_coverage_llbi_total_incidence_terms\": "
+        << result.projected_coverage_llbi_total_incidence_terms << ",\n";
+    out << "  \"projected_coverage_llbi_separation_calls\": "
+        << result.projected_coverage_llbi_separation_calls << ",\n";
+    out << "  \"projected_coverage_llbi_cuts_generated\": "
+        << result.projected_coverage_llbi_cuts_generated << ",\n";
+    out << "  \"projected_coverage_llbi_cuts_added\": "
+        << result.projected_coverage_llbi_cuts_added << ",\n";
+    out << "  \"projected_coverage_llbi_duplicate_cuts\": "
+        << result.projected_coverage_llbi_duplicate_cuts << ",\n";
+    out << "  \"projected_coverage_llbi_max_violation\": "
+        << format_json_number(result.projected_coverage_llbi_max_violation) << ",\n";
+    out << "  \"projected_coverage_llbi_precompute_time_sec\": "
+        << format_json_number(result.projected_coverage_llbi_precompute_time_sec) << ",\n";
+    out << "  \"projected_coverage_llbi_separation_time_sec\": "
+        << format_json_number(result.projected_coverage_llbi_separation_time_sec) << ",\n";
+    out << "  \"projected_coverage_llbi_validity_mode\": \""
+        << json_escape_local(result.projected_coverage_llbi_validity_mode) << "\",\n";
     out << "  \"global_dominance_enabled\": " << (result.global_dominance_enabled ? "true" : "false") << ",\n";
     out << "  \"global_dominance_structural_weight_safe\": "
         << (result.global_dominance_structural_weight_safe ? "true" : "false") << ",\n";
@@ -1285,6 +1315,8 @@ void append_experiment_result_csv(
         write_header || existing_csv_has_column(output_path, "coverage_llbi_weighted");
     const bool include_path_llbi_extended =
         write_header || existing_csv_has_column(output_path, "path_llbi_weighted");
+    const bool include_projected_coverage_llbi_extended =
+        write_header || existing_csv_has_column(output_path, "projected_coverage_llbi_weighted");
     const bool include_branch_benders_root_user_cut_summary =
         write_header || existing_csv_has_column(output_path, "branch_benders_use_root_user_cuts");
     const bool include_restricted_candidate_summary =
@@ -1386,7 +1418,26 @@ void append_experiment_result_csv(
             << "projected_poly_enumeration_truncated,projected_poly_enumeration_limit,"
             << "projected_exp_separated_cuts_added,projected_exp_separation_rounds,"
             << "projected_exp_candidate_cuts_generated,projected_exp_candidate_cuts_added,"
-            << "projected_exp_enumeration_truncated,projected_exp_enumeration_limit,"
+            << "projected_exp_enumeration_truncated,projected_exp_enumeration_limit,";
+        if (include_projected_coverage_llbi_extended) {
+            out
+                << "projected_coverage_llbi_weighted,projected_coverage_llbi_mode,"
+            << "projected_coverage_llbi_weight_map_hash,"
+            << "projected_coverage_llbi_scenarios_precomputed,"
+            << "projected_coverage_llbi_baseline_cells,"
+            << "projected_coverage_llbi_nonempty_coverage_sets,"
+            << "projected_coverage_llbi_total_incidence_terms,"
+            << "projected_coverage_llbi_separation_calls,"
+            << "projected_coverage_llbi_cuts_generated,"
+            << "projected_coverage_llbi_cuts_added,"
+            << "projected_coverage_llbi_duplicate_cuts,"
+            << "projected_coverage_llbi_max_violation,"
+            << "projected_coverage_llbi_precompute_time_sec,"
+            << "projected_coverage_llbi_separation_time_sec,"
+            << "projected_coverage_llbi_validity_mode,";
+        }
+        if (include_fpp_strengthening_summary) {
+            out
             << "global_dominance_enabled,global_dominance_structural_weight_safe,"
             << "global_dominance_original_candidate_count,global_dominance_candidates_removed,"
             << "global_dominance_equivalence_classes,global_dominance_post_candidate_count,"
@@ -1430,6 +1481,7 @@ void append_experiment_result_csv(
             << "train_evaluation_runtime_seconds,test_evaluation_runtime_seconds,test_scenario_loading_runtime_seconds,"
             << "train_graph_classification_ratios,test_graph_classification_ratios,"
             << "graph_type_note,notes\n";
+        }
     }
 
     if (include_batch_metadata) {
@@ -1610,7 +1662,28 @@ void append_experiment_result_csv(
             << result.projected_exp_candidate_cuts_generated << ","
             << result.projected_exp_candidate_cuts_added << ","
             << (result.projected_exp_enumeration_truncated ? "true" : "false") << ","
-            << result.projected_exp_enumeration_limit << ","
+            << result.projected_exp_enumeration_limit << ",";
+    }
+    if (include_projected_coverage_llbi_extended) {
+        out
+            << (result.projected_coverage_llbi_weighted ? "true" : "false") << ","
+            << csv_escape(result.projected_coverage_llbi_mode) << ","
+            << csv_escape(result.projected_coverage_llbi_weight_map_hash) << ","
+            << result.projected_coverage_llbi_scenarios_precomputed << ","
+            << result.projected_coverage_llbi_baseline_cells << ","
+            << result.projected_coverage_llbi_nonempty_coverage_sets << ","
+            << result.projected_coverage_llbi_total_incidence_terms << ","
+            << result.projected_coverage_llbi_separation_calls << ","
+            << result.projected_coverage_llbi_cuts_generated << ","
+            << result.projected_coverage_llbi_cuts_added << ","
+            << result.projected_coverage_llbi_duplicate_cuts << ","
+            << format_csv_number(result.projected_coverage_llbi_max_violation) << ","
+            << format_csv_number(result.projected_coverage_llbi_precompute_time_sec) << ","
+            << format_csv_number(result.projected_coverage_llbi_separation_time_sec) << ","
+            << csv_escape(result.projected_coverage_llbi_validity_mode) << ",";
+    }
+    if (include_fpp_strengthening_summary) {
+        out
             << (result.global_dominance_enabled ? "true" : "false") << ","
             << (result.global_dominance_structural_weight_safe ? "true" : "false") << ","
             << result.global_dominance_original_candidate_count << ","

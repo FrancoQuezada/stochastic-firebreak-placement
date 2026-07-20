@@ -1323,6 +1323,36 @@ io::StandardExperimentResult MethodDispatcher::run_method(const MethodDispatchRe
         solver_result.projected_exp_enumeration_truncated;
     result.projected_exp_enumeration_limit =
         solver_result.projected_exp_enumeration_limit;
+    result.projected_coverage_llbi_weighted =
+        solver_result.projected_coverage_llbi_weighted;
+    result.projected_coverage_llbi_mode =
+        solver_result.projected_coverage_llbi_mode;
+    result.projected_coverage_llbi_weight_map_hash =
+        solver_result.projected_coverage_llbi_weight_map_hash;
+    result.projected_coverage_llbi_scenarios_precomputed =
+        solver_result.projected_coverage_llbi_scenarios_precomputed;
+    result.projected_coverage_llbi_baseline_cells =
+        solver_result.projected_coverage_llbi_baseline_cells;
+    result.projected_coverage_llbi_nonempty_coverage_sets =
+        solver_result.projected_coverage_llbi_nonempty_coverage_sets;
+    result.projected_coverage_llbi_total_incidence_terms =
+        solver_result.projected_coverage_llbi_total_incidence_terms;
+    result.projected_coverage_llbi_separation_calls =
+        solver_result.projected_coverage_llbi_separation_calls;
+    result.projected_coverage_llbi_cuts_generated =
+        solver_result.projected_coverage_llbi_cuts_generated;
+    result.projected_coverage_llbi_cuts_added =
+        solver_result.projected_coverage_llbi_cuts_added;
+    result.projected_coverage_llbi_duplicate_cuts =
+        solver_result.projected_coverage_llbi_duplicate_cuts;
+    result.projected_coverage_llbi_max_violation =
+        solver_result.projected_coverage_llbi_max_violation;
+    result.projected_coverage_llbi_precompute_time_sec =
+        solver_result.projected_coverage_llbi_precompute_time_sec;
+    result.projected_coverage_llbi_separation_time_sec =
+        solver_result.projected_coverage_llbi_separation_time_sec;
+    result.projected_coverage_llbi_validity_mode =
+        solver_result.projected_coverage_llbi_validity_mode;
     result.global_dominance_enabled = solver_result.global_dominance_enabled;
     result.global_dominance_structural_weight_safe =
         solver_result.global_dominance_structural_weight_safe;
