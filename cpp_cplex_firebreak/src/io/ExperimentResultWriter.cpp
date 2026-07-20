@@ -1019,18 +1019,38 @@ void write_experiment_result_json(
     out << "  \"projected_exp_enumeration_limit\": "
         << result.projected_exp_enumeration_limit << ",\n";
     out << "  \"global_dominance_enabled\": " << (result.global_dominance_enabled ? "true" : "false") << ",\n";
+    out << "  \"global_dominance_structural_weight_safe\": "
+        << (result.global_dominance_structural_weight_safe ? "true" : "false") << ",\n";
+    out << "  \"global_dominance_original_candidate_count\": "
+        << result.global_dominance_original_candidate_count << ",\n";
     out << "  \"global_dominance_candidates_removed\": "
         << result.global_dominance_candidates_removed << ",\n";
     out << "  \"global_dominance_equivalence_classes\": "
         << result.global_dominance_equivalence_classes << ",\n";
+    out << "  \"global_dominance_post_candidate_count\": "
+        << result.global_dominance_post_candidate_count << ",\n";
+    out << "  \"global_dominance_warm_start_replacements\": "
+        << result.global_dominance_warm_start_replacements << ",\n";
     out << "  \"global_dominance_precompute_time_sec\": "
         << format_json_number(result.global_dominance_precompute_time_sec) << ",\n";
     out << "  \"conditional_zero_benefit_enabled\": "
         << (result.conditional_zero_benefit_enabled ? "true" : "false") << ",\n";
+    out << "  \"conditional_zero_benefit_structural_weight_safe\": "
+        << (result.conditional_zero_benefit_structural_weight_safe ? "true" : "false") << ",\n";
+    out << "  \"conditional_zero_benefit_callback_calls\": "
+        << result.conditional_zero_benefit_callback_calls << ",\n";
+    out << "  \"conditional_zero_benefit_nodes_checked\": "
+        << result.conditional_zero_benefit_nodes_checked << ",\n";
+    out << "  \"conditional_zero_benefit_candidates_checked\": "
+        << result.conditional_zero_benefit_candidates_checked << ",\n";
     out << "  \"conditional_zero_benefit_fixings_attempted\": "
         << result.conditional_zero_benefit_fixings_attempted << ",\n";
     out << "  \"conditional_zero_benefit_fixings_applied\": "
         << result.conditional_zero_benefit_fixings_applied << ",\n";
+    out << "  \"conditional_zero_benefit_variables_fixed_zero\": "
+        << result.conditional_zero_benefit_variables_fixed_zero << ",\n";
+    out << "  \"conditional_zero_benefit_scenarios_reachability_computed\": "
+        << result.conditional_zero_benefit_scenarios_reachability_computed << ",\n";
     out << "  \"conditional_zero_benefit_time_sec\": "
         << format_json_number(result.conditional_zero_benefit_time_sec) << ",\n";
     if (has_benders_diagnostics(result)) {
@@ -1260,10 +1280,15 @@ void append_experiment_result_csv(
             << "projected_exp_separated_cuts_added,projected_exp_separation_rounds,"
             << "projected_exp_candidate_cuts_generated,projected_exp_candidate_cuts_added,"
             << "projected_exp_enumeration_truncated,projected_exp_enumeration_limit,"
-            << "global_dominance_enabled,global_dominance_candidates_removed,"
-            << "global_dominance_equivalence_classes,global_dominance_precompute_time_sec,"
-            << "conditional_zero_benefit_enabled,conditional_zero_benefit_fixings_attempted,"
-            << "conditional_zero_benefit_fixings_applied,conditional_zero_benefit_time_sec,"
+            << "global_dominance_enabled,global_dominance_structural_weight_safe,"
+            << "global_dominance_original_candidate_count,global_dominance_candidates_removed,"
+            << "global_dominance_equivalence_classes,global_dominance_post_candidate_count,"
+            << "global_dominance_warm_start_replacements,global_dominance_precompute_time_sec,"
+            << "conditional_zero_benefit_enabled,conditional_zero_benefit_structural_weight_safe,"
+            << "conditional_zero_benefit_callback_calls,conditional_zero_benefit_nodes_checked,"
+            << "conditional_zero_benefit_candidates_checked,conditional_zero_benefit_fixings_attempted,"
+            << "conditional_zero_benefit_fixings_applied,conditional_zero_benefit_variables_fixed_zero,"
+            << "conditional_zero_benefit_scenarios_reachability_computed,conditional_zero_benefit_time_sec,"
             << "branch_benders_use_root_user_cuts,branch_benders_root_user_cuts_added,"
             << "branch_benders_root_user_cut_rounds,branch_benders_root_user_cut_max_violation,"
             << "restricted_candidate_enabled,restricted_candidate_exact_mode,"
@@ -1432,12 +1457,22 @@ void append_experiment_result_csv(
             << (result.projected_exp_enumeration_truncated ? "true" : "false") << ","
             << result.projected_exp_enumeration_limit << ","
             << (result.global_dominance_enabled ? "true" : "false") << ","
+            << (result.global_dominance_structural_weight_safe ? "true" : "false") << ","
+            << result.global_dominance_original_candidate_count << ","
             << result.global_dominance_candidates_removed << ","
             << result.global_dominance_equivalence_classes << ","
+            << result.global_dominance_post_candidate_count << ","
+            << result.global_dominance_warm_start_replacements << ","
             << format_csv_number(result.global_dominance_precompute_time_sec) << ","
             << (result.conditional_zero_benefit_enabled ? "true" : "false") << ","
+            << (result.conditional_zero_benefit_structural_weight_safe ? "true" : "false") << ","
+            << result.conditional_zero_benefit_callback_calls << ","
+            << result.conditional_zero_benefit_nodes_checked << ","
+            << result.conditional_zero_benefit_candidates_checked << ","
             << result.conditional_zero_benefit_fixings_attempted << ","
             << result.conditional_zero_benefit_fixings_applied << ","
+            << result.conditional_zero_benefit_variables_fixed_zero << ","
+            << result.conditional_zero_benefit_scenarios_reachability_computed << ","
             << format_csv_number(result.conditional_zero_benefit_time_sec) << ",";
     }
     if (include_branch_benders_root_user_cut_summary) {

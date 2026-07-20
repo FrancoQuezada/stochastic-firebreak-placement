@@ -109,12 +109,22 @@ std::vector<std::pair<std::string, std::string>> strengthening_summary_fields(
         {"path_llbi_num_paths_used", std::to_string(result.path_llbi_num_paths_used)},
         {"path_llbi_precompute_time_sec", format_compact_double(result.path_llbi_precompute_time_sec)},
         {"global_dominance_enabled", result.global_dominance_enabled ? "true" : "false"},
+        {"global_dominance_structural_weight_safe", result.global_dominance_structural_weight_safe ? "true" : "false"},
+        {"global_dominance_original_candidate_count", std::to_string(result.global_dominance_original_candidate_count)},
         {"global_dominance_candidates_removed", std::to_string(result.global_dominance_candidates_removed)},
         {"global_dominance_equivalence_classes", std::to_string(result.global_dominance_equivalence_classes)},
+        {"global_dominance_post_candidate_count", std::to_string(result.global_dominance_post_candidate_count)},
+        {"global_dominance_warm_start_replacements", std::to_string(result.global_dominance_warm_start_replacements)},
         {"global_dominance_precompute_time_sec", format_compact_double(result.global_dominance_precompute_time_sec)},
         {"conditional_zero_benefit_enabled", result.conditional_zero_benefit_enabled ? "true" : "false"},
+        {"conditional_zero_benefit_structural_weight_safe", result.conditional_zero_benefit_structural_weight_safe ? "true" : "false"},
+        {"conditional_zero_benefit_callback_calls", std::to_string(result.conditional_zero_benefit_callback_calls)},
+        {"conditional_zero_benefit_nodes_checked", std::to_string(result.conditional_zero_benefit_nodes_checked)},
+        {"conditional_zero_benefit_candidates_checked", std::to_string(result.conditional_zero_benefit_candidates_checked)},
         {"conditional_zero_benefit_fixings_attempted", std::to_string(result.conditional_zero_benefit_fixings_attempted)},
         {"conditional_zero_benefit_fixings_applied", std::to_string(result.conditional_zero_benefit_fixings_applied)},
+        {"conditional_zero_benefit_variables_fixed_zero", std::to_string(result.conditional_zero_benefit_variables_fixed_zero)},
+        {"conditional_zero_benefit_scenarios_reachability_computed", std::to_string(result.conditional_zero_benefit_scenarios_reachability_computed)},
         {"conditional_zero_benefit_time_sec", format_compact_double(result.conditional_zero_benefit_time_sec)},
     };
 }
@@ -344,10 +354,18 @@ int FppSaaOutOfSampleRunner::run(const FppSaaOutOfSampleOptions& options) const 
     }
     if (options.strengthening_options.use_global_dominance_preprocessing) {
         solve_result.global_dominance_enabled = true;
+        solve_result.global_dominance_structural_weight_safe =
+            dominance_preprocess.structural_weight_safe;
+        solve_result.global_dominance_original_candidate_count =
+            dominance_preprocess.original_candidate_count;
         solve_result.global_dominance_candidates_removed =
             dominance_preprocess.candidates_removed;
         solve_result.global_dominance_equivalence_classes =
             dominance_preprocess.equivalence_classes;
+        solve_result.global_dominance_post_candidate_count =
+            dominance_preprocess.post_candidate_count;
+        solve_result.global_dominance_warm_start_replacements =
+            dominance_preprocess.warm_start_replacements;
         solve_result.global_dominance_precompute_time_sec =
             dominance_preprocess.precompute_time_sec;
         solve_result.notes.insert(
@@ -510,18 +528,38 @@ int FppSaaOutOfSampleRunner::run(const FppSaaOutOfSampleOptions& options) const 
     result.path_llbi_num_paths_used = solve_result.path_llbi_num_paths_used;
     result.path_llbi_precompute_time_sec = solve_result.path_llbi_precompute_time_sec;
     result.global_dominance_enabled = solve_result.global_dominance_enabled;
+    result.global_dominance_structural_weight_safe =
+        solve_result.global_dominance_structural_weight_safe;
+    result.global_dominance_original_candidate_count =
+        solve_result.global_dominance_original_candidate_count;
     result.global_dominance_candidates_removed =
         solve_result.global_dominance_candidates_removed;
     result.global_dominance_equivalence_classes =
         solve_result.global_dominance_equivalence_classes;
+    result.global_dominance_post_candidate_count =
+        solve_result.global_dominance_post_candidate_count;
+    result.global_dominance_warm_start_replacements =
+        solve_result.global_dominance_warm_start_replacements;
     result.global_dominance_precompute_time_sec =
         solve_result.global_dominance_precompute_time_sec;
     result.conditional_zero_benefit_enabled =
         solve_result.conditional_zero_benefit_enabled;
+    result.conditional_zero_benefit_structural_weight_safe =
+        solve_result.conditional_zero_benefit_structural_weight_safe;
+    result.conditional_zero_benefit_callback_calls =
+        solve_result.conditional_zero_benefit_callback_calls;
+    result.conditional_zero_benefit_nodes_checked =
+        solve_result.conditional_zero_benefit_nodes_checked;
+    result.conditional_zero_benefit_candidates_checked =
+        solve_result.conditional_zero_benefit_candidates_checked;
     result.conditional_zero_benefit_fixings_attempted =
         solve_result.conditional_zero_benefit_fixings_attempted;
     result.conditional_zero_benefit_fixings_applied =
         solve_result.conditional_zero_benefit_fixings_applied;
+    result.conditional_zero_benefit_variables_fixed_zero =
+        solve_result.conditional_zero_benefit_variables_fixed_zero;
+    result.conditional_zero_benefit_scenarios_reachability_computed =
+        solve_result.conditional_zero_benefit_scenarios_reachability_computed;
     result.conditional_zero_benefit_time_sec =
         solve_result.conditional_zero_benefit_time_sec;
     result.train_evaluation_runtime_seconds = train_eval.total_runtime_seconds;

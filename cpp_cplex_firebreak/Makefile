@@ -467,6 +467,18 @@ TEST_WEIGHTED_RESTRICTED_BOUND_COUNTEREXAMPLES_SOURCES := \
 	src/risk/RiskMeasure.cpp \
 	tests/test_weighted_restricted_bound_counterexamples.cpp
 
+TEST_WEIGHTED_GLOBAL_CANDIDATE_DOMINANCE_SOURCES := \
+	src/core/LandscapeWeightMap.cpp \
+	src/opt/IndexMapper.cpp \
+	src/opt/OptimizationInstance.cpp \
+	tests/test_weighted_global_candidate_dominance.cpp
+
+TEST_WEIGHTED_CONDITIONAL_ZERO_BENEFIT_FIXING_SOURCES := \
+	src/core/LandscapeWeightMap.cpp \
+	src/opt/IndexMapper.cpp \
+	src/opt/OptimizationInstance.cpp \
+	tests/test_weighted_conditional_zero_benefit_fixing.cpp
+
 TEST_CANDIDATE_BOUND_CONTROLLER_SOURCES := \
 	src/benders/CandidateBoundController.cpp \
 	src/benders/RestrictedCandidateManager.cpp \
@@ -582,6 +594,14 @@ TEST_WEIGHTED_FPP_BRANCH_BENDERS_CPLEX_SOURCES := \
 	src/solver/FppSaaCplexModel.cpp \
 	tests/test_weighted_fpp_branch_benders_cplex.cpp
 
+TEST_WEIGHTED_GLOBAL_CANDIDATE_DOMINANCE_CPLEX_SOURCES := \
+	$(filter-out tests/test_weighted_fpp_branch_benders_cplex.cpp,$(TEST_WEIGHTED_FPP_BRANCH_BENDERS_CPLEX_SOURCES)) \
+	tests/test_weighted_global_candidate_dominance_cplex.cpp
+
+TEST_WEIGHTED_CONDITIONAL_ZERO_BENEFIT_FIXING_CPLEX_SOURCES := \
+	$(filter-out tests/test_weighted_fpp_restricted_branch_benders_cplex.cpp,$(TEST_WEIGHTED_FPP_RESTRICTED_BRANCH_BENDERS_CPLEX_SOURCES)) \
+	tests/test_weighted_conditional_zero_benefit_fixing_cplex.cpp
+
 TEST_DPV_SUBPROBLEM_SOURCES := \
 	src/benders/BendersCut.cpp \
 	src/benders/DpvLiftedLowerBound.cpp \
@@ -667,6 +687,8 @@ TEST_EXES := \
 	$(BUILD_DIR)/test_weighted_restricted_tail_diagnostics \
 	$(BUILD_DIR)/test_weighted_restricted_candidate_bounds \
 	$(BUILD_DIR)/test_weighted_restricted_bound_counterexamples \
+	$(BUILD_DIR)/test_weighted_global_candidate_dominance \
+	$(BUILD_DIR)/test_weighted_conditional_zero_benefit_fixing \
 	$(BUILD_DIR)/test_candidate_bound_controller \
 	$(BUILD_DIR)/test_fpp_projected_llbi \
 	$(BUILD_DIR)/test_fpp_persistent_scenario_subproblem_manager \
@@ -828,6 +850,14 @@ $(BUILD_DIR)/test_weighted_restricted_bounds_cplex: $(TEST_WEIGHTED_FPP_RESTRICT
 	@mkdir -p $(dir $@)
 	$(CXX) $(COMMON_CPPFLAGS) $(CPLEX_CPPFLAGS) $(COMMON_CXXFLAGS) $^ $(CPLEX_LDFLAGS) -o $@
 
+$(BUILD_DIR)/test_weighted_global_candidate_dominance_cplex: $(TEST_WEIGHTED_GLOBAL_CANDIDATE_DOMINANCE_CPLEX_SOURCES)
+	@mkdir -p $(dir $@)
+	$(CXX) $(COMMON_CPPFLAGS) $(CPLEX_CPPFLAGS) $(COMMON_CXXFLAGS) $^ $(CPLEX_LDFLAGS) -o $@
+
+$(BUILD_DIR)/test_weighted_conditional_zero_benefit_fixing_cplex: $(TEST_WEIGHTED_CONDITIONAL_ZERO_BENEFIT_FIXING_CPLEX_SOURCES)
+	@mkdir -p $(dir $@)
+	$(CXX) $(COMMON_CPPFLAGS) $(CPLEX_CPPFLAGS) $(COMMON_CXXFLAGS) $^ $(CPLEX_LDFLAGS) -o $@
+
 $(BUILD_DIR)/test_dpv_saa_model_structure: $(call test_obj,$(TEST_DPV_STRUCTURE_SOURCES))
 	$(CXX) $^ -o $@
 
@@ -930,6 +960,12 @@ $(BUILD_DIR)/test_weighted_restricted_candidate_bounds: $(call test_obj,$(TEST_W
 $(BUILD_DIR)/test_weighted_restricted_bound_counterexamples: $(call test_obj,$(TEST_WEIGHTED_RESTRICTED_BOUND_COUNTEREXAMPLES_SOURCES))
 	$(CXX) $^ -o $@
 
+$(BUILD_DIR)/test_weighted_global_candidate_dominance: $(call test_obj,$(TEST_WEIGHTED_GLOBAL_CANDIDATE_DOMINANCE_SOURCES))
+	$(CXX) $^ -o $@
+
+$(BUILD_DIR)/test_weighted_conditional_zero_benefit_fixing: $(call test_obj,$(TEST_WEIGHTED_CONDITIONAL_ZERO_BENEFIT_FIXING_SOURCES))
+	$(CXX) $^ -o $@
+
 $(BUILD_DIR)/test_candidate_bound_controller: $(call test_obj,$(TEST_CANDIDATE_BOUND_CONTROLLER_SOURCES))
 	$(CXX) $^ -o $@
 
@@ -1001,6 +1037,8 @@ test: $(TEST_EXES)
 	./build_gpp/test_weighted_restricted_tail_diagnostics
 	./build_gpp/test_weighted_restricted_candidate_bounds
 	./build_gpp/test_weighted_restricted_bound_counterexamples
+	./build_gpp/test_weighted_global_candidate_dominance
+	./build_gpp/test_weighted_conditional_zero_benefit_fixing
 	./build_gpp/test_candidate_bound_controller
 	./build_gpp/test_fpp_projected_llbi
 	./build_gpp/test_fpp_persistent_scenario_subproblem_manager
@@ -1123,6 +1161,10 @@ clean:
 	$(TEST_WEIGHTED_RESTRICTED_TAIL_DIAGNOSTICS_SOURCES) \
 	$(TEST_WEIGHTED_RESTRICTED_CANDIDATE_BOUNDS_SOURCES) \
 	$(TEST_WEIGHTED_RESTRICTED_BOUND_COUNTEREXAMPLES_SOURCES) \
+	$(TEST_WEIGHTED_GLOBAL_CANDIDATE_DOMINANCE_SOURCES) \
+	$(TEST_WEIGHTED_CONDITIONAL_ZERO_BENEFIT_FIXING_SOURCES) \
+	$(TEST_WEIGHTED_GLOBAL_CANDIDATE_DOMINANCE_CPLEX_SOURCES) \
+	$(TEST_WEIGHTED_CONDITIONAL_ZERO_BENEFIT_FIXING_CPLEX_SOURCES) \
 	$(TEST_CANDIDATE_BOUND_CONTROLLER_SOURCES) \
 	$(TEST_FPP_PROJECTED_LLBI_SOURCES) \
 	$(TEST_FPP_PERSISTENT_SCENARIO_SUBPROBLEM_MANAGER_SOURCES) \

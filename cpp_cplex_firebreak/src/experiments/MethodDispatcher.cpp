@@ -1053,10 +1053,18 @@ io::StandardExperimentResult MethodDispatcher::run_method(const MethodDispatchRe
 
     if (fpp_strengthening_options.use_global_dominance_preprocessing) {
         solver_result.global_dominance_enabled = true;
+        solver_result.global_dominance_structural_weight_safe =
+            dominance_preprocess.structural_weight_safe;
+        solver_result.global_dominance_original_candidate_count =
+            dominance_preprocess.original_candidate_count;
         solver_result.global_dominance_candidates_removed =
             dominance_preprocess.candidates_removed;
         solver_result.global_dominance_equivalence_classes =
             dominance_preprocess.equivalence_classes;
+        solver_result.global_dominance_post_candidate_count =
+            dominance_preprocess.post_candidate_count;
+        solver_result.global_dominance_warm_start_replacements =
+            dominance_preprocess.warm_start_replacements;
         solver_result.global_dominance_precompute_time_sec =
             dominance_preprocess.precompute_time_sec;
         solver_result.notes.insert(
@@ -1257,17 +1265,37 @@ io::StandardExperimentResult MethodDispatcher::run_method(const MethodDispatchRe
     result.projected_exp_enumeration_limit =
         solver_result.projected_exp_enumeration_limit;
     result.global_dominance_enabled = solver_result.global_dominance_enabled;
+    result.global_dominance_structural_weight_safe =
+        solver_result.global_dominance_structural_weight_safe;
+    result.global_dominance_original_candidate_count =
+        solver_result.global_dominance_original_candidate_count;
     result.global_dominance_candidates_removed = solver_result.global_dominance_candidates_removed;
     result.global_dominance_equivalence_classes =
         solver_result.global_dominance_equivalence_classes;
+    result.global_dominance_post_candidate_count =
+        solver_result.global_dominance_post_candidate_count;
+    result.global_dominance_warm_start_replacements =
+        solver_result.global_dominance_warm_start_replacements;
     result.global_dominance_precompute_time_sec =
         solver_result.global_dominance_precompute_time_sec;
     result.conditional_zero_benefit_enabled =
         solver_result.conditional_zero_benefit_enabled;
+    result.conditional_zero_benefit_structural_weight_safe =
+        solver_result.conditional_zero_benefit_structural_weight_safe;
+    result.conditional_zero_benefit_callback_calls =
+        solver_result.conditional_zero_benefit_callback_calls;
+    result.conditional_zero_benefit_nodes_checked =
+        solver_result.conditional_zero_benefit_nodes_checked;
+    result.conditional_zero_benefit_candidates_checked =
+        solver_result.conditional_zero_benefit_candidates_checked;
     result.conditional_zero_benefit_fixings_attempted =
         solver_result.conditional_zero_benefit_fixings_attempted;
     result.conditional_zero_benefit_fixings_applied =
         solver_result.conditional_zero_benefit_fixings_applied;
+    result.conditional_zero_benefit_variables_fixed_zero =
+        solver_result.conditional_zero_benefit_variables_fixed_zero;
+    result.conditional_zero_benefit_scenarios_reachability_computed =
+        solver_result.conditional_zero_benefit_scenarios_reachability_computed;
     result.conditional_zero_benefit_time_sec =
         solver_result.conditional_zero_benefit_time_sec;
     result.branch_benders_use_root_user_cuts = solver_result.branch_benders_use_root_user_cuts;

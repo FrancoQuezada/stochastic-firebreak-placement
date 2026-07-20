@@ -235,7 +235,11 @@ ModelResult FppSaaCplexModel::solve(
         result.path_llbi_enabled = strengthening_options->use_path_llbi;
         result.global_dominance_enabled =
             strengthening_options->use_global_dominance_preprocessing;
+        result.global_dominance_structural_weight_safe =
+            strengthening_options->use_global_dominance_preprocessing;
         result.conditional_zero_benefit_enabled =
+            strengthening_options->use_conditional_zero_benefit_fixing;
+        result.conditional_zero_benefit_structural_weight_safe =
             strengthening_options->use_conditional_zero_benefit_fixing;
         if (strengthening_options->use_coverage_llbi ||
             strengthening_options->use_path_llbi) {

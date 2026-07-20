@@ -136,9 +136,7 @@ bool uses_unconverted_weighted_strengthening(const FppBranchBendersOptions& opti
            options.strengthening_options.use_projected_coverage_llbi_exp ||
            options.strengthening_options.use_projected_path_llbi_exp ||
            options.strengthening_options.use_projected_coverage_llbi_poly ||
-           options.strengthening_options.use_projected_path_llbi_poly ||
-           options.strengthening_options.use_conditional_zero_benefit_fixing ||
-           options.strengthening_options.use_global_dominance_preprocessing;
+           options.strengthening_options.use_projected_path_llbi_poly;
 }
 
 #endif
@@ -1220,7 +1218,7 @@ solver::ModelResult FppBranchBendersSolver::solve(
     if (has_nonunit_compact_weights(opt) &&
         uses_unconverted_weighted_strengthening(options)) {
         throw std::runtime_error(
-            "Non-homogeneous weighted FPP Branch-Benders supports only LP lazy cuts and root user cuts in Phase 5B; LLBI, projected LLBI, combinatorial Benders, dominance preprocessing, and conditional fixing are not yet weight-converted.");
+            "Non-homogeneous weighted FPP Branch-Benders Phase 6A supports LP lazy cuts, root user cuts, structural global dominance, and conditional zero-benefit diagnostics; LLBI, projected LLBI, and combinatorial Benders remain unconverted.");
     }
     const auto risk_config = effective_risk_config_from(options.risk_config);
     const bool risk_enabled = uses_cvar_risk(risk_config);
@@ -1461,6 +1459,7 @@ solver::ModelResult FppBranchBendersSolver::solve(
         result.conditional_zero_benefit_enabled =
             options.strengthening_options.use_conditional_zero_benefit_fixing;
         if (options.strengthening_options.use_conditional_zero_benefit_fixing) {
+            result.conditional_zero_benefit_structural_weight_safe = true;
             result.notes.push_back(
                 "Conditional zero-benefit local fixing requested, but CPLEX generic callbacks in this solver do not safely expose node-local y upper-bound tightening; diagnostics are reported with zero applied local fixings.");
         }

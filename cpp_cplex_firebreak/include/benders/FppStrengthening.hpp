@@ -90,9 +90,13 @@ struct FppPathLlbiData {
 
 struct FppDominancePreprocessingResult {
     bool enabled = false;
+    bool structural_weight_safe = false;
     opt::OptimizationInstance reduced_instance;
+    int original_candidate_count = 0;
     int candidates_removed = 0;
     int equivalence_classes = 0;
+    int post_candidate_count = 0;
+    int warm_start_replacements = 0;
     double precompute_time_sec = 0.0;
     std::vector<int> kept_candidate_compact_nodes;
     std::vector<int> removed_candidate_compact_nodes;
@@ -102,8 +106,14 @@ struct FppDominancePreprocessingResult {
 
 struct FppConditionalZeroBenefitResult {
     bool enabled = false;
+    bool structural_weight_safe = false;
+    int callback_calls = 0;
+    int nodes_checked = 0;
+    int candidates_checked = 0;
     int fixings_attempted = 0;
     int fixings_applied = 0;
+    int variables_fixed_zero = 0;
+    int scenarios_reachability_computed = 0;
     double time_sec = 0.0;
     std::vector<int> zero_benefit_candidate_compact_nodes;
     std::vector<std::string> notes;
@@ -368,6 +378,25 @@ inline bool subset_of(const std::set<int>& lhs, const std::set<int>& rhs) {
     return std::includes(rhs.begin(), rhs.end(), lhs.begin(), lhs.end());
 }
 
+inline int original_node_for_compact(
+    const opt::OptimizationInstance& opt,
+    int compact_node) {
+    ensure_node_in_range(compact_node, opt.node_mapper.size(), "Dominance candidate");
+    return opt.node_mapper.to_node(compact_node);
+}
+
+inline bool candidate_identity_less(
+    const opt::OptimizationInstance& opt,
+    int lhs,
+    int rhs) {
+    const int lhs_original = original_node_for_compact(opt, lhs);
+    const int rhs_original = original_node_for_compact(opt, rhs);
+    if (lhs_original != rhs_original) {
+        return lhs_original < rhs_original;
+    }
+    return lhs < rhs;
+}
+
 inline std::string set_signature(const std::set<int>& values) {
     std::ostringstream out;
     bool first = true;
@@ -498,7 +527,10 @@ inline FppDominancePreprocessingResult apply_fpp_global_dominance_preprocessing(
     bool enabled) {
     FppDominancePreprocessingResult result;
     result.enabled = enabled;
+    result.structural_weight_safe = enabled;
     result.reduced_instance = opt;
+    result.original_candidate_count = static_cast<int>(opt.eligible_indices.size());
+    result.post_candidate_count = result.original_candidate_count;
     if (!enabled) {
         result.kept_candidate_compact_nodes = opt.eligible_indices;
         return result;
@@ -521,6 +553,12 @@ inline FppDominancePreprocessingResult apply_fpp_global_dominance_preprocessing(
             duplicate_classes.insert(candidate);
         }
     }
+    std::sort(
+        unique_candidates.begin(),
+        unique_candidates.end(),
+        [&opt](int lhs, int rhs) {
+            return detail::candidate_identity_less(opt, lhs, rhs);
+        });
     result.equivalence_classes += static_cast<int>(duplicate_classes.size());
 
     std::map<int, std::vector<std::set<int>>> dominated_by_candidate;
@@ -563,7 +601,12 @@ inline FppDominancePreprocessingResult apply_fpp_global_dominance_preprocessing(
     std::set<int> removed_compact_nodes;
     std::map<int, int> removed_by;
     for (auto& [_, cls] : classes_by_signature) {
-        std::sort(cls.begin(), cls.end());
+        std::sort(
+            cls.begin(),
+            cls.end(),
+            [&opt](int lhs, int rhs) {
+                return detail::candidate_identity_less(opt, lhs, rhs);
+            });
         if (cls.size() <= 1) {
             continue;
         }
@@ -579,15 +622,21 @@ inline FppDominancePreprocessingResult apply_fpp_global_dominance_preprocessing(
         if (removed_compact_nodes.find(j) != removed_compact_nodes.end()) {
             continue;
         }
+        int best_dominator = -1;
         for (const int i : unique_candidates) {
             if (i == j || removed_compact_nodes.find(i) != removed_compact_nodes.end()) {
                 continue;
             }
             if (dominates(i, j) && !dominates(j, i)) {
-                removed_compact_nodes.insert(j);
-                removed_by[j] = i;
-                break;
+                if (best_dominator < 0 ||
+                    detail::candidate_identity_less(opt, i, best_dominator)) {
+                    best_dominator = i;
+                }
             }
+        }
+        if (best_dominator >= 0) {
+            removed_compact_nodes.insert(j);
+            removed_by[j] = best_dominator;
         }
     }
 
@@ -618,6 +667,7 @@ inline FppDominancePreprocessingResult apply_fpp_global_dominance_preprocessing(
         result.removed_by_dominator.clear();
         result.candidates_removed = 0;
         result.equivalence_classes = 0;
+        result.post_candidate_count = result.original_candidate_count;
         result.precompute_time_sec =
             std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
         result.notes.push_back(
@@ -628,6 +678,7 @@ inline FppDominancePreprocessingResult apply_fpp_global_dominance_preprocessing(
     result.reduced_instance.eligible_original_nodes = kept_original_nodes;
     result.kept_candidate_compact_nodes = kept_indices;
     result.candidates_removed = static_cast<int>(result.removed_candidate_compact_nodes.size());
+    result.post_candidate_count = static_cast<int>(result.kept_candidate_compact_nodes.size());
     result.precompute_time_sec =
         std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
     result.notes.push_back(
@@ -644,6 +695,7 @@ inline FppConditionalZeroBenefitResult detect_fpp_conditional_zero_benefit_candi
     bool enabled) {
     FppConditionalZeroBenefitResult result;
     result.enabled = enabled;
+    result.structural_weight_safe = enabled;
     if (!enabled) {
         return result;
     }
@@ -654,11 +706,13 @@ inline FppConditionalZeroBenefitResult detect_fpp_conditional_zero_benefit_candi
         detail::ensure_node_in_range(node, node_count, "Fixed firebreak");
         fixed_selected[static_cast<std::size_t>(node)] = 1;
     }
+    result.nodes_checked = 1;
 
     for (const int candidate : opt.eligible_indices) {
         if (fixed_selected[static_cast<std::size_t>(candidate)]) {
             continue;
         }
+        ++result.candidates_checked;
         bool zero_benefit_all_scenarios = true;
         for (const auto& scenario : opt.scenarios) {
             if (candidate == scenario.ignition_index) {
@@ -669,6 +723,7 @@ inline FppConditionalZeroBenefitResult detect_fpp_conditional_zero_benefit_candi
                 successors,
                 scenario.ignition_index,
                 fixed_selected);
+            ++result.scenarios_reachability_computed;
             if (reached[static_cast<std::size_t>(candidate)]) {
                 zero_benefit_all_scenarios = false;
                 break;
@@ -679,6 +734,7 @@ inline FppConditionalZeroBenefitResult detect_fpp_conditional_zero_benefit_candi
             result.zero_benefit_candidate_compact_nodes.push_back(candidate);
         }
     }
+    result.variables_fixed_zero = result.fixings_applied;
     result.time_sec =
         std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
     result.notes.push_back(

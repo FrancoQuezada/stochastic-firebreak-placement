@@ -225,11 +225,9 @@ void validate_weighted_phase5c2b2_options(
         options.strengthening_options.use_projected_coverage_llbi_exp ||
         options.strengthening_options.use_projected_path_llbi_exp ||
         options.strengthening_options.use_projected_coverage_llbi_poly ||
-        options.strengthening_options.use_projected_path_llbi_poly ||
-        options.strengthening_options.use_conditional_zero_benefit_fixing ||
-        options.strengthening_options.use_global_dominance_preprocessing) {
+        options.strengthening_options.use_projected_path_llbi_poly) {
         throw std::runtime_error(
-            "Non-homogeneous weighted restricted Branch-Benders Phase 5C2B2 rejects unvalidated permanent-pruning, strengthening, and combinatorial modules.");
+            "Non-homogeneous weighted restricted Branch-Benders Phase 6A allows structural global dominance and conditional zero-benefit diagnostics; LLBI, projected LLBI, and combinatorial Benders remain unconverted.");
     }
     if (options.candidate_score_mode == "cvar-tail-blend" &&
         options.activation_policy != "benders-coefficients") {
@@ -2023,6 +2021,7 @@ RestrictedStageSolveResult solve_stage_impl(
         stage.model_result.conditional_zero_benefit_enabled =
             options.strengthening_options.use_conditional_zero_benefit_fixing;
         if (options.strengthening_options.use_conditional_zero_benefit_fixing) {
+            stage.model_result.conditional_zero_benefit_structural_weight_safe = true;
             stage.model_result.notes.push_back(
                 "Conditional zero-benefit local fixing requested, but CPLEX generic callbacks in this restricted solver do not safely expose node-local y upper-bound tightening; diagnostics are reported with zero applied local fixings.");
         }

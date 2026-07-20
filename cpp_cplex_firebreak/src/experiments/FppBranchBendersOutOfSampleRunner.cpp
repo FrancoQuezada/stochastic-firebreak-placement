@@ -111,9 +111,7 @@ bool uses_unconverted_weighted_strengthening(
            strengthening_options.use_projected_coverage_llbi_exp ||
            strengthening_options.use_projected_path_llbi_exp ||
            strengthening_options.use_projected_coverage_llbi_poly ||
-           strengthening_options.use_projected_path_llbi_poly ||
-           strengthening_options.use_global_dominance_preprocessing ||
-           strengthening_options.use_conditional_zero_benefit_fixing;
+           strengthening_options.use_projected_path_llbi_poly;
 }
 
 std::string method_label_for_options(
@@ -199,12 +197,22 @@ std::vector<std::pair<std::string, std::string>> strengthening_summary_fields(
         {"projected_llbi_total_nonzeros", std::to_string(result.projected_llbi_total_nonzeros)},
         {"projected_llbi_total_time_sec", format_compact_double(result.projected_llbi_total_time_sec)},
         {"global_dominance_enabled", result.global_dominance_enabled ? "true" : "false"},
+        {"global_dominance_structural_weight_safe", result.global_dominance_structural_weight_safe ? "true" : "false"},
+        {"global_dominance_original_candidate_count", std::to_string(result.global_dominance_original_candidate_count)},
         {"global_dominance_candidates_removed", std::to_string(result.global_dominance_candidates_removed)},
         {"global_dominance_equivalence_classes", std::to_string(result.global_dominance_equivalence_classes)},
+        {"global_dominance_post_candidate_count", std::to_string(result.global_dominance_post_candidate_count)},
+        {"global_dominance_warm_start_replacements", std::to_string(result.global_dominance_warm_start_replacements)},
         {"global_dominance_precompute_time_sec", format_compact_double(result.global_dominance_precompute_time_sec)},
         {"conditional_zero_benefit_enabled", result.conditional_zero_benefit_enabled ? "true" : "false"},
+        {"conditional_zero_benefit_structural_weight_safe", result.conditional_zero_benefit_structural_weight_safe ? "true" : "false"},
+        {"conditional_zero_benefit_callback_calls", std::to_string(result.conditional_zero_benefit_callback_calls)},
+        {"conditional_zero_benefit_nodes_checked", std::to_string(result.conditional_zero_benefit_nodes_checked)},
+        {"conditional_zero_benefit_candidates_checked", std::to_string(result.conditional_zero_benefit_candidates_checked)},
         {"conditional_zero_benefit_fixings_attempted", std::to_string(result.conditional_zero_benefit_fixings_attempted)},
         {"conditional_zero_benefit_fixings_applied", std::to_string(result.conditional_zero_benefit_fixings_applied)},
+        {"conditional_zero_benefit_variables_fixed_zero", std::to_string(result.conditional_zero_benefit_variables_fixed_zero)},
+        {"conditional_zero_benefit_scenarios_reachability_computed", std::to_string(result.conditional_zero_benefit_scenarios_reachability_computed)},
         {"conditional_zero_benefit_time_sec", format_compact_double(result.conditional_zero_benefit_time_sec)},
     };
 }
@@ -380,7 +388,7 @@ int FppBranchBendersOutOfSampleRunner::run(
             options.combinatorial_options,
             options.strengthening_options)) {
         throw std::runtime_error(
-            "Non-homogeneous weighted run-fpp-branch-benders-oos supports only LP lazy cuts and root user cuts in Phase 5B; LLBI, projected LLBI, combinatorial Benders, dominance preprocessing, and conditional fixing are not yet weight-converted.");
+            "Non-homogeneous weighted run-fpp-branch-benders-oos Phase 6A supports LP lazy cuts, root user cuts, structural global dominance, and conditional zero-benefit diagnostics; LLBI, projected LLBI, and combinatorial Benders remain unconverted.");
     }
     const auto dominance_preprocess = benders::apply_fpp_global_dominance_preprocessing(
         opt_instance,
@@ -413,10 +421,18 @@ int FppBranchBendersOutOfSampleRunner::run(
     solve_result.solver_weighted_objective = solve_result.objective_value;
     if (options.strengthening_options.use_global_dominance_preprocessing) {
         solve_result.global_dominance_enabled = true;
+        solve_result.global_dominance_structural_weight_safe =
+            dominance_preprocess.structural_weight_safe;
+        solve_result.global_dominance_original_candidate_count =
+            dominance_preprocess.original_candidate_count;
         solve_result.global_dominance_candidates_removed =
             dominance_preprocess.candidates_removed;
         solve_result.global_dominance_equivalence_classes =
             dominance_preprocess.equivalence_classes;
+        solve_result.global_dominance_post_candidate_count =
+            dominance_preprocess.post_candidate_count;
+        solve_result.global_dominance_warm_start_replacements =
+            dominance_preprocess.warm_start_replacements;
         solve_result.global_dominance_precompute_time_sec =
             dominance_preprocess.precompute_time_sec;
         solve_result.notes.insert(
@@ -652,18 +668,38 @@ int FppBranchBendersOutOfSampleRunner::run(
     result.projected_exp_enumeration_limit =
         solve_result.projected_exp_enumeration_limit;
     result.global_dominance_enabled = solve_result.global_dominance_enabled;
+    result.global_dominance_structural_weight_safe =
+        solve_result.global_dominance_structural_weight_safe;
+    result.global_dominance_original_candidate_count =
+        solve_result.global_dominance_original_candidate_count;
     result.global_dominance_candidates_removed =
         solve_result.global_dominance_candidates_removed;
     result.global_dominance_equivalence_classes =
         solve_result.global_dominance_equivalence_classes;
+    result.global_dominance_post_candidate_count =
+        solve_result.global_dominance_post_candidate_count;
+    result.global_dominance_warm_start_replacements =
+        solve_result.global_dominance_warm_start_replacements;
     result.global_dominance_precompute_time_sec =
         solve_result.global_dominance_precompute_time_sec;
     result.conditional_zero_benefit_enabled =
         solve_result.conditional_zero_benefit_enabled;
+    result.conditional_zero_benefit_structural_weight_safe =
+        solve_result.conditional_zero_benefit_structural_weight_safe;
+    result.conditional_zero_benefit_callback_calls =
+        solve_result.conditional_zero_benefit_callback_calls;
+    result.conditional_zero_benefit_nodes_checked =
+        solve_result.conditional_zero_benefit_nodes_checked;
+    result.conditional_zero_benefit_candidates_checked =
+        solve_result.conditional_zero_benefit_candidates_checked;
     result.conditional_zero_benefit_fixings_attempted =
         solve_result.conditional_zero_benefit_fixings_attempted;
     result.conditional_zero_benefit_fixings_applied =
         solve_result.conditional_zero_benefit_fixings_applied;
+    result.conditional_zero_benefit_variables_fixed_zero =
+        solve_result.conditional_zero_benefit_variables_fixed_zero;
+    result.conditional_zero_benefit_scenarios_reachability_computed =
+        solve_result.conditional_zero_benefit_scenarios_reachability_computed;
     result.conditional_zero_benefit_time_sec =
         solve_result.conditional_zero_benefit_time_sec;
     result.branch_benders_use_root_user_cuts = solve_result.branch_benders_use_root_user_cuts;
