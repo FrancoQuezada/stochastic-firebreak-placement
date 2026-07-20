@@ -100,7 +100,9 @@ firebreak::solver::ModelResult solve_branch(
     const firebreak::opt::OptimizationInstance& opt,
     const firebreak::risk::RiskMeasureConfig& risk_config,
     firebreak::benders::FppCombinatorialBendersLiftMode lift_mode,
-    bool combinatorial) {
+    bool combinatorial,
+    bool initial_cuts = false,
+    bool fractional_cuts = false) {
     firebreak::benders::FppBranchBendersSolver solver;
     firebreak::benders::FppBranchBendersOptions options;
     options.tolerance = 1.0e-7;
@@ -110,6 +112,8 @@ firebreak::solver::ModelResult solve_branch(
     options.risk_config = risk_config;
     if (combinatorial) {
         options.combinatorial_options = combinatorial_options(lift_mode);
+        options.combinatorial_options.initial_cuts = initial_cuts;
+        options.combinatorial_options.separate_fractional = fractional_cuts;
     }
     return solver.solve(opt, options);
 }
@@ -194,6 +198,43 @@ void test_homogeneous_regression_for_lifting() {
     }
 }
 
+void test_initial_and_fractional_combinatorial_cplex() {
+    const auto opt = make_instance(false);
+    const auto risk_config = firebreak::risk::RiskMeasureConfig();
+    const auto direct = solve_direct(opt, risk_config);
+    const auto lp_callback = solve_branch(
+        opt,
+        risk_config,
+        firebreak::benders::FppCombinatorialBendersLiftMode::None,
+        false);
+    const auto result = solve_branch(
+        opt,
+        risk_config,
+        firebreak::benders::FppCombinatorialBendersLiftMode::Heuristic,
+        true,
+        true,
+        true);
+    assert(direct.status == "Optimal");
+    assert(lp_callback.status == "Optimal");
+    assert(result.status == "Optimal");
+    assert_close(result.objective_value, direct.objective_value);
+    assert_close(result.objective_value, lp_callback.objective_value);
+    assert(result.combinatorial_benders_initial_cuts_enabled);
+    assert(result.combinatorial_benders_fractional_separation_enabled);
+    assert(result.combinatorial_initial_solutions_evaluated == 1);
+    assert(result.combinatorial_initial_cuts_generated ==
+           static_cast<int>(opt.scenarios.size()));
+    assert(result.combinatorial_benders_initial_cuts_added > 0);
+    assert(result.combinatorial_fractional_cuts_enabled);
+    assert(result.combinatorial_fractional_validity_mode ==
+           "weighted-fractional-path-activation-user-cut-convex-hull-valid");
+    assert(result.combinatorial_fractional_separation_calls >= 0);
+    assert(!result.combinatorial_root_cuts_enabled);
+    assert(!result.branch_benders_use_root_user_cuts);
+    assert(result.combinatorial_lifting_failures == 0);
+    assert(result.combinatorial_fractional_max_tightness_error >= 0.0);
+}
+
 }  // namespace
 
 int main() {
@@ -203,6 +244,7 @@ int main() {
 #else
     compare_lift_modes();
     test_homogeneous_regression_for_lifting();
+    test_initial_and_fractional_combinatorial_cplex();
     std::cout << "All weighted FPP combinatorial lifting CPLEX tests passed.\n";
     return 0;
 #endif

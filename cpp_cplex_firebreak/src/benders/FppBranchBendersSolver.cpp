@@ -133,7 +133,7 @@ bool has_nonunit_compact_weights(const opt::OptimizationInstance& opt) {
 
 bool uses_unconverted_weighted_strengthening(const FppBranchBendersOptions& options) {
     if (options.combinatorial_options.enabled) {
-        validate_fpp_phase6c2a_weighted_combinatorial_integer_mode(
+        validate_fpp_phase6c2b_weighted_combinatorial_mode(
             options.combinatorial_options,
             options.use_root_user_cuts,
             options.use_lifted_lower_bounds,
@@ -316,6 +316,12 @@ std::string combinatorial_cut_signature(
         out << compact_node << ";";
     }
     return out.str();
+}
+
+std::string fpp_fractional_combinatorial_validity_mode(bool weighted) {
+    return weighted
+        ? "weighted-fractional-path-activation-user-cut-convex-hull-valid"
+        : "unit-fractional-path-activation-user-cut-convex-hull-valid";
 }
 
 struct BranchBendersVariableAccess {
@@ -557,6 +563,14 @@ void accumulate_combinatorial_summary(
     }
     if (fractional) {
         stats.fractional_cuts_added += cuts_added;
+        ++stats.fractional_separation_calls;
+        stats.fractional_scenarios_evaluated += summary.scenarios_checked;
+        stats.fractional_cuts_generated += summary.violated_cuts;
+        stats.fractional_max_violation =
+            std::max(stats.fractional_max_violation, summary.max_violation);
+        stats.fractional_max_tightness_error =
+            std::max(stats.fractional_max_tightness_error, summary.max_tightness_error);
+        stats.fractional_separation_time_sec += summary.separation_time_sec;
     } else {
         stats.integer_cuts_added += cuts_added;
     }
@@ -1146,8 +1160,23 @@ private:
             tolerance_);
 
         int cuts_added = 0;
+        int duplicate_cuts = 0;
         double cut_construction_time = 0.0;
         for (const auto& separated : summary.cuts) {
+            const auto signature = combinatorial_cut_signature(
+                separated.cut,
+                separator_.weightMapHash(),
+                opt_.eligible_indices);
+            {
+                std::lock_guard<std::mutex> lock(stats_.mutex);
+                const auto [_, inserted] = stats_.cut_signatures.insert(signature);
+                if (!inserted) {
+                    ++duplicate_cuts;
+                    ++stats_.combinatorial_stats.duplicate_cuts;
+                    ++stats_.combinatorial_stats.fractional_duplicate_cuts;
+                    continue;
+                }
+            }
             const auto cut_start = std::chrono::steady_clock::now();
             IloEnv env = context.getEnv();
             IloRange cut = make_benders_cut_range(
@@ -1168,6 +1197,7 @@ private:
             stats_.violated_cuts += summary.violated_cuts;
             stats_.nonviolated_cuts += summary.nonviolated_cuts;
             stats_.skipped_cuts += summary.scenarios_skipped;
+            stats_.duplicate_cuts += duplicate_cuts;
             accumulate_combinatorial_summary(
                 stats_.combinatorial_stats,
                 summary,
@@ -1270,7 +1300,7 @@ solver::ModelResult FppBranchBendersSolver::solve(
     if (has_nonunit_compact_weights(opt) &&
         uses_unconverted_weighted_strengthening(options)) {
         throw std::runtime_error(
-            "Non-homogeneous weighted FPP Branch-Benders Phase 6C2A supports LP lazy cuts, root user cuts, standard downstream-union LLBI, extended CoverageLLBI, extended PathLLBI, projected CoverageLLBI, projected PathLLBI, structural global dominance, conditional zero-benefit diagnostics, and integer-only combinatorial Benders with lift_mode=none|heuristic|posterior, no sampling, no initial cuts, and no fractional cuts.");
+            "Non-homogeneous weighted FPP Branch-Benders Phase 6C2B supports LP lazy cuts, root user cuts, standard downstream-union LLBI, extended CoverageLLBI, extended PathLLBI, projected CoverageLLBI, projected PathLLBI, structural global dominance, conditional zero-benefit diagnostics, and combinatorial Benders with lift_mode=none|heuristic|posterior, complete scenario evaluation, optional binary initial cuts, and optional fractional path user cuts.");
     }
     const auto risk_config = effective_risk_config_from(options.risk_config);
     const bool risk_enabled = uses_cvar_risk(risk_config);
@@ -1682,17 +1712,36 @@ solver::ModelResult FppBranchBendersSolver::solve(
 
         std::unique_ptr<FppCombinatorialBendersSeparator> combinatorial_separator;
         std::vector<int> combinatorial_initial_y;
+        std::set<std::string> combinatorial_initial_cut_signatures;
+        int combinatorial_initial_solutions_evaluated = 0;
+        int combinatorial_initial_cuts_generated = 0;
         int combinatorial_initial_cuts_added = 0;
+        int combinatorial_initial_duplicate_cuts = 0;
+        double combinatorial_initial_cut_time_sec = 0.0;
         if (options.combinatorial_options.enabled) {
             combinatorial_separator =
                 std::make_unique<FppCombinatorialBendersSeparator>(opt);
             if (options.combinatorial_options.initial_cuts) {
+                const auto initial_start = std::chrono::steady_clock::now();
                 combinatorial_initial_y = combinatorial_separator->greedyInitialSolution();
+                ++combinatorial_initial_solutions_evaluated;
                 const auto initial_cuts =
                     combinatorial_separator->initialCutsFromSolution(
                         combinatorial_initial_y,
                         options.combinatorial_options.lift_mode);
+                combinatorial_initial_cuts_generated =
+                    static_cast<int>(initial_cuts.size());
                 for (std::size_t s = 0; s < initial_cuts.size(); ++s) {
+                    const auto signature = combinatorial_cut_signature(
+                        initial_cuts[s].cut,
+                        combinatorial_separator->weightMapHash(),
+                        opt.eligible_indices);
+                    const auto [_, inserted] =
+                        combinatorial_initial_cut_signatures.insert(signature);
+                    if (!inserted) {
+                        ++combinatorial_initial_duplicate_cuts;
+                        continue;
+                    }
                     add_benders_cut_to_model(
                         env,
                         model,
@@ -1702,6 +1751,9 @@ solver::ModelResult FppBranchBendersSolver::solve(
                         "FPP combinatorial initial Benders cut");
                     ++combinatorial_initial_cuts_added;
                 }
+                combinatorial_initial_cut_time_sec =
+                    std::chrono::duration<double>(
+                        std::chrono::steady_clock::now() - initial_start).count();
             }
         }
 
@@ -1948,8 +2000,19 @@ solver::ModelResult FppBranchBendersSolver::solve(
             options.combinatorial_options.separate_fractional;
         callback_stats.combinatorial_stats.initial_cuts_enabled =
             options.combinatorial_options.initial_cuts;
+        callback_stats.combinatorial_stats.initial_solutions_evaluated =
+            combinatorial_initial_solutions_evaluated;
+        callback_stats.combinatorial_stats.initial_cuts_generated =
+            combinatorial_initial_cuts_generated;
         callback_stats.combinatorial_stats.initial_cuts_added =
             combinatorial_initial_cuts_added;
+        callback_stats.combinatorial_stats.initial_duplicate_cuts =
+            combinatorial_initial_duplicate_cuts;
+        callback_stats.combinatorial_stats.initial_cut_time_sec =
+            combinatorial_initial_cut_time_sec;
+        callback_stats.cut_signatures.insert(
+            combinatorial_initial_cut_signatures.begin(),
+            combinatorial_initial_cut_signatures.end());
         if (combinatorial_separator) {
             callback_stats.combinatorial_stats.weighted =
                 combinatorial_separator->weighted();
@@ -1970,6 +2033,14 @@ solver::ModelResult FppBranchBendersSolver::solve(
                 fpp_phase6c2a_lifting_validity_mode(
                     options.combinatorial_options.lift_mode,
                     combinatorial_separator->weighted());
+            callback_stats.combinatorial_stats.fractional_validity_mode =
+                options.combinatorial_options.separate_fractional
+                    ? fpp_fractional_combinatorial_validity_mode(
+                          combinatorial_separator->weighted())
+                    : "disabled";
+            callback_stats.combinatorial_stats.root_cuts_enabled = false;
+            callback_stats.combinatorial_stats.root_skipped_reason =
+                "No dedicated combinatorial root-only cut mechanism is implemented; LP-dual root user cuts remain separate.";
         }
         BranchBendersRootUserCutStats root_user_stats;
         root_user_stats.enabled = options.use_root_user_cuts;
@@ -2297,6 +2368,48 @@ solver::ModelResult FppBranchBendersSolver::solve(
             callback_stats.combinatorial_stats.lifting_time_sec;
         result.combinatorial_lifting_validity_mode =
             callback_stats.combinatorial_stats.lifting_validity_mode;
+        result.combinatorial_initial_solutions_evaluated =
+            callback_stats.combinatorial_stats.initial_solutions_evaluated;
+        result.combinatorial_initial_cuts_generated =
+            callback_stats.combinatorial_stats.initial_cuts_generated;
+        result.combinatorial_initial_duplicate_cuts =
+            callback_stats.combinatorial_stats.initial_duplicate_cuts;
+        result.combinatorial_initial_cut_time_sec =
+            callback_stats.combinatorial_stats.initial_cut_time_sec;
+        result.combinatorial_root_cuts_enabled =
+            callback_stats.combinatorial_stats.root_cuts_enabled;
+        result.combinatorial_root_rounds =
+            callback_stats.combinatorial_stats.root_rounds;
+        result.combinatorial_root_integer_points_evaluated =
+            callback_stats.combinatorial_stats.root_integer_points_evaluated;
+        result.combinatorial_root_fractional_points_evaluated =
+            callback_stats.combinatorial_stats.root_fractional_points_evaluated;
+        result.combinatorial_root_cuts_generated =
+            callback_stats.combinatorial_stats.root_cuts_generated;
+        result.combinatorial_root_cuts_added =
+            callback_stats.combinatorial_stats.root_cuts_added;
+        result.combinatorial_root_duplicate_cuts =
+            callback_stats.combinatorial_stats.root_duplicate_cuts;
+        result.combinatorial_root_cut_time_sec =
+            callback_stats.combinatorial_stats.root_cut_time_sec;
+        result.combinatorial_root_skipped_reason =
+            callback_stats.combinatorial_stats.root_skipped_reason;
+        result.combinatorial_fractional_validity_mode =
+            callback_stats.combinatorial_stats.fractional_validity_mode;
+        result.combinatorial_fractional_separation_calls =
+            callback_stats.combinatorial_stats.fractional_separation_calls;
+        result.combinatorial_fractional_scenarios_evaluated =
+            callback_stats.combinatorial_stats.fractional_scenarios_evaluated;
+        result.combinatorial_fractional_cuts_generated =
+            callback_stats.combinatorial_stats.fractional_cuts_generated;
+        result.combinatorial_fractional_duplicate_cuts =
+            callback_stats.combinatorial_stats.fractional_duplicate_cuts;
+        result.combinatorial_fractional_max_violation =
+            callback_stats.combinatorial_stats.fractional_max_violation;
+        result.combinatorial_fractional_max_tightness_error =
+            callback_stats.combinatorial_stats.fractional_max_tightness_error;
+        result.combinatorial_fractional_separation_time_sec =
+            callback_stats.combinatorial_stats.fractional_separation_time_sec;
         result.projected_coverage_llbi_enabled =
             projected_stats.projected_coverage_llbi_enabled;
         result.projected_path_llbi_enabled =

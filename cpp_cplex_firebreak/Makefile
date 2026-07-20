@@ -338,6 +338,14 @@ TEST_WEIGHTED_FPP_COMBINATORIAL_LIFTING_COUNTEREXAMPLES_SOURCES := \
 	$(filter-out tests/test_weighted_fpp_combinatorial_lifting.cpp,$(TEST_WEIGHTED_FPP_COMBINATORIAL_LIFTING_SOURCES)) \
 	tests/test_weighted_fpp_combinatorial_lifting_counterexamples.cpp
 
+TEST_WEIGHTED_FPP_COMBINATORIAL_INITIAL_CUTS_SOURCES := \
+	$(filter-out tests/test_weighted_fpp_combinatorial_lifting.cpp,$(TEST_WEIGHTED_FPP_COMBINATORIAL_LIFTING_SOURCES)) \
+	tests/test_weighted_fpp_combinatorial_initial_cuts.cpp
+
+TEST_WEIGHTED_FPP_COMBINATORIAL_FRACTIONAL_VALIDITY_SOURCES := \
+	$(filter-out tests/test_weighted_fpp_combinatorial_lifting.cpp,$(TEST_WEIGHTED_FPP_COMBINATORIAL_LIFTING_SOURCES)) \
+	tests/test_weighted_fpp_combinatorial_fractional_validity.cpp
+
 TEST_WEIGHTED_FPP_COMBINATORIAL_CPLEX_SOURCES = \
 	$(filter-out tests/test_weighted_fpp_branch_benders_cplex.cpp,$(TEST_WEIGHTED_FPP_BRANCH_BENDERS_CPLEX_SOURCES)) \
 	tests/test_weighted_fpp_combinatorial_cplex.cpp
@@ -799,6 +807,8 @@ TEST_EXES := \
 	$(BUILD_DIR)/test_weighted_fpp_combinatorial_lifting \
 	$(BUILD_DIR)/test_weighted_fpp_combinatorial_lifting_validity \
 	$(BUILD_DIR)/test_weighted_fpp_combinatorial_lifting_counterexamples \
+	$(BUILD_DIR)/test_weighted_fpp_combinatorial_initial_cuts \
+	$(BUILD_DIR)/test_weighted_fpp_combinatorial_fractional_validity \
 	$(BUILD_DIR)/test_weighted_path_llbi \
 	$(BUILD_DIR)/test_weighted_path_llbi_validity \
 	$(BUILD_DIR)/test_dpv_saa_model_structure \
@@ -989,6 +999,12 @@ $(BUILD_DIR)/test_weighted_fpp_combinatorial_lifting_validity: $(call test_obj,$
 	$(CXX) $^ -o $@
 
 $(BUILD_DIR)/test_weighted_fpp_combinatorial_lifting_counterexamples: $(call test_obj,$(TEST_WEIGHTED_FPP_COMBINATORIAL_LIFTING_COUNTEREXAMPLES_SOURCES))
+	$(CXX) $^ -o $@
+
+$(BUILD_DIR)/test_weighted_fpp_combinatorial_initial_cuts: $(call test_obj,$(TEST_WEIGHTED_FPP_COMBINATORIAL_INITIAL_CUTS_SOURCES))
+	$(CXX) $^ -o $@
+
+$(BUILD_DIR)/test_weighted_fpp_combinatorial_fractional_validity: $(call test_obj,$(TEST_WEIGHTED_FPP_COMBINATORIAL_FRACTIONAL_VALIDITY_SOURCES))
 	$(CXX) $^ -o $@
 
 $(BUILD_DIR)/test_weighted_path_llbi: $(call test_obj,$(TEST_WEIGHTED_PATH_LLBI_SOURCES))
@@ -1245,6 +1261,8 @@ test: $(TEST_EXES)
 	./build_gpp/test_weighted_fpp_combinatorial_lifting
 	./build_gpp/test_weighted_fpp_combinatorial_lifting_validity
 	./build_gpp/test_weighted_fpp_combinatorial_lifting_counterexamples
+	./build_gpp/test_weighted_fpp_combinatorial_initial_cuts
+	./build_gpp/test_weighted_fpp_combinatorial_fractional_validity
 	./build_gpp/test_weighted_path_llbi
 	./build_gpp/test_weighted_path_llbi_validity
 	./build_gpp/test_graph_diagnostics
@@ -1419,6 +1437,8 @@ clean:
 	$(TEST_WEIGHTED_FPP_COMBINATORIAL_LIFTING_SOURCES) \
 	$(TEST_WEIGHTED_FPP_COMBINATORIAL_LIFTING_VALIDITY_SOURCES) \
 	$(TEST_WEIGHTED_FPP_COMBINATORIAL_LIFTING_COUNTEREXAMPLES_SOURCES) \
+	$(TEST_WEIGHTED_FPP_COMBINATORIAL_INITIAL_CUTS_SOURCES) \
+	$(TEST_WEIGHTED_FPP_COMBINATORIAL_FRACTIONAL_VALIDITY_SOURCES) \
 	$(TEST_WEIGHTED_FPP_COMBINATORIAL_LIFTING_CPLEX_SOURCES) \
 	$(TEST_WEIGHTED_GLOBAL_CANDIDATE_DOMINANCE_SOURCES) \
 	$(TEST_WEIGHTED_CONDITIONAL_ZERO_BENEFIT_FIXING_SOURCES) \

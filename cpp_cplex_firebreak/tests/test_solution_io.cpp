@@ -143,6 +143,29 @@ int main() {
     result.combinatorial_lifting_time_sec = 0.014;
     result.combinatorial_lifting_validity_mode =
         "heuristic-mode-exact-weighted-path-dedup-lifting";
+    result.combinatorial_initial_solutions_evaluated = 1;
+    result.combinatorial_initial_cuts_generated = 3;
+    result.combinatorial_initial_duplicate_cuts = 1;
+    result.combinatorial_initial_cut_time_sec = 0.015;
+    result.combinatorial_root_cuts_enabled = false;
+    result.combinatorial_root_rounds = 0;
+    result.combinatorial_root_integer_points_evaluated = 0;
+    result.combinatorial_root_fractional_points_evaluated = 0;
+    result.combinatorial_root_cuts_generated = 0;
+    result.combinatorial_root_cuts_added = 0;
+    result.combinatorial_root_duplicate_cuts = 0;
+    result.combinatorial_root_cut_time_sec = 0.0;
+    result.combinatorial_root_skipped_reason =
+        "No dedicated combinatorial root-only cut mechanism is implemented.";
+    result.combinatorial_fractional_validity_mode =
+        "weighted-fractional-path-activation-user-cut-convex-hull-valid";
+    result.combinatorial_fractional_separation_calls = 4;
+    result.combinatorial_fractional_scenarios_evaluated = 12;
+    result.combinatorial_fractional_cuts_generated = 6;
+    result.combinatorial_fractional_duplicate_cuts = 2;
+    result.combinatorial_fractional_max_violation = 4.5;
+    result.combinatorial_fractional_max_tightness_error = 0.0;
+    result.combinatorial_fractional_separation_time_sec = 0.016;
     result.coverage_llbi_enabled = true;
     result.coverage_llbi_num_zeta_vars = 7;
     result.coverage_llbi_num_constraints = 8;
@@ -213,9 +236,13 @@ int main() {
         assert(text.find("combinatorial_lifting_attempts") != std::string::npos);
         assert(text.find("combinatorial_coefficients_changed") != std::string::npos);
         assert(text.find("combinatorial_lifting_validity_mode") != std::string::npos);
+        assert(text.find("combinatorial_initial_solutions_evaluated") != std::string::npos);
+        assert(text.find("combinatorial_root_cuts_enabled") != std::string::npos);
+        assert(text.find("combinatorial_fractional_validity_mode") != std::string::npos);
         assert(text.find("baseline-integer-exact-no-lifting") != std::string::npos);
         assert(text.find("weighted-baseline-integer-path-activation-cut") != std::string::npos);
         assert(text.find("heuristic-mode-exact-weighted-path-dedup-lifting") != std::string::npos);
+        assert(text.find("weighted-fractional-path-activation-user-cut-convex-hull-valid") != std::string::npos);
         assert(text.find("coverage_llbi_enabled") != std::string::npos);
         assert(text.find("path_llbi_num_paths_used") != std::string::npos);
         assert(text.find("projected_path_llbi_weighted") != std::string::npos);
@@ -235,6 +262,7 @@ int main() {
             assert(line != "combinatorial_benders_weighted");
             assert(line != "combinatorial_candidate_callbacks");
             assert(line != "combinatorial_lifting_weighted");
+            assert(line != "combinatorial_fractional_validity_mode");
             if (line.find("experiment_id") == 0) {
                 ++header_count;
             }
@@ -276,6 +304,10 @@ int main() {
         assert(text.find("\"combinatorial_lifting_attempts\": 5") != std::string::npos);
         assert(text.find("\"combinatorial_coefficients_changed\": 2") != std::string::npos);
         assert(text.find("\"combinatorial_lifting_validity_mode\": \"heuristic-mode-exact-weighted-path-dedup-lifting\"") != std::string::npos);
+        assert(text.find("\"combinatorial_initial_solutions_evaluated\": 1") != std::string::npos);
+        assert(text.find("\"combinatorial_root_cuts_enabled\": false") != std::string::npos);
+        assert(text.find("\"combinatorial_fractional_validity_mode\": \"weighted-fractional-path-activation-user-cut-convex-hull-valid\"") != std::string::npos);
+        assert(text.find("\"combinatorial_fractional_separation_calls\": 4") != std::string::npos);
         assert(text.find("\"path_llbi_num_paths_used\": 11") != std::string::npos);
         assert(text.find("\"projected_path_llbi_weighted\": true") != std::string::npos);
         assert(text.find("\"projected_path_llbi_validity_mode\": \"exact-directed-path-projection\"") != std::string::npos);

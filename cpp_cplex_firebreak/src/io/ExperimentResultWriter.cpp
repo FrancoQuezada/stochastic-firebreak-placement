@@ -1070,6 +1070,48 @@ void write_experiment_result_json(
         << format_json_number(result.combinatorial_lifting_time_sec) << ",\n";
     out << "  \"combinatorial_lifting_validity_mode\": \""
         << json_escape_local(result.combinatorial_lifting_validity_mode) << "\",\n";
+    out << "  \"combinatorial_initial_solutions_evaluated\": "
+        << result.combinatorial_initial_solutions_evaluated << ",\n";
+    out << "  \"combinatorial_initial_cuts_generated\": "
+        << result.combinatorial_initial_cuts_generated << ",\n";
+    out << "  \"combinatorial_initial_duplicate_cuts\": "
+        << result.combinatorial_initial_duplicate_cuts << ",\n";
+    out << "  \"combinatorial_initial_cut_time_sec\": "
+        << format_json_number(result.combinatorial_initial_cut_time_sec) << ",\n";
+    out << "  \"combinatorial_root_cuts_enabled\": "
+        << (result.combinatorial_root_cuts_enabled ? "true" : "false") << ",\n";
+    out << "  \"combinatorial_root_rounds\": "
+        << result.combinatorial_root_rounds << ",\n";
+    out << "  \"combinatorial_root_integer_points_evaluated\": "
+        << result.combinatorial_root_integer_points_evaluated << ",\n";
+    out << "  \"combinatorial_root_fractional_points_evaluated\": "
+        << result.combinatorial_root_fractional_points_evaluated << ",\n";
+    out << "  \"combinatorial_root_cuts_generated\": "
+        << result.combinatorial_root_cuts_generated << ",\n";
+    out << "  \"combinatorial_root_cuts_added\": "
+        << result.combinatorial_root_cuts_added << ",\n";
+    out << "  \"combinatorial_root_duplicate_cuts\": "
+        << result.combinatorial_root_duplicate_cuts << ",\n";
+    out << "  \"combinatorial_root_cut_time_sec\": "
+        << format_json_number(result.combinatorial_root_cut_time_sec) << ",\n";
+    out << "  \"combinatorial_root_skipped_reason\": \""
+        << json_escape_local(result.combinatorial_root_skipped_reason) << "\",\n";
+    out << "  \"combinatorial_fractional_validity_mode\": \""
+        << json_escape_local(result.combinatorial_fractional_validity_mode) << "\",\n";
+    out << "  \"combinatorial_fractional_separation_calls\": "
+        << result.combinatorial_fractional_separation_calls << ",\n";
+    out << "  \"combinatorial_fractional_scenarios_evaluated\": "
+        << result.combinatorial_fractional_scenarios_evaluated << ",\n";
+    out << "  \"combinatorial_fractional_cuts_generated\": "
+        << result.combinatorial_fractional_cuts_generated << ",\n";
+    out << "  \"combinatorial_fractional_duplicate_cuts\": "
+        << result.combinatorial_fractional_duplicate_cuts << ",\n";
+    out << "  \"combinatorial_fractional_max_violation\": "
+        << format_json_number(result.combinatorial_fractional_max_violation) << ",\n";
+    out << "  \"combinatorial_fractional_max_tightness_error\": "
+        << format_json_number(result.combinatorial_fractional_max_tightness_error) << ",\n";
+    out << "  \"combinatorial_fractional_separation_time_sec\": "
+        << format_json_number(result.combinatorial_fractional_separation_time_sec) << ",\n";
     out << "  \"coverage_llbi_enabled\": " << (result.coverage_llbi_enabled ? "true" : "false") << ",\n";
     out << "  \"coverage_llbi_num_zeta_vars\": " << result.coverage_llbi_num_zeta_vars << ",\n";
     out << "  \"coverage_llbi_num_constraints\": " << result.coverage_llbi_num_constraints << ",\n";
@@ -1577,6 +1619,27 @@ void append_experiment_result_csv(
             << "combinatorial_lifted_cuts_dominating_baseline,"
             << "combinatorial_lifting_time_sec,"
             << "combinatorial_lifting_validity_mode,"
+            << "combinatorial_initial_solutions_evaluated,"
+            << "combinatorial_initial_cuts_generated,"
+            << "combinatorial_initial_duplicate_cuts,"
+            << "combinatorial_initial_cut_time_sec,"
+            << "combinatorial_root_cuts_enabled,"
+            << "combinatorial_root_rounds,"
+            << "combinatorial_root_integer_points_evaluated,"
+            << "combinatorial_root_fractional_points_evaluated,"
+            << "combinatorial_root_cuts_generated,"
+            << "combinatorial_root_cuts_added,"
+            << "combinatorial_root_duplicate_cuts,"
+            << "combinatorial_root_cut_time_sec,"
+            << "combinatorial_root_skipped_reason,"
+            << "combinatorial_fractional_validity_mode,"
+            << "combinatorial_fractional_separation_calls,"
+            << "combinatorial_fractional_scenarios_evaluated,"
+            << "combinatorial_fractional_cuts_generated,"
+            << "combinatorial_fractional_duplicate_cuts,"
+            << "combinatorial_fractional_max_violation,"
+            << "combinatorial_fractional_max_tightness_error,"
+            << "combinatorial_fractional_separation_time_sec,"
             << "coverage_llbi_enabled,coverage_llbi_num_zeta_vars,coverage_llbi_num_constraints,"
             << "coverage_llbi_precompute_time_sec,"
             << "coverage_llbi_weighted,coverage_llbi_weight_map_hash,"
@@ -1850,7 +1913,28 @@ void append_experiment_result_csv(
             << format_csv_number(result.combinatorial_max_lifted_tightness_error) << ","
             << result.combinatorial_lifted_cuts_dominating_baseline << ","
             << format_csv_number(result.combinatorial_lifting_time_sec) << ","
-            << csv_escape(result.combinatorial_lifting_validity_mode) << ",";
+            << csv_escape(result.combinatorial_lifting_validity_mode) << ","
+            << result.combinatorial_initial_solutions_evaluated << ","
+            << result.combinatorial_initial_cuts_generated << ","
+            << result.combinatorial_initial_duplicate_cuts << ","
+            << format_csv_number(result.combinatorial_initial_cut_time_sec) << ","
+            << (result.combinatorial_root_cuts_enabled ? "true" : "false") << ","
+            << result.combinatorial_root_rounds << ","
+            << result.combinatorial_root_integer_points_evaluated << ","
+            << result.combinatorial_root_fractional_points_evaluated << ","
+            << result.combinatorial_root_cuts_generated << ","
+            << result.combinatorial_root_cuts_added << ","
+            << result.combinatorial_root_duplicate_cuts << ","
+            << format_csv_number(result.combinatorial_root_cut_time_sec) << ","
+            << csv_escape(result.combinatorial_root_skipped_reason) << ","
+            << csv_escape(result.combinatorial_fractional_validity_mode) << ","
+            << result.combinatorial_fractional_separation_calls << ","
+            << result.combinatorial_fractional_scenarios_evaluated << ","
+            << result.combinatorial_fractional_cuts_generated << ","
+            << result.combinatorial_fractional_duplicate_cuts << ","
+            << format_csv_number(result.combinatorial_fractional_max_violation) << ","
+            << format_csv_number(result.combinatorial_fractional_max_tightness_error) << ","
+            << format_csv_number(result.combinatorial_fractional_separation_time_sec) << ",";
     }
     if (include_fpp_strengthening_summary) {
         out << (result.coverage_llbi_enabled ? "true" : "false") << ","

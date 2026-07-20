@@ -106,7 +106,7 @@ bool uses_unconverted_weighted_strengthening(
     const benders::FppCombinatorialBendersOptions& combinatorial_options,
     const benders::FppStrengtheningOptions& strengthening_options) {
     if (combinatorial_options.enabled) {
-        benders::validate_fpp_phase6c2a_weighted_combinatorial_integer_mode(
+        benders::validate_fpp_phase6c2b_weighted_combinatorial_mode(
             combinatorial_options,
             use_root_user_cuts,
             use_lifted_lower_bounds,
@@ -744,6 +744,48 @@ int FppBranchBendersOutOfSampleRunner::run(
         solve_result.combinatorial_lifting_time_sec;
     result.combinatorial_lifting_validity_mode =
         solve_result.combinatorial_lifting_validity_mode;
+    result.combinatorial_initial_solutions_evaluated =
+        solve_result.combinatorial_initial_solutions_evaluated;
+    result.combinatorial_initial_cuts_generated =
+        solve_result.combinatorial_initial_cuts_generated;
+    result.combinatorial_initial_duplicate_cuts =
+        solve_result.combinatorial_initial_duplicate_cuts;
+    result.combinatorial_initial_cut_time_sec =
+        solve_result.combinatorial_initial_cut_time_sec;
+    result.combinatorial_root_cuts_enabled =
+        solve_result.combinatorial_root_cuts_enabled;
+    result.combinatorial_root_rounds =
+        solve_result.combinatorial_root_rounds;
+    result.combinatorial_root_integer_points_evaluated =
+        solve_result.combinatorial_root_integer_points_evaluated;
+    result.combinatorial_root_fractional_points_evaluated =
+        solve_result.combinatorial_root_fractional_points_evaluated;
+    result.combinatorial_root_cuts_generated =
+        solve_result.combinatorial_root_cuts_generated;
+    result.combinatorial_root_cuts_added =
+        solve_result.combinatorial_root_cuts_added;
+    result.combinatorial_root_duplicate_cuts =
+        solve_result.combinatorial_root_duplicate_cuts;
+    result.combinatorial_root_cut_time_sec =
+        solve_result.combinatorial_root_cut_time_sec;
+    result.combinatorial_root_skipped_reason =
+        solve_result.combinatorial_root_skipped_reason;
+    result.combinatorial_fractional_validity_mode =
+        solve_result.combinatorial_fractional_validity_mode;
+    result.combinatorial_fractional_separation_calls =
+        solve_result.combinatorial_fractional_separation_calls;
+    result.combinatorial_fractional_scenarios_evaluated =
+        solve_result.combinatorial_fractional_scenarios_evaluated;
+    result.combinatorial_fractional_cuts_generated =
+        solve_result.combinatorial_fractional_cuts_generated;
+    result.combinatorial_fractional_duplicate_cuts =
+        solve_result.combinatorial_fractional_duplicate_cuts;
+    result.combinatorial_fractional_max_violation =
+        solve_result.combinatorial_fractional_max_violation;
+    result.combinatorial_fractional_max_tightness_error =
+        solve_result.combinatorial_fractional_max_tightness_error;
+    result.combinatorial_fractional_separation_time_sec =
+        solve_result.combinatorial_fractional_separation_time_sec;
     result.coverage_llbi_enabled = solve_result.coverage_llbi_enabled;
     result.coverage_llbi_num_zeta_vars = solve_result.coverage_llbi_num_zeta_vars;
     result.coverage_llbi_num_constraints = solve_result.coverage_llbi_num_constraints;

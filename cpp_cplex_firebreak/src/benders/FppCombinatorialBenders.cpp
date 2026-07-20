@@ -295,6 +295,14 @@ bool is_fpp_phase6c2a_weighted_combinatorial_integer_mode(
            !options.initial_cuts;
 }
 
+bool is_fpp_phase6c2b_weighted_combinatorial_mode(
+    const FppCombinatorialBendersOptions& options) {
+    return options.enabled &&
+           is_phase6c2a_supported_lift_mode(options.lift_mode) &&
+           options.scenario_order == FppCombinatorialBendersScenarioOrder::EtaAscending &&
+           std::fabs(options.cut_sampling_ratio - 1.0) <= 1.0e-12;
+}
+
 void validate_fpp_phase6c1_weighted_combinatorial_baseline(
     const FppCombinatorialBendersOptions& options,
     bool use_root_user_cuts,
@@ -364,6 +372,42 @@ void validate_fpp_phase6c2a_weighted_combinatorial_integer_mode(
     if (strengthening_options.use_conditional_zero_benefit_fixing) {
         throw std::runtime_error(
             "Non-homogeneous weighted FPP combinatorial Benders Phase 6C2A does not combine with conditional zero-benefit fixing.");
+    }
+}
+
+void validate_fpp_phase6c2b_weighted_combinatorial_mode(
+    const FppCombinatorialBendersOptions& options,
+    bool use_root_user_cuts,
+    bool use_lifted_lower_bounds,
+    const FppStrengtheningOptions& strengthening_options) {
+    if (!options.enabled) {
+        return;
+    }
+    if (!is_fpp_phase6c2b_weighted_combinatorial_mode(options)) {
+        throw std::runtime_error(
+            "Non-homogeneous weighted FPP combinatorial Benders Phase 6C2B supports only lift_mode=none|heuristic|posterior, scenario_order=eta-asc, and cut_sampling_ratio=1. Initial binary cuts and fractional path user cuts may be enabled, but scenario sampling and eta-desc remain disabled.");
+    }
+    if (use_root_user_cuts) {
+        throw std::runtime_error(
+            "Non-homogeneous weighted FPP combinatorial Benders Phase 6C2B does not combine with LP-dual root user cuts; the repository has no separate combinatorial root-only cut mechanism in this phase.");
+    }
+    if (use_lifted_lower_bounds ||
+        strengthening_options.use_coverage_llbi ||
+        strengthening_options.use_path_llbi ||
+        strengthening_options.use_projected_coverage_llbi_exp ||
+        strengthening_options.use_projected_path_llbi_exp ||
+        strengthening_options.use_projected_coverage_llbi_poly ||
+        strengthening_options.use_projected_path_llbi_poly) {
+        throw std::runtime_error(
+            "Non-homogeneous weighted FPP combinatorial Benders Phase 6C2B does not combine with LLBI or projected LLBI families.");
+    }
+    if (strengthening_options.use_global_dominance_preprocessing) {
+        throw std::runtime_error(
+            "Non-homogeneous weighted FPP combinatorial Benders Phase 6C2B keeps global dominance disabled with combinatorial separation.");
+    }
+    if (strengthening_options.use_conditional_zero_benefit_fixing) {
+        throw std::runtime_error(
+            "Non-homogeneous weighted FPP combinatorial Benders Phase 6C2B does not combine with conditional zero-benefit fixing.");
     }
 }
 

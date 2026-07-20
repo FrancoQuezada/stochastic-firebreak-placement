@@ -172,7 +172,7 @@ void test_homogeneous_regression() {
     assert(!explicit_result.combinatorial_benders_weighted);
 }
 
-void test_phase6c2a_option_rejection() {
+void test_phase6c2b_option_rejection() {
     const auto opt = make_instance(false);
     firebreak::benders::FppBranchBendersSolver solver;
     firebreak::benders::FppBranchBendersOptions options;
@@ -182,7 +182,7 @@ void test_phase6c2a_option_rejection() {
     try {
         (void)solver.solve(opt, options);
     } catch (const std::runtime_error& error) {
-        threw = std::string(error.what()).find("Phase 6C2A") != std::string::npos;
+        threw = std::string(error.what()).find("Phase 6C2B") != std::string::npos;
     }
     assert(threw);
 }
@@ -196,7 +196,7 @@ int main() {
 #else
     compare_expected_cvar_mean_cvar();
     test_homogeneous_regression();
-    test_phase6c2a_option_rejection();
+    test_phase6c2b_option_rejection();
     std::cout << "All weighted FPP combinatorial CPLEX tests passed.\n";
     return 0;
 #endif

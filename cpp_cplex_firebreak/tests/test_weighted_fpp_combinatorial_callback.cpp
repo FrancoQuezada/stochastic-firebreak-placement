@@ -68,7 +68,7 @@ void expect_rejected(
     const std::string& expected_text) {
     bool threw = false;
     try {
-        firebreak::benders::validate_fpp_phase6c2a_weighted_combinatorial_integer_mode(
+        firebreak::benders::validate_fpp_phase6c2b_weighted_combinatorial_mode(
             options,
             root_cuts,
             llbi,
@@ -83,7 +83,7 @@ void test_all_scenarios_checked_without_sampling() {
     const auto opt = make_multi_scenario_instance();
     firebreak::benders::FppCombinatorialBendersSeparator separator(opt);
     const auto options = baseline_options();
-    firebreak::benders::validate_fpp_phase6c2a_weighted_combinatorial_integer_mode(
+    firebreak::benders::validate_fpp_phase6c2b_weighted_combinatorial_mode(
         options,
         false,
         false,
@@ -105,7 +105,7 @@ void test_all_scenarios_checked_without_sampling() {
     assert(summary.max_tightness_error <= 1.0e-7);
 }
 
-void test_phase6c2a_lifting_modes_and_rejections() {
+void test_phase6c2b_initial_fractional_modes_and_rejections() {
     auto options = baseline_options();
     firebreak::benders::FppStrengtheningOptions strengthening;
 
@@ -115,7 +115,7 @@ void test_phase6c2a_lifting_modes_and_rejections() {
 
     auto heuristic = options;
     heuristic.lift_mode = firebreak::benders::FppCombinatorialBendersLiftMode::Heuristic;
-    firebreak::benders::validate_fpp_phase6c2a_weighted_combinatorial_integer_mode(
+    firebreak::benders::validate_fpp_phase6c2b_weighted_combinatorial_mode(
         heuristic,
         false,
         false,
@@ -123,7 +123,7 @@ void test_phase6c2a_lifting_modes_and_rejections() {
 
     auto posterior = options;
     posterior.lift_mode = firebreak::benders::FppCombinatorialBendersLiftMode::Posterior;
-    firebreak::benders::validate_fpp_phase6c2a_weighted_combinatorial_integer_mode(
+    firebreak::benders::validate_fpp_phase6c2b_weighted_combinatorial_mode(
         posterior,
         false,
         false,
@@ -131,11 +131,28 @@ void test_phase6c2a_lifting_modes_and_rejections() {
 
     auto fractional = options;
     fractional.separate_fractional = true;
-    expect_rejected(fractional, false, false, strengthening, "separate_fractional=false");
+    firebreak::benders::validate_fpp_phase6c2b_weighted_combinatorial_mode(
+        fractional,
+        false,
+        false,
+        strengthening);
 
     auto initial = options;
     initial.initial_cuts = true;
-    expect_rejected(initial, false, false, strengthening, "initial_cuts=false");
+    firebreak::benders::validate_fpp_phase6c2b_weighted_combinatorial_mode(
+        initial,
+        false,
+        false,
+        strengthening);
+
+    auto initial_fractional = heuristic;
+    initial_fractional.initial_cuts = true;
+    initial_fractional.separate_fractional = true;
+    firebreak::benders::validate_fpp_phase6c2b_weighted_combinatorial_mode(
+        initial_fractional,
+        false,
+        false,
+        strengthening);
 
     auto eta_desc = options;
     eta_desc.scenario_order =
@@ -157,7 +174,7 @@ void test_phase6c2a_lifting_modes_and_rejections() {
 
 int main() {
     test_all_scenarios_checked_without_sampling();
-    test_phase6c2a_lifting_modes_and_rejections();
+    test_phase6c2b_initial_fractional_modes_and_rejections();
     std::cout << "All weighted FPP combinatorial callback policy tests passed.\n";
     return 0;
 }

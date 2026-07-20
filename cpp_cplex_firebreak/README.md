@@ -137,15 +137,17 @@ Weighted landscape status:
 - Projected PathLLBI is weight-aware in callback Branch-and-Benders for both
   `exp` root separation and the static `poly` first-stored-path subset
   (`docs/WEIGHTED_LANDSCAPES_PHASE6B3B.md`).
-- Integer-incumbent combinatorial Benders is weight-aware in callback
-  Branch-and-Benders for `lift_mode=none`, `heuristic`, and `posterior` under
-  the exact no-sampling/no-fractional/no-initial-cut policy
-  (`scenario_order=eta-asc`, `cut_sampling_ratio=1`;
+- Combinatorial Benders is weight-aware in callback Branch-and-Benders for
+  integer incumbents, binary initial cuts, and fractional path user cuts with
+  `lift_mode=none`, `heuristic`, or `posterior`, under the exact no-sampling
+  policy (`scenario_order=eta-asc`, `cut_sampling_ratio=1`;
   `docs/WEIGHTED_LANDSCAPES_PHASE6C1.md`,
-  `docs/WEIGHTED_LANDSCAPES_PHASE6C2A.md`).
-- Combinatorial initial/fractional cuts, combinatorial sampling or eta-desc
-  ordering, restricted-candidate projected LLBI, DPV, and Static-DPV remain
-  blocked for non-homogeneous weights until separately validated.
+  `docs/WEIGHTED_LANDSCAPES_PHASE6C2A.md`,
+  `docs/WEIGHTED_LANDSCAPES_PHASE6C2B.md`).
+- Combinatorial sampling, eta-desc ordering, LP-dual root user cuts combined
+  with combinatorial Benders, restricted-candidate projected LLBI, DPV, and
+  Static-DPV remain blocked for non-homogeneous weights until separately
+  validated.
 
 Expected objective methods:
 

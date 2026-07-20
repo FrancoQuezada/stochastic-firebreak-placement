@@ -141,6 +141,27 @@ struct FppCombinatorialBendersStats {
     double max_lifted_tightness_error = 0.0;
     double lifting_time_sec = 0.0;
     std::string lifting_validity_mode = "none";
+    int initial_solutions_evaluated = 0;
+    int initial_cuts_generated = 0;
+    int initial_duplicate_cuts = 0;
+    double initial_cut_time_sec = 0.0;
+    bool root_cuts_enabled = false;
+    int root_rounds = 0;
+    int root_integer_points_evaluated = 0;
+    int root_fractional_points_evaluated = 0;
+    int root_cuts_generated = 0;
+    int root_cuts_added = 0;
+    int root_duplicate_cuts = 0;
+    double root_cut_time_sec = 0.0;
+    std::string root_skipped_reason;
+    std::string fractional_validity_mode = "disabled";
+    int fractional_separation_calls = 0;
+    int fractional_scenarios_evaluated = 0;
+    int fractional_cuts_generated = 0;
+    int fractional_duplicate_cuts = 0;
+    double fractional_max_violation = 0.0;
+    double fractional_max_tightness_error = 0.0;
+    double fractional_separation_time_sec = 0.0;
 
     double average_paths_per_cut() const;
     double average_cut_nonzeros() const;
@@ -177,6 +198,15 @@ bool is_fpp_phase6c2a_weighted_combinatorial_integer_mode(
     const FppCombinatorialBendersOptions& options);
 
 void validate_fpp_phase6c2a_weighted_combinatorial_integer_mode(
+    const FppCombinatorialBendersOptions& options,
+    bool use_root_user_cuts,
+    bool use_lifted_lower_bounds,
+    const FppStrengtheningOptions& strengthening_options);
+
+bool is_fpp_phase6c2b_weighted_combinatorial_mode(
+    const FppCombinatorialBendersOptions& options);
+
+void validate_fpp_phase6c2b_weighted_combinatorial_mode(
     const FppCombinatorialBendersOptions& options,
     bool use_root_user_cuts,
     bool use_lifted_lower_bounds,
