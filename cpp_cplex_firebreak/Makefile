@@ -106,6 +106,7 @@ MAIN_SOURCES := \
 	src/opt/IndexMapper.cpp \
 	src/opt/OptimizationInstance.cpp \
 	src/opt/DpvIndexBuilder.cpp \
+	src/opt/WeightedDpvScoring.cpp \
 	src/opt/OptimizationInstanceBuilder.cpp \
 	src/risk/RiskMeasure.cpp \
 	src/solver/CplexEnvironment.cpp \
@@ -215,6 +216,36 @@ TEST_DPV_INDEX_SOURCES := \
 	src/opt/OptimizationInstance.cpp \
 	src/opt/DpvIndexBuilder.cpp \
 	tests/test_dpv_index_builder.cpp
+
+TEST_WEIGHTED_FPP_DPV_SOURCES := \
+	src/opt/IndexMapper.cpp \
+	src/opt/OptimizationInstance.cpp \
+	src/opt/DpvIndexBuilder.cpp \
+	src/opt/WeightedDpvScoring.cpp \
+	tests/test_weighted_fpp_dpv.cpp
+
+TEST_WEIGHTED_FPP_DPV_VARIANTS_SOURCES := \
+	src/benchmarks/StaticDpvBenchmark.cpp \
+	src/benchmarks/StaticDpvMipBenchmark.cpp \
+	src/opt/IndexMapper.cpp \
+	src/opt/OptimizationInstance.cpp \
+	src/opt/DpvIndexBuilder.cpp \
+	src/opt/WeightedDpvScoring.cpp \
+	tests/test_weighted_fpp_dpv_variants.cpp
+
+TEST_WEIGHTED_FPP_DPV_CACHE_SOURCES := \
+	src/opt/IndexMapper.cpp \
+	src/opt/OptimizationInstance.cpp \
+	src/opt/DpvIndexBuilder.cpp \
+	src/opt/WeightedDpvScoring.cpp \
+	tests/test_weighted_fpp_dpv_cache.cpp
+
+TEST_WEIGHTED_FPP_DPV_DIAGNOSTICS_SOURCES := \
+	src/opt/IndexMapper.cpp \
+	src/opt/OptimizationInstance.cpp \
+	src/opt/DpvIndexBuilder.cpp \
+	src/opt/WeightedDpvScoring.cpp \
+	tests/test_weighted_fpp_dpv_diagnostics.cpp
 
 TEST_FPP_STRUCTURE_SOURCES := \
 	src/core/LandscapeWeightMap.cpp \
@@ -804,6 +835,10 @@ TEST_EXES := \
 	$(BUILD_DIR)/test_landscape_weight_map \
 	$(BUILD_DIR)/test_landscape_weight_generator \
 	$(BUILD_DIR)/test_dpv_index_builder \
+	$(BUILD_DIR)/test_weighted_fpp_dpv \
+	$(BUILD_DIR)/test_weighted_fpp_dpv_variants \
+	$(BUILD_DIR)/test_weighted_fpp_dpv_cache \
+	$(BUILD_DIR)/test_weighted_fpp_dpv_diagnostics \
 	$(BUILD_DIR)/test_fpp_recourse_evaluator \
 	$(BUILD_DIR)/test_weighted_fpp_recourse_evaluator \
 	$(BUILD_DIR)/test_fpp_saa_model_structure \
@@ -967,6 +1002,18 @@ $(BUILD_DIR)/test_landscape_weight_generator: $(call test_obj,$(TEST_LANDSCAPE_W
 	$(CXX) $^ -o $@
 
 $(BUILD_DIR)/test_dpv_index_builder: $(call test_obj,$(TEST_DPV_INDEX_SOURCES))
+	$(CXX) $^ -o $@
+
+$(BUILD_DIR)/test_weighted_fpp_dpv: $(call test_obj,$(TEST_WEIGHTED_FPP_DPV_SOURCES))
+	$(CXX) $^ -o $@
+
+$(BUILD_DIR)/test_weighted_fpp_dpv_variants: $(call test_obj,$(TEST_WEIGHTED_FPP_DPV_VARIANTS_SOURCES))
+	$(CXX) $^ -o $@
+
+$(BUILD_DIR)/test_weighted_fpp_dpv_cache: $(call test_obj,$(TEST_WEIGHTED_FPP_DPV_CACHE_SOURCES))
+	$(CXX) $^ -o $@
+
+$(BUILD_DIR)/test_weighted_fpp_dpv_diagnostics: $(call test_obj,$(TEST_WEIGHTED_FPP_DPV_DIAGNOSTICS_SOURCES))
 	$(CXX) $^ -o $@
 
 $(BUILD_DIR)/test_fpp_saa_model_structure: $(call test_obj,$(TEST_FPP_STRUCTURE_SOURCES))
@@ -1273,6 +1320,10 @@ test: $(TEST_EXES)
 	./build_gpp/test_landscape_weight_map
 	./build_gpp/test_landscape_weight_generator
 	./build_gpp/test_dpv_index_builder
+	./build_gpp/test_weighted_fpp_dpv
+	./build_gpp/test_weighted_fpp_dpv_variants
+	./build_gpp/test_weighted_fpp_dpv_cache
+	./build_gpp/test_weighted_fpp_dpv_diagnostics
 	./build_gpp/test_burned_area_evaluator
 	./build_gpp/test_fpp_recourse_evaluator
 	./build_gpp/test_weighted_fpp_recourse_evaluator
@@ -1423,6 +1474,10 @@ clean:
 	$(TEST_LANDSCAPE_WEIGHT_MAP_SOURCES) \
 	$(TEST_LANDSCAPE_WEIGHT_GENERATOR_SOURCES) \
 	$(TEST_DPV_INDEX_SOURCES) \
+	$(TEST_WEIGHTED_FPP_DPV_SOURCES) \
+	$(TEST_WEIGHTED_FPP_DPV_VARIANTS_SOURCES) \
+	$(TEST_WEIGHTED_FPP_DPV_CACHE_SOURCES) \
+	$(TEST_WEIGHTED_FPP_DPV_DIAGNOSTICS_SOURCES) \
 	$(TEST_FPP_STRUCTURE_SOURCES) \
 	$(TEST_DPV_STRUCTURE_SOURCES) \
 	$(TEST_GRAPH_DIAGNOSTICS_SOURCES) \
