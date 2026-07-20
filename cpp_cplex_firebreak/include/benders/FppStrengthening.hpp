@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstddef>
 #include <filesystem>
 #include <fstream>
@@ -45,6 +46,8 @@ struct FppStrengtheningOptions {
 
 struct FppCoverageLlbiNodeRecord {
     int compact_node = -1;
+    int original_node = -1;
+    double cell_weight = 1.0;
     std::vector<int> covering_candidate_compact_nodes;
 };
 
@@ -52,6 +55,7 @@ struct FppCoverageLlbiScenarioRecord {
     int scenario_index = -1;
     int scenario_id = 0;
     double empty_burned_area = 0.0;
+    int baseline_burned_cell_count = 0;
     std::vector<FppCoverageLlbiNodeRecord> nodes;
 };
 
@@ -59,8 +63,20 @@ struct FppCoverageLlbiData {
     bool enabled = false;
     int num_zeta_vars = 0;
     int num_constraints = 0;
+    bool weighted = false;
+    std::string weight_map_hash;
+    int scenarios_precomputed = 0;
+    int baseline_cells = 0;
+    int auxiliary_variables = 0;
+    int linking_constraints = 0;
+    int loss_constraints = 0;
+    int nonempty_coverage_sets = 0;
+    int total_incidence_terms = 0;
     double precompute_time_sec = 0.0;
+    double build_time_sec = 0.0;
+    std::string validity_mode;
     std::vector<FppCoverageLlbiScenarioRecord> scenarios;
+    std::vector<std::string> notes;
 };
 
 struct FppPathLlbiPathRecord {
@@ -410,6 +426,55 @@ inline std::string set_signature(const std::set<int>& values) {
     return out.str();
 }
 
+inline std::vector<double> compact_weights_or_unit(
+    const opt::OptimizationInstance& opt,
+    const std::string& context) {
+    const int node_count = opt.node_mapper.size();
+    if (opt.compact_cell_weights.empty()) {
+        return std::vector<double>(static_cast<std::size_t>(node_count), 1.0);
+    }
+    if (opt.compact_cell_weights.size() != static_cast<std::size_t>(node_count)) {
+        throw std::runtime_error(
+            context + " compact weight vector does not cover the optimization node universe.");
+    }
+    for (const double weight : opt.compact_cell_weights) {
+        if (!std::isfinite(weight) || weight <= 0.0) {
+            throw std::runtime_error(context + " compact weights must be finite and positive.");
+        }
+    }
+    return opt.compact_cell_weights;
+}
+
+inline bool has_nonunit_weights(const std::vector<double>& compact_weights) {
+    for (const double weight : compact_weights) {
+        if (std::fabs(weight - 1.0) > 1.0e-9) {
+            return true;
+        }
+    }
+    return false;
+}
+
+inline std::string weight_map_hash_for_strengthening(
+    const opt::OptimizationInstance& opt,
+    const std::vector<double>& compact_weights) {
+    if (!opt.cell_weight_map.deterministic_hash.empty()) {
+        return opt.cell_weight_map.deterministic_hash;
+    }
+    if (compact_weights.empty() || !has_nonunit_weights(compact_weights)) {
+        return "homogeneous-unit";
+    }
+    std::ostringstream out;
+    out << "compact-weights:n=" << compact_weights.size();
+    double total = 0.0;
+    double weighted_index_sum = 0.0;
+    for (std::size_t i = 0; i < compact_weights.size(); ++i) {
+        total += compact_weights[i];
+        weighted_index_sum += static_cast<double>(i + 1) * compact_weights[i];
+    }
+    out << ":sum=" << total << ":idxsum=" << weighted_index_sum;
+    return out.str();
+}
+
 }  // namespace detail
 
 inline FppCoverageLlbiData build_fpp_coverage_llbi_data(
@@ -422,6 +487,11 @@ inline FppCoverageLlbiData build_fpp_coverage_llbi_data(
     }
     const auto start = std::chrono::steady_clock::now();
     const int node_count = opt.node_mapper.size();
+    const auto compact_weights = detail::compact_weights_or_unit(opt, "CoverageLLBI");
+    data.weighted = detail::has_nonunit_weights(compact_weights);
+    data.weight_map_hash = detail::weight_map_hash_for_strengthening(opt, compact_weights);
+    data.scenarios_precomputed = static_cast<int>(opt.scenarios.size());
+    data.validity_mode = "per-cell-capped-downstream-coverage-bound";
     const auto eligible = detail::eligible_mask(opt);
     for (std::size_t s = 0; s < opt.scenarios.size(); ++s) {
         const auto& scenario = opt.scenarios[s];
@@ -441,8 +511,13 @@ inline FppCoverageLlbiData build_fpp_coverage_llbi_data(
         FppCoverageLlbiScenarioRecord scenario_record;
         scenario_record.scenario_index = static_cast<int>(s);
         scenario_record.scenario_id = scenario.scenario_id;
-        scenario_record.empty_burned_area = static_cast<double>(root_reachable.size());
-        const auto nodes = detail::unique_nodes_from_scenario(scenario, root_reachable);
+        scenario_record.baseline_burned_cell_count = static_cast<int>(root_reachable.size());
+        data.baseline_cells += scenario_record.baseline_burned_cell_count;
+        for (const int node : root_reachable) {
+            scenario_record.empty_burned_area +=
+                compact_weights[static_cast<std::size_t>(node)];
+        }
+        const auto nodes = root_reachable;
         for (const int node : nodes) {
             auto candidates = covering_candidates[static_cast<std::size_t>(node)];
             candidates.erase(
@@ -460,15 +535,28 @@ inline FppCoverageLlbiData build_fpp_coverage_llbi_data(
             if (candidates.empty()) {
                 continue;
             }
-            scenario_record.nodes.push_back(FppCoverageLlbiNodeRecord{node, std::move(candidates)});
+            data.total_incidence_terms += static_cast<int>(candidates.size());
+            scenario_record.nodes.push_back(FppCoverageLlbiNodeRecord{
+                node,
+                opt.node_mapper.to_node(node),
+                compact_weights[static_cast<std::size_t>(node)],
+                std::move(candidates)});
             ++data.num_zeta_vars;
+            ++data.auxiliary_variables;
             ++data.num_constraints;
+            ++data.linking_constraints;
+            ++data.nonempty_coverage_sets;
         }
         if (!scenario_record.nodes.empty()) {
             ++data.num_constraints;
+            ++data.loss_constraints;
         }
         data.scenarios.push_back(std::move(scenario_record));
     }
+    data.notes.push_back(
+        "CoverageLLBI uses structural closed-downstream coverage sets and weighted baseline-burned cell coefficients.");
+    data.notes.push_back(
+        "Coverage incidence is not weighted; each covered baseline-burned cell is capped by one zeta variable.");
     data.precompute_time_sec =
         std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
     return data;

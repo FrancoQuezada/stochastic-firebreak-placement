@@ -125,9 +125,12 @@ Weighted landscape status:
   Branch-and-Benders (`docs/WEIGHTED_LANDSCAPES_PHASE6B1.md`).
 - The weighted standard LLBI formula uses downstream empty-burned weighted mass,
   not exact singleton LP subproblem solves.
-- Restricted-candidate LLBI, CoverageLLBI, PathLLBI, projected LLBI,
-  combinatorial Benders/lifting, DPV, and Static-DPV remain blocked for
-  non-homogeneous weights until separately validated.
+- Extended CoverageLLBI is weight-aware for explicit-loop and callback
+  Branch-and-Benders using per-cell capped downstream coverage
+  (`docs/WEIGHTED_LANDSCAPES_PHASE6B2A.md`).
+- Restricted-candidate LLBI, restricted-candidate CoverageLLBI, PathLLBI,
+  projected LLBI, combinatorial Benders/lifting, DPV, and Static-DPV remain
+  blocked for non-homogeneous weights until separately validated.
 
 Expected objective methods:
 

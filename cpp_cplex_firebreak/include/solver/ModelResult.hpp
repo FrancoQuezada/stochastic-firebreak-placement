@@ -165,6 +165,17 @@ struct ModelResult {
     int coverage_llbi_num_zeta_vars = 0;
     int coverage_llbi_num_constraints = 0;
     double coverage_llbi_precompute_time_sec = 0.0;
+    bool coverage_llbi_weighted = false;
+    std::string coverage_llbi_weight_map_hash;
+    int coverage_llbi_scenarios_precomputed = 0;
+    int coverage_llbi_baseline_cells = 0;
+    int coverage_llbi_auxiliary_variables = 0;
+    int coverage_llbi_linking_constraints = 0;
+    int coverage_llbi_loss_constraints = 0;
+    int coverage_llbi_nonempty_coverage_sets = 0;
+    int coverage_llbi_total_incidence_terms = 0;
+    double coverage_llbi_build_time_sec = 0.0;
+    std::string coverage_llbi_validity_mode;
     bool path_llbi_enabled = false;
     int path_llbi_num_b_vars = 0;
     int path_llbi_num_path_constraints = 0;

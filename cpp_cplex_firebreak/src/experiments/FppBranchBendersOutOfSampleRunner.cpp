@@ -106,7 +106,6 @@ bool uses_unconverted_weighted_strengthening(
     const benders::FppStrengtheningOptions& strengthening_options) {
     (void)use_lifted_lower_bounds;
     return combinatorial_options.enabled ||
-           strengthening_options.use_coverage_llbi ||
            strengthening_options.use_path_llbi ||
            strengthening_options.use_projected_coverage_llbi_exp ||
            strengthening_options.use_projected_path_llbi_exp ||
@@ -182,6 +181,17 @@ std::vector<std::pair<std::string, std::string>> strengthening_summary_fields(
         {"coverage_llbi_num_zeta_vars", std::to_string(result.coverage_llbi_num_zeta_vars)},
         {"coverage_llbi_num_constraints", std::to_string(result.coverage_llbi_num_constraints)},
         {"coverage_llbi_precompute_time_sec", format_compact_double(result.coverage_llbi_precompute_time_sec)},
+        {"coverage_llbi_weighted", result.coverage_llbi_weighted ? "true" : "false"},
+        {"coverage_llbi_weight_map_hash", result.coverage_llbi_weight_map_hash},
+        {"coverage_llbi_scenarios_precomputed", std::to_string(result.coverage_llbi_scenarios_precomputed)},
+        {"coverage_llbi_baseline_cells", std::to_string(result.coverage_llbi_baseline_cells)},
+        {"coverage_llbi_auxiliary_variables", std::to_string(result.coverage_llbi_auxiliary_variables)},
+        {"coverage_llbi_linking_constraints", std::to_string(result.coverage_llbi_linking_constraints)},
+        {"coverage_llbi_loss_constraints", std::to_string(result.coverage_llbi_loss_constraints)},
+        {"coverage_llbi_nonempty_coverage_sets", std::to_string(result.coverage_llbi_nonempty_coverage_sets)},
+        {"coverage_llbi_total_incidence_terms", std::to_string(result.coverage_llbi_total_incidence_terms)},
+        {"coverage_llbi_build_time_sec", format_compact_double(result.coverage_llbi_build_time_sec)},
+        {"coverage_llbi_validity_mode", result.coverage_llbi_validity_mode},
         {"path_llbi_enabled", result.path_llbi_enabled ? "true" : "false"},
         {"path_llbi_num_b_vars", std::to_string(result.path_llbi_num_b_vars)},
         {"path_llbi_num_path_constraints", std::to_string(result.path_llbi_num_path_constraints)},
@@ -388,7 +398,7 @@ int FppBranchBendersOutOfSampleRunner::run(
             options.combinatorial_options,
             options.strengthening_options)) {
         throw std::runtime_error(
-            "Non-homogeneous weighted run-fpp-branch-benders-oos Phase 6B1 supports LP lazy cuts, root user cuts, standard downstream-union LLBI, structural global dominance, and conditional zero-benefit diagnostics; Coverage/Path/projected LLBI and combinatorial Benders remain unconverted.");
+            "Non-homogeneous weighted run-fpp-branch-benders-oos Phase 6B2A supports LP lazy cuts, root user cuts, standard downstream-union LLBI, extended CoverageLLBI, structural global dominance, and conditional zero-benefit diagnostics; Path/projected LLBI and combinatorial Benders remain unconverted.");
     }
     const auto dominance_preprocess = benders::apply_fpp_global_dominance_preprocessing(
         opt_instance,
@@ -623,6 +633,22 @@ int FppBranchBendersOutOfSampleRunner::run(
     result.coverage_llbi_num_zeta_vars = solve_result.coverage_llbi_num_zeta_vars;
     result.coverage_llbi_num_constraints = solve_result.coverage_llbi_num_constraints;
     result.coverage_llbi_precompute_time_sec = solve_result.coverage_llbi_precompute_time_sec;
+    result.coverage_llbi_weighted = solve_result.coverage_llbi_weighted;
+    result.coverage_llbi_weight_map_hash = solve_result.coverage_llbi_weight_map_hash;
+    result.coverage_llbi_scenarios_precomputed =
+        solve_result.coverage_llbi_scenarios_precomputed;
+    result.coverage_llbi_baseline_cells = solve_result.coverage_llbi_baseline_cells;
+    result.coverage_llbi_auxiliary_variables =
+        solve_result.coverage_llbi_auxiliary_variables;
+    result.coverage_llbi_linking_constraints =
+        solve_result.coverage_llbi_linking_constraints;
+    result.coverage_llbi_loss_constraints = solve_result.coverage_llbi_loss_constraints;
+    result.coverage_llbi_nonempty_coverage_sets =
+        solve_result.coverage_llbi_nonempty_coverage_sets;
+    result.coverage_llbi_total_incidence_terms =
+        solve_result.coverage_llbi_total_incidence_terms;
+    result.coverage_llbi_build_time_sec = solve_result.coverage_llbi_build_time_sec;
+    result.coverage_llbi_validity_mode = solve_result.coverage_llbi_validity_mode;
     result.path_llbi_enabled = solve_result.path_llbi_enabled;
     result.path_llbi_num_b_vars = solve_result.path_llbi_num_b_vars;
     result.path_llbi_num_path_constraints = solve_result.path_llbi_num_path_constraints;

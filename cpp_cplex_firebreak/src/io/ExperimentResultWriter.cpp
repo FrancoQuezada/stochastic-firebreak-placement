@@ -219,6 +219,8 @@ bool has_benders_diagnostics(const StandardExperimentResult& result) {
            result.benders_lifted_lower_bound_count > 0 ||
            result.benders_lifted_lower_bound_nonzero_coefficients > 0 ||
            result.benders_lifted_lower_bound_constraints_added > 0 ||
+           result.coverage_llbi_enabled ||
+           result.coverage_llbi_auxiliary_variables > 0 ||
            !result.benders_lifted_lower_bound_notes.empty();
 }
 
@@ -969,6 +971,28 @@ void write_experiment_result_json(
     out << "  \"coverage_llbi_num_constraints\": " << result.coverage_llbi_num_constraints << ",\n";
     out << "  \"coverage_llbi_precompute_time_sec\": "
         << format_json_number(result.coverage_llbi_precompute_time_sec) << ",\n";
+    out << "  \"coverage_llbi_weighted\": "
+        << (result.coverage_llbi_weighted ? "true" : "false") << ",\n";
+    out << "  \"coverage_llbi_weight_map_hash\": \""
+        << json_escape_local(result.coverage_llbi_weight_map_hash) << "\",\n";
+    out << "  \"coverage_llbi_scenarios_precomputed\": "
+        << result.coverage_llbi_scenarios_precomputed << ",\n";
+    out << "  \"coverage_llbi_baseline_cells\": "
+        << result.coverage_llbi_baseline_cells << ",\n";
+    out << "  \"coverage_llbi_auxiliary_variables\": "
+        << result.coverage_llbi_auxiliary_variables << ",\n";
+    out << "  \"coverage_llbi_linking_constraints\": "
+        << result.coverage_llbi_linking_constraints << ",\n";
+    out << "  \"coverage_llbi_loss_constraints\": "
+        << result.coverage_llbi_loss_constraints << ",\n";
+    out << "  \"coverage_llbi_nonempty_coverage_sets\": "
+        << result.coverage_llbi_nonempty_coverage_sets << ",\n";
+    out << "  \"coverage_llbi_total_incidence_terms\": "
+        << result.coverage_llbi_total_incidence_terms << ",\n";
+    out << "  \"coverage_llbi_build_time_sec\": "
+        << format_json_number(result.coverage_llbi_build_time_sec) << ",\n";
+    out << "  \"coverage_llbi_validity_mode\": \""
+        << json_escape_local(result.coverage_llbi_validity_mode) << "\",\n";
     out << "  \"path_llbi_enabled\": " << (result.path_llbi_enabled ? "true" : "false") << ",\n";
     out << "  \"path_llbi_num_b_vars\": " << result.path_llbi_num_b_vars << ",\n";
     out << "  \"path_llbi_num_path_constraints\": " << result.path_llbi_num_path_constraints << ",\n";
@@ -1228,6 +1252,8 @@ void append_experiment_result_csv(
         write_header || existing_csv_has_column(output_path, "combinatorial_benders_enabled");
     const bool include_fpp_strengthening_summary =
         write_header || existing_csv_has_column(output_path, "coverage_llbi_enabled");
+    const bool include_coverage_llbi_extended =
+        write_header || existing_csv_has_column(output_path, "coverage_llbi_weighted");
     const bool include_branch_benders_root_user_cut_summary =
         write_header || existing_csv_has_column(output_path, "branch_benders_use_root_user_cuts");
     const bool include_restricted_candidate_summary =
@@ -1297,7 +1323,14 @@ void append_experiment_result_csv(
             << "combinatorial_benders_avg_cut_nonzeros,"
             << "combinatorial_benders_num_violated_cuts,"
             << "coverage_llbi_enabled,coverage_llbi_num_zeta_vars,coverage_llbi_num_constraints,"
-            << "coverage_llbi_precompute_time_sec,path_llbi_enabled,path_llbi_num_b_vars,"
+            << "coverage_llbi_precompute_time_sec,"
+            << "coverage_llbi_weighted,coverage_llbi_weight_map_hash,"
+            << "coverage_llbi_scenarios_precomputed,coverage_llbi_baseline_cells,"
+            << "coverage_llbi_auxiliary_variables,coverage_llbi_linking_constraints,"
+            << "coverage_llbi_loss_constraints,coverage_llbi_nonempty_coverage_sets,"
+            << "coverage_llbi_total_incidence_terms,coverage_llbi_build_time_sec,"
+            << "coverage_llbi_validity_mode,"
+            << "path_llbi_enabled,path_llbi_num_b_vars,"
             << "path_llbi_num_path_constraints,path_llbi_num_paths_used,path_llbi_precompute_time_sec,"
             << "projected_coverage_llbi_enabled,projected_path_llbi_enabled,"
             << "projected_llbi_family,projected_llbi_strategy,projected_llbi_mode,"
@@ -1465,7 +1498,23 @@ void append_experiment_result_csv(
         out << (result.coverage_llbi_enabled ? "true" : "false") << ","
             << result.coverage_llbi_num_zeta_vars << ","
             << result.coverage_llbi_num_constraints << ","
-            << format_csv_number(result.coverage_llbi_precompute_time_sec) << ","
+            << format_csv_number(result.coverage_llbi_precompute_time_sec) << ",";
+    }
+    if (include_coverage_llbi_extended) {
+        out << (result.coverage_llbi_weighted ? "true" : "false") << ","
+            << csv_escape(result.coverage_llbi_weight_map_hash) << ","
+            << result.coverage_llbi_scenarios_precomputed << ","
+            << result.coverage_llbi_baseline_cells << ","
+            << result.coverage_llbi_auxiliary_variables << ","
+            << result.coverage_llbi_linking_constraints << ","
+            << result.coverage_llbi_loss_constraints << ","
+            << result.coverage_llbi_nonempty_coverage_sets << ","
+            << result.coverage_llbi_total_incidence_terms << ","
+            << format_csv_number(result.coverage_llbi_build_time_sec) << ","
+            << csv_escape(result.coverage_llbi_validity_mode) << ",";
+    }
+    if (include_fpp_strengthening_summary) {
+        out
             << (result.path_llbi_enabled ? "true" : "false") << ","
             << result.path_llbi_num_b_vars << ","
             << result.path_llbi_num_path_constraints << ","

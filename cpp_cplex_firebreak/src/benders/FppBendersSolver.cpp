@@ -36,6 +36,16 @@ void validate_options(const FppBendersOptions& options) {
     if (options.threads < 0) {
         throw std::runtime_error("FPP Benders threads must be nonnegative.");
     }
+    if (options.strengthening_options.use_path_llbi ||
+        options.strengthening_options.use_projected_coverage_llbi_exp ||
+        options.strengthening_options.use_projected_path_llbi_exp ||
+        options.strengthening_options.use_projected_coverage_llbi_poly ||
+        options.strengthening_options.use_projected_path_llbi_poly ||
+        options.strengthening_options.use_global_dominance_preprocessing ||
+        options.strengthening_options.use_conditional_zero_benefit_fixing) {
+        throw std::runtime_error(
+            "FPP Benders explicit-loop Phase 6B2A supports standard LLBI and extended CoverageLLBI only; Path/projected LLBI, dominance, and conditional fixing are not explicit-loop options.");
+    }
     risk::RiskMeasureConfig effective_risk_config = options.risk_config;
     if (effective_risk_config.type == risk::RiskMeasureType::CVaR) {
         effective_risk_config.cvarLambda = 1.0;
@@ -246,6 +256,25 @@ solver::ModelResult FppBendersSolver::solve(
         result.notes.push_back(
             "Optional FPP lifted lower-bound inequalities were added to the Benders master.");
     }
+    const auto coverage_llbi = build_fpp_coverage_llbi_data(
+        opt,
+        options.strengthening_options.use_coverage_llbi);
+    const double coverage_llbi_build_time_sec = master.addCoverageLlbi(coverage_llbi);
+    result.coverage_llbi_enabled = coverage_llbi.enabled;
+    result.coverage_llbi_num_zeta_vars = coverage_llbi.num_zeta_vars;
+    result.coverage_llbi_num_constraints = coverage_llbi.num_constraints;
+    result.coverage_llbi_precompute_time_sec = coverage_llbi.precompute_time_sec;
+    result.coverage_llbi_weighted = coverage_llbi.weighted;
+    result.coverage_llbi_weight_map_hash = coverage_llbi.weight_map_hash;
+    result.coverage_llbi_scenarios_precomputed = coverage_llbi.scenarios_precomputed;
+    result.coverage_llbi_baseline_cells = coverage_llbi.baseline_cells;
+    result.coverage_llbi_auxiliary_variables = coverage_llbi.auxiliary_variables;
+    result.coverage_llbi_linking_constraints = coverage_llbi.linking_constraints;
+    result.coverage_llbi_loss_constraints = coverage_llbi.loss_constraints;
+    result.coverage_llbi_nonempty_coverage_sets = coverage_llbi.nonempty_coverage_sets;
+    result.coverage_llbi_total_incidence_terms = coverage_llbi.total_incidence_terms;
+    result.coverage_llbi_build_time_sec = coverage_llbi_build_time_sec;
+    result.coverage_llbi_validity_mode = coverage_llbi.validity_mode;
 
     FppScenarioSubproblem subproblem;
     double incumbent_upper_bound = std::numeric_limits<double>::infinity();

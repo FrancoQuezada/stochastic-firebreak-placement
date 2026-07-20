@@ -7,6 +7,7 @@
 
 #include "benders/BendersCut.hpp"
 #include "benders/FppLiftedLowerBound.hpp"
+#include "benders/FppStrengthening.hpp"
 #include "opt/OptimizationInstance.hpp"
 #include "risk/RiskMeasure.hpp"
 
@@ -44,6 +45,7 @@ public:
     void addLiftedLowerBound(
         int scenario_position,
         const FppLiftedLowerBoundInequality& inequality);
+    double addCoverageLlbi(const FppCoverageLlbiData& data);
     double getObjective() const;
     double getBestBound() const;
     double getMipGap() const;

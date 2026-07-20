@@ -511,6 +511,26 @@ int FppBendersOutOfSampleRunner::run(const FppBendersOutOfSampleOptions& options
     result.benders_lifted_lower_bound_validity_mode =
         solve_result.benders_lifted_lower_bound_validity_mode;
     result.benders_lifted_lower_bound_notes = solve_result.benders_lifted_lower_bound_notes;
+    result.coverage_llbi_enabled = solve_result.coverage_llbi_enabled;
+    result.coverage_llbi_num_zeta_vars = solve_result.coverage_llbi_num_zeta_vars;
+    result.coverage_llbi_num_constraints = solve_result.coverage_llbi_num_constraints;
+    result.coverage_llbi_precompute_time_sec = solve_result.coverage_llbi_precompute_time_sec;
+    result.coverage_llbi_weighted = solve_result.coverage_llbi_weighted;
+    result.coverage_llbi_weight_map_hash = solve_result.coverage_llbi_weight_map_hash;
+    result.coverage_llbi_scenarios_precomputed =
+        solve_result.coverage_llbi_scenarios_precomputed;
+    result.coverage_llbi_baseline_cells = solve_result.coverage_llbi_baseline_cells;
+    result.coverage_llbi_auxiliary_variables =
+        solve_result.coverage_llbi_auxiliary_variables;
+    result.coverage_llbi_linking_constraints =
+        solve_result.coverage_llbi_linking_constraints;
+    result.coverage_llbi_loss_constraints = solve_result.coverage_llbi_loss_constraints;
+    result.coverage_llbi_nonempty_coverage_sets =
+        solve_result.coverage_llbi_nonempty_coverage_sets;
+    result.coverage_llbi_total_incidence_terms =
+        solve_result.coverage_llbi_total_incidence_terms;
+    result.coverage_llbi_build_time_sec = solve_result.coverage_llbi_build_time_sec;
+    result.coverage_llbi_validity_mode = solve_result.coverage_llbi_validity_mode;
     result.benders_iteration_log = solve_result.benders_iteration_log;
     result.fpp_mode = "fpp_benders_explicit_loop";
     result.formulation = "benders";

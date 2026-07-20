@@ -1159,6 +1159,27 @@ io::StandardExperimentResult MethodDispatcher::run_method(const MethodDispatchRe
     result.benders_lifted_lower_bound_notes =
         solver_result.benders_lifted_lower_bound_notes;
     result.benders_iteration_log = solver_result.benders_iteration_log;
+    result.coverage_llbi_enabled = solver_result.coverage_llbi_enabled;
+    result.coverage_llbi_num_zeta_vars = solver_result.coverage_llbi_num_zeta_vars;
+    result.coverage_llbi_num_constraints = solver_result.coverage_llbi_num_constraints;
+    result.coverage_llbi_precompute_time_sec =
+        solver_result.coverage_llbi_precompute_time_sec;
+    result.coverage_llbi_weighted = solver_result.coverage_llbi_weighted;
+    result.coverage_llbi_weight_map_hash = solver_result.coverage_llbi_weight_map_hash;
+    result.coverage_llbi_scenarios_precomputed =
+        solver_result.coverage_llbi_scenarios_precomputed;
+    result.coverage_llbi_baseline_cells = solver_result.coverage_llbi_baseline_cells;
+    result.coverage_llbi_auxiliary_variables =
+        solver_result.coverage_llbi_auxiliary_variables;
+    result.coverage_llbi_linking_constraints =
+        solver_result.coverage_llbi_linking_constraints;
+    result.coverage_llbi_loss_constraints = solver_result.coverage_llbi_loss_constraints;
+    result.coverage_llbi_nonempty_coverage_sets =
+        solver_result.coverage_llbi_nonempty_coverage_sets;
+    result.coverage_llbi_total_incidence_terms =
+        solver_result.coverage_llbi_total_incidence_terms;
+    result.coverage_llbi_build_time_sec = solver_result.coverage_llbi_build_time_sec;
+    result.coverage_llbi_validity_mode = solver_result.coverage_llbi_validity_mode;
     result.branch_benders_enabled = solver_result.branch_benders_enabled;
     result.branch_benders_callback_calls = solver_result.branch_benders_callback_calls;
     result.branch_benders_candidate_callback_calls =

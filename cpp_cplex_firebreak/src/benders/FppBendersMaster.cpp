@@ -72,6 +72,10 @@ void FppBendersMaster::addLiftedLowerBound(int, const FppLiftedLowerBoundInequal
     throw std::runtime_error(solver::cplex_unavailable_message());
 }
 
+double FppBendersMaster::addCoverageLlbi(const FppCoverageLlbiData&) {
+    throw std::runtime_error(solver::cplex_unavailable_message());
+}
+
 double FppBendersMaster::getObjective() const {
     throw std::runtime_error(solver::cplex_unavailable_message());
 }
@@ -444,6 +448,64 @@ void FppBendersMaster::addLiftedLowerBound(
     impl_->model.add(range);
     expr.end();
     ++impl_->lifted_lower_bound_count;
+}
+
+double FppBendersMaster::addCoverageLlbi(const FppCoverageLlbiData& data) {
+    ensure_initialized(*impl_);
+    const auto start = std::chrono::steady_clock::now();
+    if (!data.enabled) {
+        return 0.0;
+    }
+    for (const auto& scenario_record : data.scenarios) {
+        if (scenario_record.scenario_index < 0 ||
+            scenario_record.scenario_index >= impl_->eta.getSize()) {
+            throw std::runtime_error("FPP Benders master CoverageLLBI scenario position is out of range.");
+        }
+        IloExpr lower_bound_rhs(impl_->env);
+        lower_bound_rhs += scenario_record.empty_burned_area;
+        for (const auto& node_record : scenario_record.nodes) {
+            IloNumVar zeta(impl_->env, 0.0, 1.0, ILOFLOAT);
+            std::ostringstream zeta_name;
+            zeta_name << "coverage_zeta_s" << scenario_record.scenario_id
+                      << "_" << node_record.compact_node;
+            zeta.setName(zeta_name.str().c_str());
+
+            IloExpr cover(impl_->env);
+            for (const int candidate : node_record.covering_candidate_compact_nodes) {
+                if (candidate < 0 ||
+                    candidate >= static_cast<int>(impl_->y_position_by_node.size()) ||
+                    impl_->y_position_by_node[static_cast<std::size_t>(candidate)] < 0) {
+                    continue;
+                }
+                cover += impl_->y[static_cast<IloInt>(
+                    impl_->y_position_by_node[static_cast<std::size_t>(candidate)])];
+            }
+            cover -= zeta;
+            IloRange link_range = (cover >= 0.0);
+            std::ostringstream link_name;
+            link_name << "coverage_link_s" << scenario_record.scenario_id
+                      << "_" << node_record.compact_node;
+            link_range.setName(link_name.str().c_str());
+            impl_->model.add(link_range);
+            cover.end();
+            lower_bound_rhs -= node_record.cell_weight * zeta;
+        }
+        if (!scenario_record.nodes.empty()) {
+            IloExpr lhs(impl_->env);
+            lhs += impl_->eta[static_cast<IloInt>(scenario_record.scenario_index)];
+            lhs -= lower_bound_rhs;
+            IloRange loss_range = (lhs >= 0.0);
+            std::ostringstream loss_name;
+            loss_name << "coverage_loss_s" << scenario_record.scenario_id;
+            loss_range.setName(loss_name.str().c_str());
+            impl_->model.add(loss_range);
+            lhs.end();
+        }
+        lower_bound_rhs.end();
+    }
+    impl_->cplex = std::make_unique<IloCplex>(impl_->model);
+    apply_parameters(*impl_);
+    return std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
 }
 
 double FppBendersMaster::getObjective() const {

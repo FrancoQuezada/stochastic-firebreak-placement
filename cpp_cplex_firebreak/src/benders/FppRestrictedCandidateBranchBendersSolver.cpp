@@ -227,7 +227,7 @@ void validate_weighted_phase5c2b2_options(
         options.strengthening_options.use_projected_coverage_llbi_poly ||
         options.strengthening_options.use_projected_path_llbi_poly) {
         throw std::runtime_error(
-            "Non-homogeneous weighted restricted Branch-Benders Phase 6B1 allows structural global dominance and conditional zero-benefit diagnostics; restricted standard LLBI remains disabled because inactive candidate coefficients are not retained safely. Coverage/Path/projected LLBI and combinatorial Benders remain unconverted.");
+            "Non-homogeneous weighted restricted Branch-Benders Phase 6B2A allows structural global dominance and conditional zero-benefit diagnostics; restricted standard LLBI and restricted CoverageLLBI remain disabled because inactive candidate coefficients are not retained safely. Path/projected LLBI and combinatorial Benders remain unconverted.");
     }
     if (options.candidate_score_mode == "cvar-tail-blend" &&
         options.activation_policy != "benders-coefficients") {
@@ -916,15 +916,16 @@ struct BranchBendersRootUserCutStats {
     mutable std::mutex mutex;
 };
 
-void add_coverage_llbi_constraints(
+double add_coverage_llbi_constraints(
     IloEnv& env,
     IloModel& model,
     const FppCoverageLlbiData& data,
     const IloBoolVarArray& y,
     const IloNumVarArray& eta,
     const std::vector<int>& y_position_by_node) {
+    const auto start = std::chrono::steady_clock::now();
     if (!data.enabled) {
-        return;
+        return 0.0;
     }
     for (const auto& scenario_record : data.scenarios) {
         IloExpr lower_bound_rhs(env);
@@ -949,7 +950,7 @@ void add_coverage_llbi_constraints(
             cover -= zeta;
             model.add(cover >= 0.0);
             cover.end();
-            lower_bound_rhs -= zeta;
+            lower_bound_rhs -= node_record.cell_weight * zeta;
         }
         if (!scenario_record.nodes.empty()) {
             IloExpr lhs(env);
@@ -960,6 +961,7 @@ void add_coverage_llbi_constraints(
         }
         lower_bound_rhs.end();
     }
+    return std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
 }
 
 void add_path_llbi_constraints(
@@ -2015,7 +2017,7 @@ RestrictedStageSolveResult solve_stage_impl(
             opt,
             options.strengthening_options.use_path_llbi,
             options.strengthening_options.path_llbi_max_paths_per_node);
-        add_coverage_llbi_constraints(
+        const double coverage_llbi_build_time_sec = add_coverage_llbi_constraints(
             env,
             model,
             coverage_llbi,
@@ -2033,6 +2035,22 @@ RestrictedStageSolveResult solve_stage_impl(
         stage.model_result.coverage_llbi_num_zeta_vars = coverage_llbi.num_zeta_vars;
         stage.model_result.coverage_llbi_num_constraints = coverage_llbi.num_constraints;
         stage.model_result.coverage_llbi_precompute_time_sec = coverage_llbi.precompute_time_sec;
+        stage.model_result.coverage_llbi_weighted = coverage_llbi.weighted;
+        stage.model_result.coverage_llbi_weight_map_hash = coverage_llbi.weight_map_hash;
+        stage.model_result.coverage_llbi_scenarios_precomputed =
+            coverage_llbi.scenarios_precomputed;
+        stage.model_result.coverage_llbi_baseline_cells = coverage_llbi.baseline_cells;
+        stage.model_result.coverage_llbi_auxiliary_variables =
+            coverage_llbi.auxiliary_variables;
+        stage.model_result.coverage_llbi_linking_constraints =
+            coverage_llbi.linking_constraints;
+        stage.model_result.coverage_llbi_loss_constraints = coverage_llbi.loss_constraints;
+        stage.model_result.coverage_llbi_nonempty_coverage_sets =
+            coverage_llbi.nonempty_coverage_sets;
+        stage.model_result.coverage_llbi_total_incidence_terms =
+            coverage_llbi.total_incidence_terms;
+        stage.model_result.coverage_llbi_build_time_sec = coverage_llbi_build_time_sec;
+        stage.model_result.coverage_llbi_validity_mode = coverage_llbi.validity_mode;
         stage.model_result.path_llbi_enabled = path_llbi.enabled;
         stage.model_result.path_llbi_num_b_vars = path_llbi.num_b_vars;
         stage.model_result.path_llbi_num_path_constraints = path_llbi.num_path_constraints;

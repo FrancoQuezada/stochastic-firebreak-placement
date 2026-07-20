@@ -266,6 +266,17 @@ std::vector<std::pair<std::string, std::string>> strengthening_summary_fields(
         {"coverage_llbi_num_zeta_vars", std::to_string(result.coverage_llbi_num_zeta_vars)},
         {"coverage_llbi_num_constraints", std::to_string(result.coverage_llbi_num_constraints)},
         {"coverage_llbi_precompute_time_sec", format_compact_double(result.coverage_llbi_precompute_time_sec)},
+        {"coverage_llbi_weighted", result.coverage_llbi_weighted ? "true" : "false"},
+        {"coverage_llbi_weight_map_hash", result.coverage_llbi_weight_map_hash},
+        {"coverage_llbi_scenarios_precomputed", std::to_string(result.coverage_llbi_scenarios_precomputed)},
+        {"coverage_llbi_baseline_cells", std::to_string(result.coverage_llbi_baseline_cells)},
+        {"coverage_llbi_auxiliary_variables", std::to_string(result.coverage_llbi_auxiliary_variables)},
+        {"coverage_llbi_linking_constraints", std::to_string(result.coverage_llbi_linking_constraints)},
+        {"coverage_llbi_loss_constraints", std::to_string(result.coverage_llbi_loss_constraints)},
+        {"coverage_llbi_nonempty_coverage_sets", std::to_string(result.coverage_llbi_nonempty_coverage_sets)},
+        {"coverage_llbi_total_incidence_terms", std::to_string(result.coverage_llbi_total_incidence_terms)},
+        {"coverage_llbi_build_time_sec", format_compact_double(result.coverage_llbi_build_time_sec)},
+        {"coverage_llbi_validity_mode", result.coverage_llbi_validity_mode},
         {"path_llbi_enabled", result.path_llbi_enabled ? "true" : "false"},
         {"path_llbi_num_b_vars", std::to_string(result.path_llbi_num_b_vars)},
         {"path_llbi_num_path_constraints", std::to_string(result.path_llbi_num_path_constraints)},
@@ -680,7 +691,7 @@ int FppRestrictedCandidateBranchBendersOutOfSampleRunner::run(
             options.combinatorial_options,
             options.strengthening_options)) {
         throw std::runtime_error(
-            "Non-homogeneous weighted run-fpp-restricted-branch-benders-oos Phase 6B1 allows structural global dominance and conditional zero-benefit diagnostics; restricted standard LLBI remains disabled because inactive candidate coefficients are not retained safely. Coverage/Path/projected LLBI and combinatorial Benders remain unconverted.");
+            "Non-homogeneous weighted run-fpp-restricted-branch-benders-oos Phase 6B2A allows structural global dominance and conditional zero-benefit diagnostics; restricted standard LLBI and restricted CoverageLLBI remain disabled because inactive candidate coefficients are not retained safely. Path/projected LLBI and combinatorial Benders remain unconverted.");
     }
     const auto dominance_preprocess = benders::apply_fpp_global_dominance_preprocessing(
         opt_instance,
@@ -899,6 +910,27 @@ int FppRestrictedCandidateBranchBendersOutOfSampleRunner::run(
         reported_stage.benders_lifted_lower_bound_validity_mode;
     result.benders_lifted_lower_bound_notes =
         reported_stage.benders_lifted_lower_bound_notes;
+    result.coverage_llbi_enabled = reported_stage.coverage_llbi_enabled;
+    result.coverage_llbi_num_zeta_vars = reported_stage.coverage_llbi_num_zeta_vars;
+    result.coverage_llbi_num_constraints = reported_stage.coverage_llbi_num_constraints;
+    result.coverage_llbi_precompute_time_sec =
+        reported_stage.coverage_llbi_precompute_time_sec;
+    result.coverage_llbi_weighted = reported_stage.coverage_llbi_weighted;
+    result.coverage_llbi_weight_map_hash = reported_stage.coverage_llbi_weight_map_hash;
+    result.coverage_llbi_scenarios_precomputed =
+        reported_stage.coverage_llbi_scenarios_precomputed;
+    result.coverage_llbi_baseline_cells = reported_stage.coverage_llbi_baseline_cells;
+    result.coverage_llbi_auxiliary_variables =
+        reported_stage.coverage_llbi_auxiliary_variables;
+    result.coverage_llbi_linking_constraints =
+        reported_stage.coverage_llbi_linking_constraints;
+    result.coverage_llbi_loss_constraints = reported_stage.coverage_llbi_loss_constraints;
+    result.coverage_llbi_nonempty_coverage_sets =
+        reported_stage.coverage_llbi_nonempty_coverage_sets;
+    result.coverage_llbi_total_incidence_terms =
+        reported_stage.coverage_llbi_total_incidence_terms;
+    result.coverage_llbi_build_time_sec = reported_stage.coverage_llbi_build_time_sec;
+    result.coverage_llbi_validity_mode = reported_stage.coverage_llbi_validity_mode;
     result.branch_benders_enabled = reported_stage.branch_benders_enabled;
     result.branch_benders_callback_calls = reported_stage.branch_benders_callback_calls;
     result.branch_benders_candidate_callback_calls =

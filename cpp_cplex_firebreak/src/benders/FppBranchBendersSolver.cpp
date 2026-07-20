@@ -130,7 +130,6 @@ bool has_nonunit_compact_weights(const opt::OptimizationInstance& opt) {
 
 bool uses_unconverted_weighted_strengthening(const FppBranchBendersOptions& options) {
     return options.combinatorial_options.enabled ||
-           options.strengthening_options.use_coverage_llbi ||
            options.strengthening_options.use_path_llbi ||
            options.strengthening_options.use_projected_coverage_llbi_exp ||
            options.strengthening_options.use_projected_path_llbi_exp ||
@@ -346,15 +345,16 @@ struct BranchBendersRootUserCutStats {
     mutable std::mutex mutex;
 };
 
-void add_coverage_llbi_constraints(
+double add_coverage_llbi_constraints(
     IloEnv& env,
     IloModel& model,
     const FppCoverageLlbiData& data,
     const IloBoolVarArray& y,
     const IloNumVarArray& eta,
     const std::vector<int>& y_position_by_node) {
+    const auto start = std::chrono::steady_clock::now();
     if (!data.enabled) {
-        return;
+        return 0.0;
     }
     for (const auto& scenario_record : data.scenarios) {
         IloExpr lower_bound_rhs(env);
@@ -379,7 +379,7 @@ void add_coverage_llbi_constraints(
             cover -= zeta;
             model.add(cover >= 0.0);
             cover.end();
-            lower_bound_rhs -= zeta;
+            lower_bound_rhs -= node_record.cell_weight * zeta;
         }
         if (!scenario_record.nodes.empty()) {
             IloExpr lhs(env);
@@ -390,6 +390,7 @@ void add_coverage_llbi_constraints(
         }
         lower_bound_rhs.end();
     }
+    return std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
 }
 
 void add_path_llbi_constraints(
@@ -1217,7 +1218,7 @@ solver::ModelResult FppBranchBendersSolver::solve(
     if (has_nonunit_compact_weights(opt) &&
         uses_unconverted_weighted_strengthening(options)) {
         throw std::runtime_error(
-            "Non-homogeneous weighted FPP Branch-Benders Phase 6B1 supports LP lazy cuts, root user cuts, standard downstream-union LLBI, structural global dominance, and conditional zero-benefit diagnostics; Coverage/Path/projected LLBI and combinatorial Benders remain unconverted.");
+            "Non-homogeneous weighted FPP Branch-Benders Phase 6B2A supports LP lazy cuts, root user cuts, standard downstream-union LLBI, extended CoverageLLBI, structural global dominance, and conditional zero-benefit diagnostics; Path/projected LLBI and combinatorial Benders remain unconverted.");
     }
     const auto risk_config = effective_risk_config_from(options.risk_config);
     const bool risk_enabled = uses_cvar_risk(risk_config);
@@ -1437,7 +1438,7 @@ solver::ModelResult FppBranchBendersSolver::solve(
             opt,
             options.strengthening_options.use_path_llbi,
             options.strengthening_options.path_llbi_max_paths_per_node);
-        add_coverage_llbi_constraints(
+        const double coverage_llbi_build_time_sec = add_coverage_llbi_constraints(
             env,
             model,
             coverage_llbi,
@@ -1455,6 +1456,17 @@ solver::ModelResult FppBranchBendersSolver::solve(
         result.coverage_llbi_num_zeta_vars = coverage_llbi.num_zeta_vars;
         result.coverage_llbi_num_constraints = coverage_llbi.num_constraints;
         result.coverage_llbi_precompute_time_sec = coverage_llbi.precompute_time_sec;
+        result.coverage_llbi_weighted = coverage_llbi.weighted;
+        result.coverage_llbi_weight_map_hash = coverage_llbi.weight_map_hash;
+        result.coverage_llbi_scenarios_precomputed = coverage_llbi.scenarios_precomputed;
+        result.coverage_llbi_baseline_cells = coverage_llbi.baseline_cells;
+        result.coverage_llbi_auxiliary_variables = coverage_llbi.auxiliary_variables;
+        result.coverage_llbi_linking_constraints = coverage_llbi.linking_constraints;
+        result.coverage_llbi_loss_constraints = coverage_llbi.loss_constraints;
+        result.coverage_llbi_nonempty_coverage_sets = coverage_llbi.nonempty_coverage_sets;
+        result.coverage_llbi_total_incidence_terms = coverage_llbi.total_incidence_terms;
+        result.coverage_llbi_build_time_sec = coverage_llbi_build_time_sec;
+        result.coverage_llbi_validity_mode = coverage_llbi.validity_mode;
         result.path_llbi_enabled = path_llbi.enabled;
         result.path_llbi_num_b_vars = path_llbi.num_b_vars;
         result.path_llbi_num_path_constraints = path_llbi.num_path_constraints;
