@@ -70,6 +70,33 @@ int sampled_cut_limit(double ratio, std::size_t scenario_count) {
     return std::max(1, static_cast<int>(std::ceil(ratio * scenario_count)));
 }
 
+bool has_nonunit_weights(const std::vector<double>& weights) {
+    for (const double weight : weights) {
+        if (std::fabs(weight - 1.0) > 1.0e-9) {
+            return true;
+        }
+    }
+    return false;
+}
+
+std::vector<double> compact_weights_or_unit(const opt::OptimizationInstance& opt) {
+    if (opt.compact_cell_weights.empty()) {
+        return std::vector<double>(static_cast<std::size_t>(opt.node_mapper.size()), 1.0);
+    }
+    if (opt.compact_cell_weights.size() !=
+        static_cast<std::size_t>(opt.node_mapper.size())) {
+        throw std::runtime_error(
+            "FPP combinatorial Benders compact weight vector does not cover the optimization node universe.");
+    }
+    for (const double weight : opt.compact_cell_weights) {
+        if (!std::isfinite(weight) || weight <= 0.0) {
+            throw std::runtime_error(
+                "FPP combinatorial Benders compact weights must be finite and strictly positive.");
+        }
+    }
+    return opt.compact_cell_weights;
+}
+
 }  // namespace
 
 double FppCombinatorialBendersStats::average_paths_per_cut() const {
@@ -170,6 +197,52 @@ void validate_fpp_combinatorial_benders_options(
     }
 }
 
+bool is_fpp_phase6c1_weighted_combinatorial_baseline(
+    const FppCombinatorialBendersOptions& options) {
+    return options.enabled &&
+           options.lift_mode == FppCombinatorialBendersLiftMode::None &&
+           options.scenario_order == FppCombinatorialBendersScenarioOrder::EtaAscending &&
+           std::fabs(options.cut_sampling_ratio - 1.0) <= 1.0e-12 &&
+           !options.separate_fractional &&
+           !options.initial_cuts;
+}
+
+void validate_fpp_phase6c1_weighted_combinatorial_baseline(
+    const FppCombinatorialBendersOptions& options,
+    bool use_root_user_cuts,
+    bool use_lifted_lower_bounds,
+    const FppStrengtheningOptions& strengthening_options) {
+    if (!options.enabled) {
+        return;
+    }
+    if (!is_fpp_phase6c1_weighted_combinatorial_baseline(options)) {
+        throw std::runtime_error(
+            "Non-homogeneous weighted FPP combinatorial Benders Phase 6C1 supports only baseline integer incumbent cuts with lift_mode=none, scenario_order=eta-asc, cut_sampling_ratio=1, separate_fractional=false, and initial_cuts=false.");
+    }
+    if (use_root_user_cuts) {
+        throw std::runtime_error(
+            "Non-homogeneous weighted FPP combinatorial Benders Phase 6C1 does not combine with root user cuts.");
+    }
+    if (use_lifted_lower_bounds ||
+        strengthening_options.use_coverage_llbi ||
+        strengthening_options.use_path_llbi ||
+        strengthening_options.use_projected_coverage_llbi_exp ||
+        strengthening_options.use_projected_path_llbi_exp ||
+        strengthening_options.use_projected_coverage_llbi_poly ||
+        strengthening_options.use_projected_path_llbi_poly) {
+        throw std::runtime_error(
+            "Non-homogeneous weighted FPP combinatorial Benders Phase 6C1 does not combine with LLBI or projected LLBI families.");
+    }
+    if (strengthening_options.use_global_dominance_preprocessing) {
+        throw std::runtime_error(
+            "Non-homogeneous weighted FPP combinatorial Benders Phase 6C1 keeps global dominance disabled until the combinatorial separator remapping is separately validated.");
+    }
+    if (strengthening_options.use_conditional_zero_benefit_fixing) {
+        throw std::runtime_error(
+            "Non-homogeneous weighted FPP combinatorial Benders Phase 6C1 does not combine with conditional zero-benefit fixing.");
+    }
+}
+
 FppCombinatorialBendersSeparator::FppCombinatorialBendersSeparator(
     const opt::OptimizationInstance& opt)
     : opt_(opt),
@@ -186,6 +259,12 @@ FppCombinatorialBendersSeparator::FppCombinatorialBendersSeparator(
         throw std::runtime_error(
             "FPP combinatorial Benders separator requires at least one eligible candidate.");
     }
+    compact_weights_ = compact_weights_or_unit(opt_);
+    weighted_ = has_nonunit_weights(compact_weights_);
+    weight_map_hash_ = opt_.cell_weight_map.deterministic_hash;
+    validity_mode_ = weighted_
+        ? "weighted-baseline-integer-path-activation-cut"
+        : "unit-baseline-integer-path-activation-cut";
 
     eligible_.assign(static_cast<std::size_t>(node_count_), 0);
     y_position_by_node_.assign(static_cast<std::size_t>(node_count_), -1);
@@ -242,6 +321,7 @@ FppCombinatorialCut FppCombinatorialBendersSeparator::separateScenario(
     const int root = scenario.ignition_index;
 
     std::vector<double> y_compact = expand_y_to_compact_values(opt_, y_values_by_eligible_position);
+    const auto propagation_start = std::chrono::steady_clock::now();
     std::vector<double> dist(static_cast<std::size_t>(node_count_), kInfinity);
     std::vector<int> parent(static_cast<std::size_t>(node_count_), -1);
     using QueueItem = std::pair<double, int>;
@@ -278,22 +358,33 @@ FppCombinatorialCut FppCombinatorialBendersSeparator::separateScenario(
         }
     }
 
+    separated.propagation_time_sec =
+        std::chrono::duration<double>(std::chrono::steady_clock::now() - propagation_start).count();
+
+    const auto cut_build_start = std::chrono::steady_clock::now();
     std::unordered_map<int, double> coefficient_counts;
     int active_nodes = 0;
     int paths = 0;
+    double active_loss = 0.0;
     for (int node = 0; node < node_count_; ++node) {
         if (!(dist[static_cast<std::size_t>(node)] < 1.0 - tolerance)) {
             continue;
         }
         ++active_nodes;
         ++paths;
+        const double destination_weight = compact_weights_[static_cast<std::size_t>(node)];
+        if (!std::isfinite(destination_weight) || destination_weight <= 0.0) {
+            throw std::runtime_error(
+                "FPP combinatorial Benders encountered an invalid compact destination weight.");
+        }
+        active_loss += destination_weight;
         std::set<int> blockers_on_path;
         int current = node;
         int guard = 0;
         while (current != root && current >= 0 && guard <= node_count_) {
             if (eligible_[static_cast<std::size_t>(current)] != 0) {
                 if (lift_mode == FppCombinatorialBendersLiftMode::None) {
-                    coefficient_counts[current] += 1.0;
+                    coefficient_counts[current] += destination_weight;
                 } else {
                     blockers_on_path.insert(current);
                 }
@@ -303,15 +394,15 @@ FppCombinatorialCut FppCombinatorialBendersSeparator::separateScenario(
         }
         if (lift_mode != FppCombinatorialBendersLiftMode::None) {
             for (const int blocker : blockers_on_path) {
-                coefficient_counts[blocker] += 1.0;
+                coefficient_counts[blocker] += destination_weight;
             }
         }
     }
 
     BendersCut cut;
     cut.scenario_id = scenario.scenario_id;
-    cut.rhs_constant = static_cast<double>(active_nodes);
-    cut.subproblem_objective = static_cast<double>(active_nodes);
+    cut.rhs_constant = active_loss;
+    cut.subproblem_objective = active_loss;
     cut.ybar_compact_values.reserve(opt_.eligible_indices.size());
     for (std::size_t pos = 0; pos < opt_.eligible_indices.size(); ++pos) {
         cut.ybar_compact_values.push_back({
@@ -330,9 +421,14 @@ FppCombinatorialCut FppCombinatorialBendersSeparator::separateScenario(
         cut.coefficients_by_compact_index.begin(),
         cut.coefficients_by_compact_index.end(),
         [](const auto& lhs, const auto& rhs) { return lhs.first < rhs.first; });
+    separated.cut_build_time_sec =
+        std::chrono::duration<double>(std::chrono::steady_clock::now() - cut_build_start).count();
     separated.cut = std::move(cut);
     separated.rhs_at_ybar = separated.cut.evaluateAt(y_compact);
+    separated.incumbent_weighted_loss = active_loss;
+    separated.incumbent_eta = eta_value;
     separated.violation = separated.rhs_at_ybar - eta_value;
+    separated.tightness_error = std::fabs(separated.rhs_at_ybar - active_loss);
     separated.active_nodes = active_nodes;
     separated.activation_paths = paths;
     separated.nonzeros =
@@ -378,6 +474,14 @@ FppCombinatorialBendersSeparator::separateViolatedCuts(
         summary.max_violation = std::max(summary.max_violation, cut.violation);
         if (cut.lift_mode_fallback) {
             ++summary.lift_fallback_count;
+        }
+        summary.propagation_time_sec += cut.propagation_time_sec;
+        summary.cut_build_time_sec += cut.cut_build_time_sec;
+        ++summary.weighted_recourse_evaluations;
+        summary.max_tightness_error =
+            std::max(summary.max_tightness_error, cut.tightness_error);
+        if (cut.tightness_error <= std::max(1.0, std::fabs(cut.incumbent_weighted_loss)) * 1.0e-8) {
+            ++summary.tight_cuts;
         }
         if (cut.violation > tolerance) {
             ++summary.violated_cuts;
@@ -437,7 +541,7 @@ std::vector<double> FppCombinatorialBendersSeparator::evaluateScenarioLosses(
         std::queue<int> frontier;
         reached[static_cast<std::size_t>(root)] = 1;
         frontier.push(root);
-        double burned_count = 1.0;
+        double burned_loss = compact_weights_[static_cast<std::size_t>(root)];
         while (!frontier.empty()) {
             const int current = frontier.front();
             frontier.pop();
@@ -450,11 +554,16 @@ std::vector<double> FppCombinatorialBendersSeparator::evaluateScenarioLosses(
                 if (next != root && selected[next_pos]) {
                     continue;
                 }
-                burned_count += 1.0;
+                const double weight = compact_weights_[next_pos];
+                if (!std::isfinite(weight) || weight <= 0.0) {
+                    throw std::runtime_error(
+                        "FPP combinatorial burned-loss evaluation encountered an invalid compact weight.");
+                }
+                burned_loss += weight;
                 frontier.push(next);
             }
         }
-        losses.push_back(burned_count);
+        losses.push_back(burned_loss);
     }
     return losses;
 }

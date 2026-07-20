@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "benders/BendersCut.hpp"
+#include "benders/FppStrengthening.hpp"
 #include "opt/OptimizationInstance.hpp"
 
 namespace firebreak::benders {
@@ -33,8 +34,13 @@ struct FppCombinatorialBendersOptions {
 
 struct FppCombinatorialCut {
     BendersCut cut;
+    double incumbent_weighted_loss = 0.0;
+    double incumbent_eta = 0.0;
     double rhs_at_ybar = 0.0;
     double violation = 0.0;
+    double tightness_error = 0.0;
+    double cut_build_time_sec = 0.0;
+    double propagation_time_sec = 0.0;
     int active_nodes = 0;
     int activation_paths = 0;
     int nonzeros = 0;
@@ -50,9 +56,14 @@ struct FppCombinatorialSeparationSummary {
     int nonviolated_cuts = 0;
     double max_violation = 0.0;
     double separation_time_sec = 0.0;
+    double propagation_time_sec = 0.0;
+    double cut_build_time_sec = 0.0;
     int total_paths = 0;
     int total_nonzeros = 0;
     int lift_fallback_count = 0;
+    int weighted_recourse_evaluations = 0;
+    int tight_cuts = 0;
+    double max_tightness_error = 0.0;
 };
 
 struct FppCombinatorialBendersStats {
@@ -73,6 +84,17 @@ struct FppCombinatorialBendersStats {
     int num_violated_cuts = 0;
     int lift_fallback_count = 0;
     bool fractional_lift_disabled_due_to_validity = false;
+    bool weighted = false;
+    std::string mode = "legacy-unit-path-activation";
+    std::string weight_map_hash;
+    int weighted_recourse_evaluations = 0;
+    int duplicate_cuts = 0;
+    int tight_cuts = 0;
+    double max_tightness_error = 0.0;
+    double max_violation = 0.0;
+    double propagation_time_sec = 0.0;
+    double cut_build_time_sec = 0.0;
+    std::string validity_mode = "unit-path-activation-cut";
 
     double average_paths_per_cut() const;
     double average_cut_nonzeros() const;
@@ -90,6 +112,15 @@ std::vector<int> order_fpp_combinatorial_scenarios_by_eta(
 
 void validate_fpp_combinatorial_benders_options(
     const FppCombinatorialBendersOptions& options);
+
+bool is_fpp_phase6c1_weighted_combinatorial_baseline(
+    const FppCombinatorialBendersOptions& options);
+
+void validate_fpp_phase6c1_weighted_combinatorial_baseline(
+    const FppCombinatorialBendersOptions& options,
+    bool use_root_user_cuts,
+    bool use_lifted_lower_bounds,
+    const FppStrengtheningOptions& strengthening_options);
 
 class FppCombinatorialBendersSeparator {
 public:
@@ -121,12 +152,20 @@ public:
     std::vector<double> evaluateScenarioLosses(
         const std::vector<int>& y_values_by_eligible_position) const;
 
+    bool weighted() const { return weighted_; }
+    const std::string& weightMapHash() const { return weight_map_hash_; }
+    const std::string& validityMode() const { return validity_mode_; }
+
 private:
     const opt::OptimizationInstance& opt_;
     int node_count_ = 0;
     std::vector<char> eligible_;
     std::vector<int> y_position_by_node_;
     std::vector<std::vector<std::vector<int>>> successors_by_scenario_;
+    std::vector<double> compact_weights_;
+    bool weighted_ = false;
+    std::string weight_map_hash_;
+    std::string validity_mode_ = "unit-path-activation-cut";
 };
 
 }  // namespace firebreak::benders

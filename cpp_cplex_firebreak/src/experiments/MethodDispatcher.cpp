@@ -1237,6 +1237,69 @@ io::StandardExperimentResult MethodDispatcher::run_method(const MethodDispatchRe
         solver_result.combinatorial_benders_avg_cut_nonzeros;
     result.combinatorial_benders_num_violated_cuts =
         solver_result.combinatorial_benders_num_violated_cuts;
+    result.combinatorial_benders_weighted =
+        solver_result.combinatorial_benders_weighted;
+    result.combinatorial_benders_mode =
+        solver_result.combinatorial_benders_mode;
+    result.combinatorial_benders_weight_map_hash =
+        solver_result.combinatorial_benders_weight_map_hash;
+    result.combinatorial_benders_weighted_recourse_evaluations =
+        solver_result.combinatorial_benders_weighted_recourse_evaluations;
+    result.combinatorial_benders_duplicate_cuts =
+        solver_result.combinatorial_benders_duplicate_cuts;
+    result.combinatorial_benders_cuts_tight_at_incumbent =
+        solver_result.combinatorial_benders_cuts_tight_at_incumbent;
+    result.combinatorial_benders_lifting_enabled =
+        solver_result.combinatorial_benders_lifting_enabled;
+    result.combinatorial_benders_scenario_sampling_enabled =
+        solver_result.combinatorial_benders_scenario_sampling_enabled;
+    result.combinatorial_benders_max_tightness_error =
+        solver_result.combinatorial_benders_max_tightness_error;
+    result.combinatorial_benders_max_violation =
+        solver_result.combinatorial_benders_max_violation;
+    result.combinatorial_benders_propagation_time_sec =
+        solver_result.combinatorial_benders_propagation_time_sec;
+    result.combinatorial_benders_cut_build_time_sec =
+        solver_result.combinatorial_benders_cut_build_time_sec;
+    result.combinatorial_benders_validity_mode =
+        solver_result.combinatorial_benders_validity_mode;
+    result.combinatorial_weighted = solver_result.combinatorial_weighted;
+    result.combinatorial_mode = solver_result.combinatorial_mode;
+    result.combinatorial_weight_map_hash =
+        solver_result.combinatorial_weight_map_hash;
+    result.combinatorial_candidate_callbacks =
+        solver_result.combinatorial_candidate_callbacks;
+    result.combinatorial_scenarios_evaluated =
+        solver_result.combinatorial_scenarios_evaluated;
+    result.combinatorial_weighted_recourse_evaluations =
+        solver_result.combinatorial_weighted_recourse_evaluations;
+    result.combinatorial_cuts_generated =
+        solver_result.combinatorial_cuts_generated;
+    result.combinatorial_cuts_added = solver_result.combinatorial_cuts_added;
+    result.combinatorial_duplicate_cuts =
+        solver_result.combinatorial_duplicate_cuts;
+    result.combinatorial_cuts_tight_at_incumbent =
+        solver_result.combinatorial_cuts_tight_at_incumbent;
+    result.combinatorial_max_tightness_error =
+        solver_result.combinatorial_max_tightness_error;
+    result.combinatorial_max_violation =
+        solver_result.combinatorial_max_violation;
+    result.combinatorial_propagation_time_sec =
+        solver_result.combinatorial_propagation_time_sec;
+    result.combinatorial_cut_build_time_sec =
+        solver_result.combinatorial_cut_build_time_sec;
+    result.combinatorial_callback_time_sec =
+        solver_result.combinatorial_callback_time_sec;
+    result.combinatorial_validity_mode =
+        solver_result.combinatorial_validity_mode;
+    result.combinatorial_lifting_enabled =
+        solver_result.combinatorial_lifting_enabled;
+    result.combinatorial_fractional_cuts_enabled =
+        solver_result.combinatorial_fractional_cuts_enabled;
+    result.combinatorial_initial_cuts_enabled =
+        solver_result.combinatorial_initial_cuts_enabled;
+    result.combinatorial_scenario_sampling_enabled =
+        solver_result.combinatorial_scenario_sampling_enabled;
     result.coverage_llbi_enabled = solver_result.coverage_llbi_enabled;
     result.coverage_llbi_num_zeta_vars = solver_result.coverage_llbi_num_zeta_vars;
     result.coverage_llbi_num_constraints = solver_result.coverage_llbi_num_constraints;
