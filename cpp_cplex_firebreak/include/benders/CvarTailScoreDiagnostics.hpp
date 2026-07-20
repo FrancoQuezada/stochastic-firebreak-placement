@@ -38,14 +38,27 @@ struct TailScoreCandidateEventDiagnostic {
     std::string warning;
 };
 
+struct TailScoreScenarioDiagnostic {
+    int scenario_id = -1;
+    double scenario_probability = 0.0;
+    double weighted_loss = std::numeric_limits<double>::quiet_NaN();
+    double weighted_var_threshold = std::numeric_limits<double>::quiet_NaN();
+    bool tail_membership = false;
+    double tail_excess = 0.0;
+};
+
 struct CvarTailScoreRoundDiagnostics {
     int round_index = 0;
     std::string risk_measure = "expected";
     double cvar_beta = 0.9;
+    bool weighted = false;
+    std::string weight_profile;
+    std::string weight_map_hash;
     double risk_threshold = std::numeric_limits<double>::quiet_NaN();
     std::string tail_definition_used;
     int tail_scenario_count = 0;
     std::vector<int> tail_scenario_ids;
+    std::vector<TailScoreScenarioDiagnostic> scenario_diagnostics;
     int candidate_count = 0;
     int active_count_before_round = 0;
     int active_count_after_round = 0;
@@ -79,6 +92,9 @@ struct CvarTailScoreDiagnosticsInput {
     int round_index = 0;
     std::string risk_measure = "expected";
     double cvar_beta = 0.9;
+    bool weighted = false;
+    std::string weight_profile;
+    std::string weight_map_hash;
     double risk_threshold = std::numeric_limits<double>::quiet_NaN();
     int candidate_count = 0;
     std::vector<int> eligible_compact_indices;

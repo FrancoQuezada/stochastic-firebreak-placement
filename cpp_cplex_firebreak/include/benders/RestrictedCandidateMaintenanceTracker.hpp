@@ -1,6 +1,7 @@
 #pragma once
 
 #include <utility>
+#include <string>
 #include <vector>
 
 #include "benders/RestrictedCandidateManager.hpp"
@@ -18,6 +19,8 @@ struct RestrictedCandidateMaintenanceOptions {
 
 struct RestrictedCandidateMaintenanceDecision {
     int maintenance_round = 0;
+    bool weighted = false;
+    std::string weight_map_hash;
     int active_count_before_maintenance = 0;
     int active_count_after_activation = 0;
     int active_count_after_deactivation = 0;
@@ -42,9 +45,12 @@ class RestrictedCandidateMaintenanceTracker {
 public:
     RestrictedCandidateMaintenanceTracker(
         int candidate_count,
-        const std::vector<int>& initial_active_candidates);
+        const std::vector<int>& initial_active_candidates,
+        std::string weight_map_hash = {});
 
     int currentRound() const;
+    const std::string& weightMapHash() const;
+    void setWeightMapHash(const std::string& weight_map_hash);
     int activeAge(int candidate) const;
     int lastActivatedRound(int candidate) const;
     int lastDeactivatedRound(int candidate) const;
@@ -86,6 +92,7 @@ public:
 
 private:
     int candidate_count_ = 0;
+    std::string weight_map_hash_;
     int current_round_ = 0;
     std::vector<int> active_age_;
     std::vector<int> last_activated_round_;

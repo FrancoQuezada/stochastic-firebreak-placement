@@ -141,9 +141,9 @@ void validate_options(const FppRestrictedCandidateBranchBendersOptions& options)
             "FPP restricted Branch-Benders Benders-coefficient activation requires activation_batch_size > 0.");
     }
     if (options.candidate_maintenance_policy != "none") {
-        if (!options.restricted_heuristic_mode || options.eventually_activate_all) {
+        if (!options.restricted_heuristic_mode && !options.eventually_activate_all) {
             throw std::runtime_error(
-                "FPP restricted Branch-Benders active-set maintenance is heuristic-mode only; use --restricted-heuristic-mode.");
+                "FPP restricted Branch-Benders active-set maintenance requires either restricted heuristic mode or exact eventual full activation.");
         }
         if (options.activation_policy != "benders-coefficients") {
             throw std::runtime_error(
@@ -164,9 +164,9 @@ void validate_options(const FppRestrictedCandidateBranchBendersOptions& options)
                 "CVaR tail-aware candidate scoring requires candidate_activation_policy=benders-coefficients.");
         }
         if (options.candidate_maintenance_policy != "none" &&
-            (!options.restricted_heuristic_mode || options.eventually_activate_all)) {
+            (!options.restricted_heuristic_mode && !options.eventually_activate_all)) {
             throw std::runtime_error(
-                "CVaR tail-aware candidate maintenance is supported only in restricted heuristic mode.");
+                "CVaR tail-aware candidate maintenance requires either restricted heuristic mode or exact eventual full activation.");
         }
     }
 }
@@ -203,23 +203,20 @@ bool has_nonunit_compact_weights(const opt::OptimizationInstance& opt) {
     return false;
 }
 
-void validate_weighted_phase5c2a_options(
+void validate_weighted_phase5c2b1_options(
     const opt::OptimizationInstance& opt,
     const FppRestrictedCandidateBranchBendersOptions& options) {
     if (!has_nonunit_compact_weights(opt)) {
         return;
     }
-    if (options.candidate_maintenance_policy != "none") {
-        throw std::runtime_error(
-            "Non-homogeneous weighted restricted Branch-Benders Phase 5C2A does not support candidate maintenance or deactivation.");
-    }
-    if (options.export_tail_score_diagnostics) {
-        throw std::runtime_error(
-            "Non-homogeneous weighted restricted Branch-Benders Phase 5C2A does not support explicit tail-score diagnostic export.");
-    }
     if (!options.eventually_activate_all || options.restricted_heuristic_mode) {
         throw std::runtime_error(
-            "Non-homogeneous weighted restricted Branch-Benders Phase 5C2A supports scorer-guided exact mode with eventual full activation only.");
+            "Non-homogeneous weighted restricted Branch-Benders Phase 5C2B1 supports maintenance only in exact mode with eventual full activation.");
+    }
+    if (options.export_tail_score_diagnostics &&
+        options.risk_config.type == risk::RiskMeasureType::Expected) {
+        throw std::runtime_error(
+            "Non-homogeneous weighted CVaR-tail diagnostic export requires risk_measure=cvar or risk_measure=mean-cvar.");
     }
     if (options.use_lifted_lower_bounds ||
         options.combinatorial_options.enabled ||
@@ -232,7 +229,7 @@ void validate_weighted_phase5c2a_options(
         options.strengthening_options.use_conditional_zero_benefit_fixing ||
         options.strengthening_options.use_global_dominance_preprocessing) {
         throw std::runtime_error(
-            "Non-homogeneous weighted restricted Branch-Benders Phase 5C2A rejects unconverted strengthening/combinatorial modules.");
+            "Non-homogeneous weighted restricted Branch-Benders Phase 5C2B1 rejects unconverted strengthening/combinatorial modules.");
     }
     if (options.candidate_score_mode == "cvar-tail-blend" &&
         options.activation_policy != "benders-coefficients") {
@@ -560,6 +557,9 @@ void update_cut_pool_diagnostics(
     const RestrictedCandidateCutPool& cut_pool) {
     result.cut_pool = cut_pool;
     result.cut_pool_size = cut_pool.size();
+    result.cut_pool_peak_size = cut_pool.peakSize();
+    result.cut_pool_evictions = cut_pool.evictions();
+    result.cut_pool_reinstantiations = cut_pool.reinstantiations();
     result.duplicate_cuts_skipped = cut_pool.duplicateCutsSkipped();
     result.cuts_by_round = vector_from_count_map(cut_pool.cutsByRound());
     result.cuts_by_scenario = vector_from_count_map(cut_pool.cutsByScenario());
@@ -601,6 +601,15 @@ void record_maintenance_diagnostics(
     result.protected_cooldown_count += decision.protected_cooldown_count;
     result.protected_newly_activated_count +=
         decision.protected_newly_activated_count;
+    result.candidates_reactivated += static_cast<int>(decision.activated.size());
+    result.candidates_deactivated += static_cast<int>(decision.deactivated.size());
+    result.candidates_considered_for_deactivation += decision.deactivation_candidate_count;
+    result.candidates_protected_from_deactivation +=
+        decision.protected_selected_count +
+        decision.protected_min_age_count +
+        decision.protected_cooldown_count +
+        decision.protected_newly_activated_count +
+        decision.protected_tail_count;
     result.protected_tail_count += decision.protected_tail_count;
     result.deactivation_blocked_by_tail_protection_count +=
         decision.protected_tail_count;
@@ -656,6 +665,9 @@ void append_tail_score_diagnostics_if_enabled(
     input.round_index = log.round_index;
     input.risk_measure = log.risk_measure;
     input.cvar_beta = result.cvar_beta;
+    input.weighted = has_nonunit_compact_weights(opt);
+    input.weight_profile = opt.cell_weight_map.profile;
+    input.weight_map_hash = opt.cell_weight_map.deterministic_hash;
     input.risk_threshold = stage.model_result.risk_threshold_value;
     input.candidate_count = static_cast<int>(opt.eligible_indices.size());
     input.eligible_compact_indices = opt.eligible_indices;
@@ -2483,7 +2495,7 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
     const FppRestrictedCandidateBranchBendersOptions& options) const {
     validate_options(options);
     validate_instance(opt);
-    validate_weighted_phase5c2a_options(opt, options);
+    validate_weighted_phase5c2b1_options(opt, options);
     const auto risk_config = effective_risk_config_from(options.risk_config);
     const auto global_start = std::chrono::steady_clock::now();
     const bool nonunit_weights = has_nonunit_compact_weights(opt);
@@ -2507,7 +2519,8 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
     FppPersistentScenarioSubproblemManager subproblem_manager(opt, options.verbose);
     RestrictedCandidateMaintenanceTracker maintenance_tracker(
         manager.candidateCount(),
-        manager.activeCandidates());
+        manager.activeCandidates(),
+        opt.cell_weight_map.deterministic_hash);
     const RestrictedCandidateMaintenanceOptions maintenance_options =
         effective_maintenance_options(options, manager);
 
@@ -2520,6 +2533,8 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
     result.initial_candidate_policy = options.initial_candidate_policy;
     result.activation_policy = options.activation_policy;
     result.candidate_maintenance_policy = options.candidate_maintenance_policy;
+    result.maintenance_weighted = nonunit_weights;
+    result.maintenance_map_hash = score_weight_map_hash;
     result.deactivation_enabled = options.candidate_maintenance_policy != "none";
     result.candidate_score_mode = options.candidate_score_mode;
     result.candidate_tail_score_gamma = options.candidate_tail_score_gamma;
@@ -2539,6 +2554,7 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
     result.candidate_score_map_hash = score_weight_map_hash;
     result.candidate_min_active_size = maintenance_options.min_active_size;
     result.candidate_max_active_size = maintenance_options.max_active_size;
+    result.active_candidate_target = maintenance_options.max_active_size;
     result.candidate_deactivation_batch_size =
         maintenance_options.deactivation_batch_size;
     result.candidate_deactivation_min_age =
@@ -2608,8 +2624,9 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
         result.notes.push_back("Restricted heuristic mode is enabled; global optimality will not be claimed before full activation.");
     }
     if (options.candidate_maintenance_policy == "benders-coefficients") {
-        result.notes.push_back("Phase 1P Benders-coefficient active-set maintenance is enabled for heuristic mode.");
+        result.notes.push_back("Phase 5C2B1 Benders-coefficient active-set maintenance is enabled.");
         result.notes.push_back("Selected firebreaks are protected from deactivation by default; deactivation uses upper-bound changes only.");
+        result.notes.push_back("Maintenance scores consume weighted Benders coefficients directly when a weight map is attached; coefficients are not multiplied by weights again.");
     }
     if (uses_tail_aware_candidate_scoring(options)) {
         result.notes.push_back(
@@ -2902,6 +2919,8 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
             const auto active_before_round = manager.activeCandidates();
             RestrictedCandidateMaintenanceDecision decision;
             decision.maintenance_round = maintenance_tracker.currentRound();
+            decision.weighted = nonunit_weights;
+            decision.weight_map_hash = score_weight_map_hash;
             decision.active_count_before_maintenance = manager.activeCount();
 
             BendersCoefficientScoringSummary inactive_summary;
@@ -3402,6 +3421,8 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
 
     const auto active_before_full_activation = manager.activeCandidates();
     const std::size_t history_size_before_full_activation = manager.activationHistory().size();
+    result.full_activation_overrode_maintenance =
+        options.candidate_maintenance_policy != "none" && !manager.allActive();
     manager.activateAll();
     std::vector<int> full_activation_batch;
     if (manager.activationHistory().size() > history_size_before_full_activation) {

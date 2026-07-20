@@ -436,6 +436,12 @@ void write_restricted_candidate_json_block(std::ostream& out, const StandardExpe
     out << "    \"cut_reuse_enabled\": "
         << (result.restricted_candidate_cut_reuse_enabled ? "true" : "false") << ",\n";
     out << "    \"cut_pool_size\": " << result.restricted_candidate_cut_pool_size << ",\n";
+    out << "    \"cut_pool_peak_size\": "
+        << result.restricted_candidate_cut_pool_peak_size << ",\n";
+    out << "    \"cut_pool_evictions\": "
+        << result.restricted_candidate_cut_pool_evictions << ",\n";
+    out << "    \"cut_pool_reinstantiations\": "
+        << result.restricted_candidate_cut_pool_reinstantiations << ",\n";
     out << "    \"candidate_rounds\": " << result.restricted_candidate_rounds << ",\n";
     out << "    \"cuts_reused_in_full_stage\": "
         << result.restricted_candidate_cuts_reused_in_full_stage << ",\n";
@@ -475,6 +481,10 @@ void write_restricted_candidate_json_block(std::ostream& out, const StandardExpe
         << format_json_number(result.restricted_candidate_active_fraction_at_stop) << ",\n";
     out << "    \"candidate_maintenance_policy\": \""
         << json_escape_local(result.restricted_candidate_maintenance_policy) << "\",\n";
+    out << "    \"maintenance_weighted\": "
+        << (result.restricted_candidate_maintenance_weighted ? "true" : "false") << ",\n";
+    out << "    \"maintenance_map_hash\": \""
+        << json_escape_local(result.restricted_candidate_maintenance_map_hash) << "\",\n";
     out << "    \"candidate_score_mode\": \""
         << json_escape_local(result.restricted_candidate_score_mode) << "\",\n";
     out << "    \"candidate_tail_score_gamma\": "
@@ -505,6 +515,18 @@ void write_restricted_candidate_json_block(std::ostream& out, const StandardExpe
         << (result.restricted_candidate_deactivation_enabled ? "true" : "false") << ",\n";
     out << "    \"deactivation_rounds\": "
         << result.restricted_candidate_deactivation_rounds << ",\n";
+    out << "    \"active_candidate_target\": "
+        << result.restricted_candidate_active_target << ",\n";
+    out << "    \"candidates_considered_for_deactivation\": "
+        << result.restricted_candidate_considered_for_deactivation << ",\n";
+    out << "    \"candidates_deactivated\": "
+        << result.restricted_candidate_deactivated_total << ",\n";
+    out << "    \"candidates_reactivated\": "
+        << result.restricted_candidate_reactivated_total << ",\n";
+    out << "    \"candidates_protected_from_deactivation\": "
+        << result.restricted_candidate_protected_from_deactivation_total << ",\n";
+    out << "    \"full_activation_overrode_maintenance\": "
+        << (result.restricted_candidate_full_activation_overrode_maintenance ? "true" : "false") << ",\n";
     out << "    \"candidate_min_active_size\": "
         << result.restricted_candidate_min_active_size << ",\n";
     out << "    \"candidate_max_active_size\": "
@@ -600,6 +622,11 @@ void write_restricted_candidate_json_block(std::ostream& out, const StandardExpe
         out << "        \"round_index\": " << diag.round_index << ",\n";
         out << "        \"risk_measure\": \"" << json_escape_local(diag.risk_measure) << "\",\n";
         out << "        \"cvar_beta\": " << format_json_number(diag.cvar_beta) << ",\n";
+        out << "        \"weighted\": " << (diag.weighted ? "true" : "false") << ",\n";
+        out << "        \"weight_profile\": \""
+            << json_escape_local(diag.weight_profile) << "\",\n";
+        out << "        \"weight_map_hash\": \""
+            << json_escape_local(diag.weight_map_hash) << "\",\n";
         out << "        \"risk_threshold\": " << format_json_number(diag.risk_threshold) << ",\n";
         out << "        \"tail_definition_used\": \""
             << json_escape_local(diag.tail_definition_used) << "\",\n";
@@ -607,6 +634,28 @@ void write_restricted_candidate_json_block(std::ostream& out, const StandardExpe
         out << "        \"tail_scenario_ids\": ";
         write_json_int_array(out, diag.tail_scenario_ids);
         out << ",\n";
+        out << "        \"scenario_diagnostics\": [";
+        for (std::size_t j = 0; j < diag.scenario_diagnostics.size(); ++j) {
+            const auto& scenario = diag.scenario_diagnostics[j];
+            out << (j == 0 ? "\n" : ",\n");
+            out << "          {"
+                << "\"scenario_id\":" << scenario.scenario_id << ","
+                << "\"scenario_probability\":"
+                << format_json_number(scenario.scenario_probability) << ","
+                << "\"weighted_loss\":"
+                << format_json_number(scenario.weighted_loss) << ","
+                << "\"weighted_var_threshold\":"
+                << format_json_number(scenario.weighted_var_threshold) << ","
+                << "\"tail_membership\":"
+                << (scenario.tail_membership ? "true" : "false") << ","
+                << "\"tail_excess\":"
+                << format_json_number(scenario.tail_excess)
+                << "}";
+        }
+        if (!diag.scenario_diagnostics.empty()) {
+            out << "\n        ";
+        }
+        out << "],\n";
         out << "        \"candidate_count\": " << diag.candidate_count << ",\n";
         out << "        \"active_count_before_round\": " << diag.active_count_before_round << ",\n";
         out << "        \"active_count_after_round\": " << diag.active_count_after_round << ",\n";

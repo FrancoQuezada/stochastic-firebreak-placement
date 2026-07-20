@@ -334,6 +334,12 @@ void attach_restricted_candidate_diagnostics(
         restricted_result.final_lower_bound_is_global;
     result.restricted_candidate_cut_reuse_enabled = restricted_result.cut_reuse_enabled;
     result.restricted_candidate_cut_pool_size = restricted_result.cut_pool_size;
+    result.restricted_candidate_cut_pool_peak_size =
+        restricted_result.cut_pool_peak_size;
+    result.restricted_candidate_cut_pool_evictions =
+        restricted_result.cut_pool_evictions;
+    result.restricted_candidate_cut_pool_reinstantiations =
+        restricted_result.cut_pool_reinstantiations;
     result.restricted_candidate_rounds = restricted_result.candidate_rounds;
     result.restricted_candidate_cuts_reused_in_full_stage =
         restricted_result.cuts_reused_in_full_stage;
@@ -373,10 +379,26 @@ void attach_restricted_candidate_diagnostics(
         restricted_result.active_candidate_fraction_at_stop;
     result.restricted_candidate_maintenance_policy =
         restricted_result.candidate_maintenance_policy;
+    result.restricted_candidate_maintenance_weighted =
+        restricted_result.maintenance_weighted;
+    result.restricted_candidate_maintenance_map_hash =
+        restricted_result.maintenance_map_hash;
     result.restricted_candidate_deactivation_enabled =
         restricted_result.deactivation_enabled;
     result.restricted_candidate_deactivation_rounds =
         restricted_result.deactivation_rounds;
+    result.restricted_candidate_active_target =
+        restricted_result.active_candidate_target;
+    result.restricted_candidate_considered_for_deactivation =
+        restricted_result.candidates_considered_for_deactivation;
+    result.restricted_candidate_deactivated_total =
+        restricted_result.candidates_deactivated;
+    result.restricted_candidate_reactivated_total =
+        restricted_result.candidates_reactivated;
+    result.restricted_candidate_protected_from_deactivation_total =
+        restricted_result.candidates_protected_from_deactivation;
+    result.restricted_candidate_full_activation_overrode_maintenance =
+        restricted_result.full_activation_overrode_maintenance;
     result.restricted_candidate_min_active_size =
         restricted_result.candidate_min_active_size;
     result.restricted_candidate_max_active_size =

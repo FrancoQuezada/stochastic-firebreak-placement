@@ -23,8 +23,13 @@ bool nearly_equal(double lhs, double rhs) {
     return std::fabs(lhs - rhs) <= 1.0e-12;
 }
 
-bool duplicate_cut(const BendersCut& lhs, const BendersCut& rhs) {
+bool duplicate_cut(
+    const RestrictedCandidateCutRecord& lhs_record,
+    const BendersCut& rhs,
+    const std::string& rhs_weight_map_hash) {
+    const auto& lhs = lhs_record.cut;
     if (lhs.scenario_id != rhs.scenario_id ||
+        lhs_record.weight_map_hash != rhs_weight_map_hash ||
         !nearly_equal(lhs.rhs_constant, rhs.rhs_constant)) {
         return false;
     }
@@ -67,7 +72,7 @@ bool RestrictedCandidateCutPool::addCut(
     const std::string& stage_name,
     int active_candidate_count) {
     for (const auto& record : records_) {
-        if (duplicate_cut(record.cut, cut)) {
+        if (duplicate_cut(record, cut, weight_map_hash_)) {
             ++duplicate_cuts_skipped_;
             return false;
         }
@@ -78,9 +83,12 @@ bool RestrictedCandidateCutPool::addCut(
     record.scenario_id = cut.scenario_id;
     record.round_index = round_index;
     record.active_candidate_count = active_candidate_count;
+    record.creation_iteration = round_index;
+    record.weight_map_hash = weight_map_hash_;
     record.stage_name = stage_name;
     record.cut = cut;
     records_.push_back(record);
+    peak_size_ = std::max(peak_size_, static_cast<int>(records_.size()));
     return true;
 }
 
@@ -108,6 +116,18 @@ bool RestrictedCandidateCutPool::empty() const {
 
 int RestrictedCandidateCutPool::duplicateCutsSkipped() const {
     return duplicate_cuts_skipped_;
+}
+
+int RestrictedCandidateCutPool::evictions() const {
+    return evictions_;
+}
+
+int RestrictedCandidateCutPool::reinstantiations() const {
+    return reinstantiations_;
+}
+
+int RestrictedCandidateCutPool::peakSize() const {
+    return peak_size_;
 }
 
 const std::vector<RestrictedCandidateCutRecord>& RestrictedCandidateCutPool::records() const {

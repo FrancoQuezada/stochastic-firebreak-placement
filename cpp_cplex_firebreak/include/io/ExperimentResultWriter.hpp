@@ -289,6 +289,9 @@ struct StandardExperimentResult {
     bool restricted_candidate_final_lower_bound_is_global = false;
     bool restricted_candidate_cut_reuse_enabled = false;
     int restricted_candidate_cut_pool_size = 0;
+    int restricted_candidate_cut_pool_peak_size = 0;
+    int restricted_candidate_cut_pool_evictions = 0;
+    int restricted_candidate_cut_pool_reinstantiations = 0;
     int restricted_candidate_rounds = 0;
     int restricted_candidate_cuts_reused_in_full_stage = 0;
     int restricted_candidate_duplicate_cuts_skipped = 0;
@@ -309,8 +312,16 @@ struct StandardExperimentResult {
     bool restricted_candidate_restricted_bound_is_global = false;
     double restricted_candidate_active_fraction_at_stop = 0.0;
     std::string restricted_candidate_maintenance_policy = "none";
+    bool restricted_candidate_maintenance_weighted = false;
+    std::string restricted_candidate_maintenance_map_hash;
     bool restricted_candidate_deactivation_enabled = false;
     int restricted_candidate_deactivation_rounds = 0;
+    int restricted_candidate_active_target = 0;
+    int restricted_candidate_considered_for_deactivation = 0;
+    int restricted_candidate_deactivated_total = 0;
+    int restricted_candidate_reactivated_total = 0;
+    int restricted_candidate_protected_from_deactivation_total = 0;
+    bool restricted_candidate_full_activation_overrode_maintenance = false;
     int restricted_candidate_min_active_size = 0;
     int restricted_candidate_max_active_size = 0;
     int restricted_candidate_deactivation_batch_size = 0;

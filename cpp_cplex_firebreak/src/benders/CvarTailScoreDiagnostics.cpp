@@ -117,14 +117,16 @@ std::map<int, double> score_map_from(
     int candidate_count,
     const std::vector<int>& eligible_compact_indices,
     const std::vector<BendersCut>& cuts,
-    const std::map<int, double>& scenario_probability_by_id) {
+    const std::map<int, double>& scenario_probability_by_id,
+    const std::string& weight_map_hash) {
     BendersCoefficientCandidateScorer scorer;
     const auto summary = scorer.scoreCandidates(
         candidate_count,
         eligible_compact_indices,
         all_candidate_ids(candidate_count),
         cuts,
-        scenario_probability_by_id);
+        scenario_probability_by_id,
+        weight_map_hash);
     std::map<int, double> scores;
     for (const auto& [candidate, score] : summary.scores) {
         scores[candidate] = score;
@@ -474,6 +476,9 @@ CvarTailScoreRoundDiagnostics computeCvarTailScoreRoundDiagnostics(
     diagnostics.round_index = input.round_index;
     diagnostics.risk_measure = input.risk_measure;
     diagnostics.cvar_beta = input.cvar_beta;
+    diagnostics.weighted = input.weighted;
+    diagnostics.weight_profile = input.weight_profile;
+    diagnostics.weight_map_hash = input.weight_map_hash;
     diagnostics.risk_threshold = input.risk_threshold;
     diagnostics.candidate_count = input.candidate_count;
     diagnostics.active_count_before_round =
@@ -495,6 +500,28 @@ CvarTailScoreRoundDiagnostics computeCvarTailScoreRoundDiagnostics(
     }
     diagnostics.tail_scenario_ids = empirical_tail_ids;
     diagnostics.tail_scenario_count = static_cast<int>(empirical_tail_ids.size());
+    const auto empirical_tail_set = set_from_vector(empirical_tail_ids);
+    std::map<int, double> excess_by_id;
+    for (const auto& [scenario_id, excess] : input.cvar_excess_by_id) {
+        excess_by_id[scenario_id] = excess;
+    }
+    diagnostics.scenario_diagnostics.reserve(input.scenario_losses_by_id.size());
+    for (const auto& [scenario_id, loss] : input.scenario_losses_by_id) {
+        TailScoreScenarioDiagnostic scenario_diag;
+        scenario_diag.scenario_id = scenario_id;
+        const auto probability_it = input.scenario_probability_by_id.find(scenario_id);
+        scenario_diag.scenario_probability =
+            probability_it == input.scenario_probability_by_id.end()
+                ? 0.0
+                : probability_it->second;
+        scenario_diag.weighted_loss = loss;
+        scenario_diag.weighted_var_threshold = input.risk_threshold;
+        scenario_diag.tail_membership = empirical_tail_set.count(scenario_id) > 0;
+        const auto excess_it = excess_by_id.find(scenario_id);
+        scenario_diag.tail_excess =
+            excess_it == excess_by_id.end() ? 0.0 : excess_it->second;
+        diagnostics.scenario_diagnostics.push_back(scenario_diag);
+    }
     if (empirical_tail_ids.empty()) {
         diagnostics.notes.push_back(
             "No finite scenario losses were available; empirical tail diagnostics use zero tail scores.");
@@ -526,22 +553,26 @@ CvarTailScoreRoundDiagnostics computeCvarTailScoreRoundDiagnostics(
         input.candidate_count,
         input.eligible_compact_indices,
         input.accumulated_cuts,
-        input.scenario_probability_by_id);
+        input.scenario_probability_by_id,
+        input.weight_map_hash);
     const auto empirical_scores = score_map_from(
         input.candidate_count,
         input.eligible_compact_indices,
         empirical_tail_cuts,
-        input.scenario_probability_by_id);
+        input.scenario_probability_by_id,
+        input.weight_map_hash);
     const auto excess_scores = score_map_from(
         input.candidate_count,
         input.eligible_compact_indices,
         excess_tail_cuts,
-        input.scenario_probability_by_id);
+        input.scenario_probability_by_id,
+        input.weight_map_hash);
     const auto recent_scores = score_map_from(
         input.candidate_count,
         input.eligible_compact_indices,
         recent_tail_cuts,
-        input.scenario_probability_by_id);
+        input.scenario_probability_by_id,
+        input.weight_map_hash);
 
     const auto generic_ranked = ranked_descending(generic_scores);
     const auto empirical_ranked = ranked_descending(empirical_scores);

@@ -432,6 +432,28 @@ TEST_RESTRICTED_CANDIDATE_MAINTENANCE_TRACKER_SOURCES := \
 	src/benders/RestrictedCandidateMaintenanceTracker.cpp \
 	tests/test_restricted_candidate_maintenance_tracker.cpp
 
+TEST_WEIGHTED_RESTRICTED_CANDIDATE_MAINTENANCE_SOURCES := \
+	src/benders/RestrictedCandidateManager.cpp \
+	src/benders/RestrictedCandidateMaintenanceTracker.cpp \
+	tests/test_weighted_restricted_candidate_maintenance.cpp
+
+TEST_WEIGHTED_RESTRICTED_CUT_POOL_PRIORITIZATION_SOURCES := \
+	src/benders/BendersCut.cpp \
+	src/benders/RestrictedCandidateCutPool.cpp \
+	tests/test_weighted_restricted_cut_pool_prioritization.cpp
+
+TEST_WEIGHTED_RESTRICTED_CUT_REACTIVATION_SOURCES := \
+	src/benders/BendersCut.cpp \
+	src/benders/RestrictedCandidateCutPool.cpp \
+	src/benders/RestrictedCandidateManager.cpp \
+	tests/test_weighted_restricted_cut_reactivation.cpp
+
+TEST_WEIGHTED_RESTRICTED_TAIL_DIAGNOSTICS_SOURCES := \
+	src/benders/BendersCut.cpp \
+	src/benders/BendersCoefficientCandidateScorer.cpp \
+	src/benders/CvarTailScoreDiagnostics.cpp \
+	tests/test_weighted_restricted_tail_diagnostics.cpp
+
 TEST_CANDIDATE_BOUND_CONTROLLER_SOURCES := \
 	src/benders/CandidateBoundController.cpp \
 	src/benders/RestrictedCandidateManager.cpp \
@@ -626,6 +648,10 @@ TEST_EXES := \
 	$(BUILD_DIR)/test_restricted_candidate_cut_pool \
 	$(BUILD_DIR)/test_restricted_candidate_manager \
 	$(BUILD_DIR)/test_restricted_candidate_maintenance_tracker \
+	$(BUILD_DIR)/test_weighted_restricted_candidate_maintenance \
+	$(BUILD_DIR)/test_weighted_restricted_cut_pool_prioritization \
+	$(BUILD_DIR)/test_weighted_restricted_cut_reactivation \
+	$(BUILD_DIR)/test_weighted_restricted_tail_diagnostics \
 	$(BUILD_DIR)/test_candidate_bound_controller \
 	$(BUILD_DIR)/test_fpp_projected_llbi \
 	$(BUILD_DIR)/test_fpp_persistent_scenario_subproblem_manager \
@@ -779,6 +805,10 @@ $(BUILD_DIR)/test_weighted_restricted_candidate_scoring_cplex: $(TEST_WEIGHTED_F
 	@mkdir -p $(dir $@)
 	$(CXX) $(COMMON_CPPFLAGS) $(CPLEX_CPPFLAGS) $(COMMON_CXXFLAGS) $^ $(CPLEX_LDFLAGS) -o $@
 
+$(BUILD_DIR)/test_weighted_restricted_maintenance_cplex: $(TEST_WEIGHTED_FPP_RESTRICTED_BRANCH_BENDERS_CPLEX_SOURCES)
+	@mkdir -p $(dir $@)
+	$(CXX) $(COMMON_CPPFLAGS) $(CPLEX_CPPFLAGS) $(COMMON_CXXFLAGS) $^ $(CPLEX_LDFLAGS) -o $@
+
 $(BUILD_DIR)/test_dpv_saa_model_structure: $(call test_obj,$(TEST_DPV_STRUCTURE_SOURCES))
 	$(CXX) $^ -o $@
 
@@ -863,6 +893,18 @@ $(BUILD_DIR)/test_restricted_candidate_manager: $(call test_obj,$(TEST_RESTRICTE
 $(BUILD_DIR)/test_restricted_candidate_maintenance_tracker: $(call test_obj,$(TEST_RESTRICTED_CANDIDATE_MAINTENANCE_TRACKER_SOURCES))
 	$(CXX) $^ -o $@
 
+$(BUILD_DIR)/test_weighted_restricted_candidate_maintenance: $(call test_obj,$(TEST_WEIGHTED_RESTRICTED_CANDIDATE_MAINTENANCE_SOURCES))
+	$(CXX) $^ -o $@
+
+$(BUILD_DIR)/test_weighted_restricted_cut_pool_prioritization: $(call test_obj,$(TEST_WEIGHTED_RESTRICTED_CUT_POOL_PRIORITIZATION_SOURCES))
+	$(CXX) $^ -o $@
+
+$(BUILD_DIR)/test_weighted_restricted_cut_reactivation: $(call test_obj,$(TEST_WEIGHTED_RESTRICTED_CUT_REACTIVATION_SOURCES))
+	$(CXX) $^ -o $@
+
+$(BUILD_DIR)/test_weighted_restricted_tail_diagnostics: $(call test_obj,$(TEST_WEIGHTED_RESTRICTED_TAIL_DIAGNOSTICS_SOURCES))
+	$(CXX) $^ -o $@
+
 $(BUILD_DIR)/test_candidate_bound_controller: $(call test_obj,$(TEST_CANDIDATE_BOUND_CONTROLLER_SOURCES))
 	$(CXX) $^ -o $@
 
@@ -928,6 +970,10 @@ test: $(TEST_EXES)
 	./build_gpp/test_restricted_candidate_cut_pool
 	./build_gpp/test_restricted_candidate_manager
 	./build_gpp/test_restricted_candidate_maintenance_tracker
+	./build_gpp/test_weighted_restricted_candidate_maintenance
+	./build_gpp/test_weighted_restricted_cut_pool_prioritization
+	./build_gpp/test_weighted_restricted_cut_reactivation
+	./build_gpp/test_weighted_restricted_tail_diagnostics
 	./build_gpp/test_candidate_bound_controller
 	./build_gpp/test_fpp_projected_llbi
 	./build_gpp/test_fpp_persistent_scenario_subproblem_manager
@@ -1044,6 +1090,10 @@ clean:
 	$(TEST_RESTRICTED_CANDIDATE_CUT_POOL_SOURCES) \
 	$(TEST_RESTRICTED_CANDIDATE_MANAGER_SOURCES) \
 	$(TEST_RESTRICTED_CANDIDATE_MAINTENANCE_TRACKER_SOURCES) \
+	$(TEST_WEIGHTED_RESTRICTED_CANDIDATE_MAINTENANCE_SOURCES) \
+	$(TEST_WEIGHTED_RESTRICTED_CUT_POOL_PRIORITIZATION_SOURCES) \
+	$(TEST_WEIGHTED_RESTRICTED_CUT_REACTIVATION_SOURCES) \
+	$(TEST_WEIGHTED_RESTRICTED_TAIL_DIAGNOSTICS_SOURCES) \
 	$(TEST_CANDIDATE_BOUND_CONTROLLER_SOURCES) \
 	$(TEST_FPP_PROJECTED_LLBI_SOURCES) \
 	$(TEST_FPP_PERSISTENT_SCENARIO_SUBPROBLEM_MANAGER_SOURCES) \

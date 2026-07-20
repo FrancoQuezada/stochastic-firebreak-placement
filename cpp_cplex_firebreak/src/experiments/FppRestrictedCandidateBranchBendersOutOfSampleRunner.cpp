@@ -317,6 +317,10 @@ void attach_restricted_diagnostics(
         solve_result.final_lower_bound_is_global;
     result.restricted_candidate_cut_reuse_enabled = solve_result.cut_reuse_enabled;
     result.restricted_candidate_cut_pool_size = solve_result.cut_pool_size;
+    result.restricted_candidate_cut_pool_peak_size = solve_result.cut_pool_peak_size;
+    result.restricted_candidate_cut_pool_evictions = solve_result.cut_pool_evictions;
+    result.restricted_candidate_cut_pool_reinstantiations =
+        solve_result.cut_pool_reinstantiations;
     result.restricted_candidate_rounds = solve_result.candidate_rounds;
     result.restricted_candidate_cuts_reused_in_full_stage =
         solve_result.cuts_reused_in_full_stage;
@@ -356,10 +360,26 @@ void attach_restricted_diagnostics(
         solve_result.active_candidate_fraction_at_stop;
     result.restricted_candidate_maintenance_policy =
         solve_result.candidate_maintenance_policy;
+    result.restricted_candidate_maintenance_weighted =
+        solve_result.maintenance_weighted;
+    result.restricted_candidate_maintenance_map_hash =
+        solve_result.maintenance_map_hash;
     result.restricted_candidate_deactivation_enabled =
         solve_result.deactivation_enabled;
     result.restricted_candidate_deactivation_rounds =
         solve_result.deactivation_rounds;
+    result.restricted_candidate_active_target =
+        solve_result.active_candidate_target;
+    result.restricted_candidate_considered_for_deactivation =
+        solve_result.candidates_considered_for_deactivation;
+    result.restricted_candidate_deactivated_total =
+        solve_result.candidates_deactivated;
+    result.restricted_candidate_reactivated_total =
+        solve_result.candidates_reactivated;
+    result.restricted_candidate_protected_from_deactivation_total =
+        solve_result.candidates_protected_from_deactivation;
+    result.restricted_candidate_full_activation_overrode_maintenance =
+        solve_result.full_activation_overrode_maintenance;
     result.restricted_candidate_min_active_size =
         solve_result.candidate_min_active_size;
     result.restricted_candidate_max_active_size =

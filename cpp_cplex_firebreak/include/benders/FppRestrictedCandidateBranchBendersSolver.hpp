@@ -156,8 +156,16 @@ struct FppRestrictedCandidateBranchBendersResult {
     std::string initial_candidate_policy;
     std::string activation_policy;
     std::string candidate_maintenance_policy = "none";
+    bool maintenance_weighted = false;
+    std::string maintenance_map_hash;
     bool deactivation_enabled = false;
     int deactivation_rounds = 0;
+    int active_candidate_target = 0;
+    int candidates_considered_for_deactivation = 0;
+    int candidates_deactivated = 0;
+    int candidates_reactivated = 0;
+    int candidates_protected_from_deactivation = 0;
+    bool full_activation_overrode_maintenance = false;
     int candidate_min_active_size = 0;
     int candidate_max_active_size = 0;
     int candidate_deactivation_batch_size = 0;
@@ -210,6 +218,9 @@ struct FppRestrictedCandidateBranchBendersResult {
     double avg_benders_coefficient_score = std::numeric_limits<double>::quiet_NaN();
     std::vector<BendersCut> accumulated_benders_cuts;
     int cut_pool_size = 0;
+    int cut_pool_peak_size = 0;
+    int cut_pool_evictions = 0;
+    int cut_pool_reinstantiations = 0;
     int cuts_reused_in_full_stage = 0;
     int restricted_stage_cuts_reused = 0;
     int duplicate_cuts_skipped = 0;

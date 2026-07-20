@@ -65,8 +65,10 @@ std::vector<std::pair<int, double>> scores_for_candidates_with_zero_default(
 
 RestrictedCandidateMaintenanceTracker::RestrictedCandidateMaintenanceTracker(
     int candidate_count,
-    const std::vector<int>& initial_active_candidates)
+    const std::vector<int>& initial_active_candidates,
+    std::string weight_map_hash)
     : candidate_count_(candidate_count),
+      weight_map_hash_(std::move(weight_map_hash)),
       active_age_(static_cast<std::size_t>(std::max(candidate_count, 0)), 0),
       last_activated_round_(static_cast<std::size_t>(std::max(candidate_count, 0)), -1),
       last_deactivated_round_(static_cast<std::size_t>(std::max(candidate_count, 0)), -1),
@@ -86,6 +88,18 @@ RestrictedCandidateMaintenanceTracker::RestrictedCandidateMaintenanceTracker(
 
 int RestrictedCandidateMaintenanceTracker::currentRound() const {
     return current_round_;
+}
+
+const std::string& RestrictedCandidateMaintenanceTracker::weightMapHash() const {
+    return weight_map_hash_;
+}
+
+void RestrictedCandidateMaintenanceTracker::setWeightMapHash(const std::string& weight_map_hash) {
+    if (!weight_map_hash_.empty() && weight_map_hash_ != weight_map_hash) {
+        throw std::runtime_error(
+            "Restricted candidate maintenance tracker cannot be reused with a different weight map hash.");
+    }
+    weight_map_hash_ = weight_map_hash;
 }
 
 int RestrictedCandidateMaintenanceTracker::activeAge(int candidate) const {
@@ -191,6 +205,13 @@ std::vector<int> RestrictedCandidateMaintenanceTracker::selectDeactivationCandid
     if (requested_deactivation_count <= 0) {
         return {};
     }
+    if (!weight_map_hash_.empty() &&
+        !decision.weight_map_hash.empty() &&
+        decision.weight_map_hash != weight_map_hash_) {
+        throw std::runtime_error(
+            "Restricted candidate maintenance decision uses a different weight map hash than the tracker.");
+    }
+    decision.weight_map_hash = weight_map_hash_;
     if (options.min_active_size < manager.budget()) {
         throw std::invalid_argument("Maintenance min_active_size must be at least the firebreak budget.");
     }
