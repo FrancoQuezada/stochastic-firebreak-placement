@@ -34,18 +34,34 @@ struct FppCombinatorialBendersOptions {
 
 struct FppCombinatorialCut {
     BendersCut cut;
+    BendersCut baseline_cut;
     double incumbent_weighted_loss = 0.0;
     double incumbent_eta = 0.0;
+    double baseline_rhs_at_ybar = 0.0;
+    double lifted_rhs_at_ybar = 0.0;
     double rhs_at_ybar = 0.0;
     double violation = 0.0;
+    double baseline_tightness_error = 0.0;
+    double lifted_tightness_error = 0.0;
     double tightness_error = 0.0;
     double cut_build_time_sec = 0.0;
     double propagation_time_sec = 0.0;
+    double lifting_time_sec = 0.0;
     int active_nodes = 0;
     int activation_paths = 0;
+    int baseline_nonzeros = 0;
+    int lifted_nonzeros = 0;
     int nonzeros = 0;
+    int candidates_considered_for_lifting = 0;
+    int coefficients_changed = 0;
+    int propagation_evaluations_for_lifting = 0;
+    double max_coefficient_change = 0.0;
     bool fractional = false;
     bool lift_mode_fallback = false;
+    bool lifting_attempted = false;
+    bool lifting_success = false;
+    bool lifting_failure = false;
+    bool lifted_dominates_baseline = true;
 };
 
 struct FppCombinatorialSeparationSummary {
@@ -64,6 +80,19 @@ struct FppCombinatorialSeparationSummary {
     int weighted_recourse_evaluations = 0;
     int tight_cuts = 0;
     double max_tightness_error = 0.0;
+    int lifting_attempts = 0;
+    int lifting_successes = 0;
+    int lifting_failures = 0;
+    int candidates_considered_for_lifting = 0;
+    int coefficients_changed_by_lifting = 0;
+    int propagation_evaluations_for_lifting = 0;
+    int baseline_cut_nonzeros = 0;
+    int lifted_cut_nonzeros = 0;
+    int lifted_cuts_dominating_baseline = 0;
+    double max_coefficient_change = 0.0;
+    double max_baseline_tightness_error = 0.0;
+    double max_lifted_tightness_error = 0.0;
+    double lifting_time_sec = 0.0;
 };
 
 struct FppCombinatorialBendersStats {
@@ -95,6 +124,23 @@ struct FppCombinatorialBendersStats {
     double propagation_time_sec = 0.0;
     double cut_build_time_sec = 0.0;
     std::string validity_mode = "unit-path-activation-cut";
+    bool lifting_weighted = false;
+    std::string lifting_mode = "none";
+    std::string lifting_weight_map_hash;
+    int lifting_attempts = 0;
+    int lifting_successes = 0;
+    int lifting_failures = 0;
+    int candidates_considered_for_lifting = 0;
+    int coefficients_changed_by_lifting = 0;
+    int propagation_evaluations_for_lifting = 0;
+    int baseline_cut_nonzeros = 0;
+    int lifted_cut_nonzeros = 0;
+    int lifted_cuts_dominating_baseline = 0;
+    double max_coefficient_change = 0.0;
+    double max_baseline_tightness_error = 0.0;
+    double max_lifted_tightness_error = 0.0;
+    double lifting_time_sec = 0.0;
+    std::string lifting_validity_mode = "none";
 
     double average_paths_per_cut() const;
     double average_cut_nonzeros() const;
@@ -103,6 +149,11 @@ struct FppCombinatorialBendersStats {
 std::string to_string(FppCombinatorialBendersLiftMode mode);
 FppCombinatorialBendersLiftMode parse_fpp_combinatorial_benders_lift_mode(
     const std::string& value);
+std::string fpp_phase6c2a_combinatorial_mode(
+    FppCombinatorialBendersLiftMode mode);
+std::string fpp_phase6c2a_lifting_validity_mode(
+    FppCombinatorialBendersLiftMode mode,
+    bool weighted);
 std::string to_string(FppCombinatorialBendersScenarioOrder order);
 FppCombinatorialBendersScenarioOrder parse_fpp_combinatorial_benders_scenario_order(
     const std::string& value);
@@ -117,6 +168,15 @@ bool is_fpp_phase6c1_weighted_combinatorial_baseline(
     const FppCombinatorialBendersOptions& options);
 
 void validate_fpp_phase6c1_weighted_combinatorial_baseline(
+    const FppCombinatorialBendersOptions& options,
+    bool use_root_user_cuts,
+    bool use_lifted_lower_bounds,
+    const FppStrengtheningOptions& strengthening_options);
+
+bool is_fpp_phase6c2a_weighted_combinatorial_integer_mode(
+    const FppCombinatorialBendersOptions& options);
+
+void validate_fpp_phase6c2a_weighted_combinatorial_integer_mode(
     const FppCombinatorialBendersOptions& options,
     bool use_root_user_cuts,
     bool use_lifted_lower_bounds,

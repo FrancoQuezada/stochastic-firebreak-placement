@@ -324,9 +324,27 @@ TEST_WEIGHTED_FPP_COMBINATORIAL_CALLBACK_SOURCES := \
 	$(filter-out tests/test_weighted_fpp_combinatorial_cut.cpp,$(TEST_WEIGHTED_FPP_COMBINATORIAL_CUT_SOURCES)) \
 	tests/test_weighted_fpp_combinatorial_callback.cpp
 
+TEST_WEIGHTED_FPP_COMBINATORIAL_LIFTING_SOURCES := \
+	$(filter-out tests/test_weighted_fpp_combinatorial_cut.cpp,$(TEST_WEIGHTED_FPP_COMBINATORIAL_CUT_SOURCES)) \
+	src/core/LandscapeWeightMap.cpp \
+	src/io/PathUtils.cpp \
+	tests/test_weighted_fpp_combinatorial_lifting.cpp
+
+TEST_WEIGHTED_FPP_COMBINATORIAL_LIFTING_VALIDITY_SOURCES := \
+	$(filter-out tests/test_weighted_fpp_combinatorial_lifting.cpp,$(TEST_WEIGHTED_FPP_COMBINATORIAL_LIFTING_SOURCES)) \
+	tests/test_weighted_fpp_combinatorial_lifting_validity.cpp
+
+TEST_WEIGHTED_FPP_COMBINATORIAL_LIFTING_COUNTEREXAMPLES_SOURCES := \
+	$(filter-out tests/test_weighted_fpp_combinatorial_lifting.cpp,$(TEST_WEIGHTED_FPP_COMBINATORIAL_LIFTING_SOURCES)) \
+	tests/test_weighted_fpp_combinatorial_lifting_counterexamples.cpp
+
 TEST_WEIGHTED_FPP_COMBINATORIAL_CPLEX_SOURCES = \
 	$(filter-out tests/test_weighted_fpp_branch_benders_cplex.cpp,$(TEST_WEIGHTED_FPP_BRANCH_BENDERS_CPLEX_SOURCES)) \
 	tests/test_weighted_fpp_combinatorial_cplex.cpp
+
+TEST_WEIGHTED_FPP_COMBINATORIAL_LIFTING_CPLEX_SOURCES = \
+	$(filter-out tests/test_weighted_fpp_combinatorial_cplex.cpp,$(TEST_WEIGHTED_FPP_COMBINATORIAL_CPLEX_SOURCES)) \
+	tests/test_weighted_fpp_combinatorial_lifting_cplex.cpp
 
 TEST_WEIGHTED_PATH_LLBI_SOURCES := \
 	src/benders/FppLiftedLowerBound.cpp \
@@ -778,6 +796,9 @@ TEST_EXES := \
 	$(BUILD_DIR)/test_weighted_fpp_combinatorial_cut \
 	$(BUILD_DIR)/test_weighted_fpp_combinatorial_cut_validity \
 	$(BUILD_DIR)/test_weighted_fpp_combinatorial_callback \
+	$(BUILD_DIR)/test_weighted_fpp_combinatorial_lifting \
+	$(BUILD_DIR)/test_weighted_fpp_combinatorial_lifting_validity \
+	$(BUILD_DIR)/test_weighted_fpp_combinatorial_lifting_counterexamples \
 	$(BUILD_DIR)/test_weighted_path_llbi \
 	$(BUILD_DIR)/test_weighted_path_llbi_validity \
 	$(BUILD_DIR)/test_dpv_saa_model_structure \
@@ -961,6 +982,15 @@ $(BUILD_DIR)/test_weighted_fpp_combinatorial_cut_validity: $(call test_obj,$(TES
 $(BUILD_DIR)/test_weighted_fpp_combinatorial_callback: $(call test_obj,$(TEST_WEIGHTED_FPP_COMBINATORIAL_CALLBACK_SOURCES))
 	$(CXX) $^ -o $@
 
+$(BUILD_DIR)/test_weighted_fpp_combinatorial_lifting: $(call test_obj,$(TEST_WEIGHTED_FPP_COMBINATORIAL_LIFTING_SOURCES))
+	$(CXX) $^ -o $@
+
+$(BUILD_DIR)/test_weighted_fpp_combinatorial_lifting_validity: $(call test_obj,$(TEST_WEIGHTED_FPP_COMBINATORIAL_LIFTING_VALIDITY_SOURCES))
+	$(CXX) $^ -o $@
+
+$(BUILD_DIR)/test_weighted_fpp_combinatorial_lifting_counterexamples: $(call test_obj,$(TEST_WEIGHTED_FPP_COMBINATORIAL_LIFTING_COUNTEREXAMPLES_SOURCES))
+	$(CXX) $^ -o $@
+
 $(BUILD_DIR)/test_weighted_path_llbi: $(call test_obj,$(TEST_WEIGHTED_PATH_LLBI_SOURCES))
 	$(CXX) $^ -o $@
 
@@ -1044,6 +1074,10 @@ $(BUILD_DIR)/test_weighted_projected_path_llbi_cplex: $(TEST_WEIGHTED_PROJECTED_
 	$(CXX) $(COMMON_CPPFLAGS) $(CPLEX_CPPFLAGS) $(COMMON_CXXFLAGS) $^ $(CPLEX_LDFLAGS) -o $@
 
 $(BUILD_DIR)/test_weighted_fpp_combinatorial_cplex: $(TEST_WEIGHTED_FPP_COMBINATORIAL_CPLEX_SOURCES)
+	@mkdir -p $(dir $@)
+	$(CXX) $(COMMON_CPPFLAGS) $(CPLEX_CPPFLAGS) $(COMMON_CXXFLAGS) $^ $(CPLEX_LDFLAGS) -o $@
+
+$(BUILD_DIR)/test_weighted_fpp_combinatorial_lifting_cplex: $(TEST_WEIGHTED_FPP_COMBINATORIAL_LIFTING_CPLEX_SOURCES)
 	@mkdir -p $(dir $@)
 	$(CXX) $(COMMON_CPPFLAGS) $(CPLEX_CPPFLAGS) $(COMMON_CXXFLAGS) $^ $(CPLEX_LDFLAGS) -o $@
 
@@ -1208,6 +1242,9 @@ test: $(TEST_EXES)
 	./build_gpp/test_weighted_fpp_combinatorial_cut
 	./build_gpp/test_weighted_fpp_combinatorial_cut_validity
 	./build_gpp/test_weighted_fpp_combinatorial_callback
+	./build_gpp/test_weighted_fpp_combinatorial_lifting
+	./build_gpp/test_weighted_fpp_combinatorial_lifting_validity
+	./build_gpp/test_weighted_fpp_combinatorial_lifting_counterexamples
 	./build_gpp/test_weighted_path_llbi
 	./build_gpp/test_weighted_path_llbi_validity
 	./build_gpp/test_graph_diagnostics
@@ -1379,6 +1416,10 @@ clean:
 	$(TEST_WEIGHTED_FPP_COMBINATORIAL_CUT_VALIDITY_SOURCES) \
 	$(TEST_WEIGHTED_FPP_COMBINATORIAL_CALLBACK_SOURCES) \
 	$(TEST_WEIGHTED_FPP_COMBINATORIAL_CPLEX_SOURCES) \
+	$(TEST_WEIGHTED_FPP_COMBINATORIAL_LIFTING_SOURCES) \
+	$(TEST_WEIGHTED_FPP_COMBINATORIAL_LIFTING_VALIDITY_SOURCES) \
+	$(TEST_WEIGHTED_FPP_COMBINATORIAL_LIFTING_COUNTEREXAMPLES_SOURCES) \
+	$(TEST_WEIGHTED_FPP_COMBINATORIAL_LIFTING_CPLEX_SOURCES) \
 	$(TEST_WEIGHTED_GLOBAL_CANDIDATE_DOMINANCE_SOURCES) \
 	$(TEST_WEIGHTED_CONDITIONAL_ZERO_BENEFIT_FIXING_SOURCES) \
 	$(TEST_WEIGHTED_GLOBAL_CANDIDATE_DOMINANCE_CPLEX_SOURCES) \

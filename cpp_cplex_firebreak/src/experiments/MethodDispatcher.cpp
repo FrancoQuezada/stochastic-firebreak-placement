@@ -1300,6 +1300,40 @@ io::StandardExperimentResult MethodDispatcher::run_method(const MethodDispatchRe
         solver_result.combinatorial_initial_cuts_enabled;
     result.combinatorial_scenario_sampling_enabled =
         solver_result.combinatorial_scenario_sampling_enabled;
+    result.combinatorial_lifting_weighted =
+        solver_result.combinatorial_lifting_weighted;
+    result.combinatorial_lifting_mode =
+        solver_result.combinatorial_lifting_mode;
+    result.combinatorial_lifting_weight_map_hash =
+        solver_result.combinatorial_lifting_weight_map_hash;
+    result.combinatorial_lifting_attempts =
+        solver_result.combinatorial_lifting_attempts;
+    result.combinatorial_lifting_successes =
+        solver_result.combinatorial_lifting_successes;
+    result.combinatorial_lifting_failures =
+        solver_result.combinatorial_lifting_failures;
+    result.combinatorial_candidates_considered_for_lifting =
+        solver_result.combinatorial_candidates_considered_for_lifting;
+    result.combinatorial_coefficients_changed =
+        solver_result.combinatorial_coefficients_changed;
+    result.combinatorial_propagation_evaluations_for_lifting =
+        solver_result.combinatorial_propagation_evaluations_for_lifting;
+    result.combinatorial_baseline_cut_nonzeros =
+        solver_result.combinatorial_baseline_cut_nonzeros;
+    result.combinatorial_lifted_cut_nonzeros =
+        solver_result.combinatorial_lifted_cut_nonzeros;
+    result.combinatorial_max_coefficient_change =
+        solver_result.combinatorial_max_coefficient_change;
+    result.combinatorial_max_baseline_tightness_error =
+        solver_result.combinatorial_max_baseline_tightness_error;
+    result.combinatorial_max_lifted_tightness_error =
+        solver_result.combinatorial_max_lifted_tightness_error;
+    result.combinatorial_lifted_cuts_dominating_baseline =
+        solver_result.combinatorial_lifted_cuts_dominating_baseline;
+    result.combinatorial_lifting_time_sec =
+        solver_result.combinatorial_lifting_time_sec;
+    result.combinatorial_lifting_validity_mode =
+        solver_result.combinatorial_lifting_validity_mode;
     result.coverage_llbi_enabled = solver_result.coverage_llbi_enabled;
     result.coverage_llbi_num_zeta_vars = solver_result.coverage_llbi_num_zeta_vars;
     result.coverage_llbi_num_constraints = solver_result.coverage_llbi_num_constraints;

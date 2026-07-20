@@ -1036,6 +1036,40 @@ void write_experiment_result_json(
     out << "  \"combinatorial_scenario_sampling_enabled\": "
         << (result.combinatorial_scenario_sampling_enabled ? "true" : "false")
         << ",\n";
+    out << "  \"combinatorial_lifting_weighted\": "
+        << (result.combinatorial_lifting_weighted ? "true" : "false") << ",\n";
+    out << "  \"combinatorial_lifting_mode\": \""
+        << json_escape_local(result.combinatorial_lifting_mode) << "\",\n";
+    out << "  \"combinatorial_lifting_weight_map_hash\": \""
+        << json_escape_local(result.combinatorial_lifting_weight_map_hash) << "\",\n";
+    out << "  \"combinatorial_lifting_attempts\": "
+        << result.combinatorial_lifting_attempts << ",\n";
+    out << "  \"combinatorial_lifting_successes\": "
+        << result.combinatorial_lifting_successes << ",\n";
+    out << "  \"combinatorial_lifting_failures\": "
+        << result.combinatorial_lifting_failures << ",\n";
+    out << "  \"combinatorial_candidates_considered_for_lifting\": "
+        << result.combinatorial_candidates_considered_for_lifting << ",\n";
+    out << "  \"combinatorial_coefficients_changed\": "
+        << result.combinatorial_coefficients_changed << ",\n";
+    out << "  \"combinatorial_propagation_evaluations_for_lifting\": "
+        << result.combinatorial_propagation_evaluations_for_lifting << ",\n";
+    out << "  \"combinatorial_baseline_cut_nonzeros\": "
+        << result.combinatorial_baseline_cut_nonzeros << ",\n";
+    out << "  \"combinatorial_lifted_cut_nonzeros\": "
+        << result.combinatorial_lifted_cut_nonzeros << ",\n";
+    out << "  \"combinatorial_max_coefficient_change\": "
+        << format_json_number(result.combinatorial_max_coefficient_change) << ",\n";
+    out << "  \"combinatorial_max_baseline_tightness_error\": "
+        << format_json_number(result.combinatorial_max_baseline_tightness_error) << ",\n";
+    out << "  \"combinatorial_max_lifted_tightness_error\": "
+        << format_json_number(result.combinatorial_max_lifted_tightness_error) << ",\n";
+    out << "  \"combinatorial_lifted_cuts_dominating_baseline\": "
+        << result.combinatorial_lifted_cuts_dominating_baseline << ",\n";
+    out << "  \"combinatorial_lifting_time_sec\": "
+        << format_json_number(result.combinatorial_lifting_time_sec) << ",\n";
+    out << "  \"combinatorial_lifting_validity_mode\": \""
+        << json_escape_local(result.combinatorial_lifting_validity_mode) << "\",\n";
     out << "  \"coverage_llbi_enabled\": " << (result.coverage_llbi_enabled ? "true" : "false") << ",\n";
     out << "  \"coverage_llbi_num_zeta_vars\": " << result.coverage_llbi_num_zeta_vars << ",\n";
     out << "  \"coverage_llbi_num_constraints\": " << result.coverage_llbi_num_constraints << ",\n";
@@ -1415,6 +1449,8 @@ void append_experiment_result_csv(
         write_header || existing_csv_has_column(output_path, "combinatorial_benders_enabled");
     const bool include_combinatorial_benders_extended =
         write_header || existing_csv_has_column(output_path, "combinatorial_benders_weighted");
+    const bool include_combinatorial_lifting_extended =
+        write_header || existing_csv_has_column(output_path, "combinatorial_lifting_weighted");
     const bool include_fpp_strengthening_summary =
         write_header || existing_csv_has_column(output_path, "coverage_llbi_enabled");
     const bool include_coverage_llbi_extended =
@@ -1524,6 +1560,23 @@ void append_experiment_result_csv(
             << "combinatorial_fractional_cuts_enabled,"
             << "combinatorial_initial_cuts_enabled,"
             << "combinatorial_scenario_sampling_enabled,"
+            << "combinatorial_lifting_weighted,"
+            << "combinatorial_lifting_mode,"
+            << "combinatorial_lifting_weight_map_hash,"
+            << "combinatorial_lifting_attempts,"
+            << "combinatorial_lifting_successes,"
+            << "combinatorial_lifting_failures,"
+            << "combinatorial_candidates_considered_for_lifting,"
+            << "combinatorial_coefficients_changed,"
+            << "combinatorial_propagation_evaluations_for_lifting,"
+            << "combinatorial_baseline_cut_nonzeros,"
+            << "combinatorial_lifted_cut_nonzeros,"
+            << "combinatorial_max_coefficient_change,"
+            << "combinatorial_max_baseline_tightness_error,"
+            << "combinatorial_max_lifted_tightness_error,"
+            << "combinatorial_lifted_cuts_dominating_baseline,"
+            << "combinatorial_lifting_time_sec,"
+            << "combinatorial_lifting_validity_mode,"
             << "coverage_llbi_enabled,coverage_llbi_num_zeta_vars,coverage_llbi_num_constraints,"
             << "coverage_llbi_precompute_time_sec,"
             << "coverage_llbi_weighted,coverage_llbi_weight_map_hash,"
@@ -1778,6 +1831,26 @@ void append_experiment_result_csv(
             << (result.combinatorial_fractional_cuts_enabled ? "true" : "false") << ","
             << (result.combinatorial_initial_cuts_enabled ? "true" : "false") << ","
             << (result.combinatorial_scenario_sampling_enabled ? "true" : "false") << ",";
+    }
+    if (include_combinatorial_lifting_extended) {
+        out
+            << (result.combinatorial_lifting_weighted ? "true" : "false") << ","
+            << csv_escape(result.combinatorial_lifting_mode) << ","
+            << csv_escape(result.combinatorial_lifting_weight_map_hash) << ","
+            << result.combinatorial_lifting_attempts << ","
+            << result.combinatorial_lifting_successes << ","
+            << result.combinatorial_lifting_failures << ","
+            << result.combinatorial_candidates_considered_for_lifting << ","
+            << result.combinatorial_coefficients_changed << ","
+            << result.combinatorial_propagation_evaluations_for_lifting << ","
+            << result.combinatorial_baseline_cut_nonzeros << ","
+            << result.combinatorial_lifted_cut_nonzeros << ","
+            << format_csv_number(result.combinatorial_max_coefficient_change) << ","
+            << format_csv_number(result.combinatorial_max_baseline_tightness_error) << ","
+            << format_csv_number(result.combinatorial_max_lifted_tightness_error) << ","
+            << result.combinatorial_lifted_cuts_dominating_baseline << ","
+            << format_csv_number(result.combinatorial_lifting_time_sec) << ","
+            << csv_escape(result.combinatorial_lifting_validity_mode) << ",";
     }
     if (include_fpp_strengthening_summary) {
         out << (result.coverage_llbi_enabled ? "true" : "false") << ","

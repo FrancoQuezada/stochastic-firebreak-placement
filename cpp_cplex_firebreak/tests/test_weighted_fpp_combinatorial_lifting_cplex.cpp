@@ -1,7 +1,6 @@
 #include <cassert>
 #include <cmath>
 #include <iostream>
-#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -18,7 +17,7 @@ void assert_close(double actual, double expected, double tolerance = 1.0e-6) {
 
 firebreak::opt::OptimizationInstance make_instance(bool homogeneous = false) {
     firebreak::opt::OptimizationInstance opt;
-    opt.landscape_name = "weighted_combinatorial_cplex";
+    opt.landscape_name = "weighted_combinatorial_lifting_cplex";
     opt.alpha = 0.25;
     opt.n_cells = 5;
     opt.budget = 1;
@@ -52,7 +51,6 @@ firebreak::opt::OptimizationInstance make_instance(bool homogeneous = false) {
     opt.scenarios = {first, second};
     opt.scenario_probabilities = {0.5, 0.5};
     opt.total_arcs = first.arcs.size() + second.arcs.size();
-
     const auto records = homogeneous
         ? std::vector<firebreak::core::LandscapeWeightRecord>{
               {1, 1.0, 1.0, 0},
@@ -70,7 +68,7 @@ firebreak::opt::OptimizationInstance make_instance(bool homogeneous = false) {
           };
     opt.cell_weight_map = firebreak::core::make_landscape_weight_map(
         homogeneous ? "homogeneous" : "heterogeneous",
-        homogeneous ? 641 : 642,
+        homogeneous ? 62041 : 62042,
         false,
         records);
     opt.compact_cell_weights =
@@ -78,10 +76,11 @@ firebreak::opt::OptimizationInstance make_instance(bool homogeneous = false) {
     return opt;
 }
 
-firebreak::benders::FppCombinatorialBendersOptions baseline_options() {
+firebreak::benders::FppCombinatorialBendersOptions combinatorial_options(
+    firebreak::benders::FppCombinatorialBendersLiftMode lift_mode) {
     firebreak::benders::FppCombinatorialBendersOptions options;
     options.enabled = true;
-    options.lift_mode = firebreak::benders::FppCombinatorialBendersLiftMode::None;
+    options.lift_mode = lift_mode;
     options.scenario_order =
         firebreak::benders::FppCombinatorialBendersScenarioOrder::EtaAscending;
     options.cut_sampling_ratio = 1.0;
@@ -100,6 +99,7 @@ firebreak::solver::ModelResult solve_direct(
 firebreak::solver::ModelResult solve_branch(
     const firebreak::opt::OptimizationInstance& opt,
     const firebreak::risk::RiskMeasureConfig& risk_config,
+    firebreak::benders::FppCombinatorialBendersLiftMode lift_mode,
     bool combinatorial) {
     firebreak::benders::FppBranchBendersSolver solver;
     firebreak::benders::FppBranchBendersOptions options;
@@ -109,12 +109,12 @@ firebreak::solver::ModelResult solve_branch(
     options.threads = 1;
     options.risk_config = risk_config;
     if (combinatorial) {
-        options.combinatorial_options = baseline_options();
+        options.combinatorial_options = combinatorial_options(lift_mode);
     }
     return solver.solve(opt, options);
 }
 
-void compare_expected_cvar_mean_cvar() {
+void compare_lift_modes() {
     const auto opt = make_instance(false);
     std::vector<firebreak::risk::RiskMeasureConfig> configs;
     configs.push_back(firebreak::risk::RiskMeasureConfig());
@@ -128,76 +128,82 @@ void compare_expected_cvar_mean_cvar() {
     mean_cvar.cvarLambda = 0.5;
     configs.push_back(mean_cvar);
 
+    const std::vector<firebreak::benders::FppCombinatorialBendersLiftMode> modes = {
+        firebreak::benders::FppCombinatorialBendersLiftMode::None,
+        firebreak::benders::FppCombinatorialBendersLiftMode::Heuristic,
+        firebreak::benders::FppCombinatorialBendersLiftMode::Posterior,
+    };
     for (const auto& config : configs) {
         const auto direct = solve_direct(opt, config);
-        const auto lp_callback = solve_branch(opt, config, false);
-        const auto combinatorial = solve_branch(opt, config, true);
+        const auto lp_callback = solve_branch(
+            opt,
+            config,
+            firebreak::benders::FppCombinatorialBendersLiftMode::None,
+            false);
         assert(direct.status == "Optimal");
         assert(lp_callback.status == "Optimal");
-        assert(combinatorial.status == "Optimal");
-        assert_close(combinatorial.objective_value, direct.objective_value);
-        assert_close(combinatorial.objective_value, lp_callback.objective_value);
-        assert_close(combinatorial.expected_loss_component, direct.expected_loss_component);
-        if (config.type != firebreak::risk::RiskMeasureType::Expected) {
-            assert_close(combinatorial.cvar_loss_component, direct.cvar_loss_component);
+        for (const auto mode : modes) {
+            const auto result = solve_branch(opt, config, mode, true);
+            assert(result.status == "Optimal");
+            assert_close(result.objective_value, direct.objective_value);
+            assert_close(result.objective_value, lp_callback.objective_value);
+            assert(result.combinatorial_benders_enabled);
+            assert(result.combinatorial_benders_weighted);
+            assert(result.combinatorial_benders_lift_mode ==
+                   firebreak::benders::to_string(mode));
+            assert(result.combinatorial_lifting_mode ==
+                   firebreak::benders::to_string(mode));
+            assert(result.combinatorial_lifting_failures == 0);
+            assert(result.combinatorial_max_baseline_tightness_error <= 1.0e-6);
+            assert(result.combinatorial_max_lifted_tightness_error <= 1.0e-6);
+            if (mode == firebreak::benders::FppCombinatorialBendersLiftMode::None) {
+                assert(!result.combinatorial_lifting_enabled);
+                assert(result.combinatorial_lifting_attempts == 0);
+            } else {
+                assert(result.combinatorial_lifting_enabled);
+                assert(result.combinatorial_lifting_attempts > 0);
+                assert(result.combinatorial_lifting_successes ==
+                       result.combinatorial_lifting_attempts);
+                assert(result.combinatorial_lifted_cuts_dominating_baseline >=
+                       result.combinatorial_lifting_attempts);
+            }
         }
-        assert(combinatorial.combinatorial_benders_enabled);
-        assert(combinatorial.combinatorial_benders_weighted);
-        assert(combinatorial.combinatorial_benders_mode == "baseline-integer-exact-no-lifting");
-        assert(combinatorial.combinatorial_benders_fractional_separation_enabled == false);
-        assert(combinatorial.combinatorial_benders_initial_cuts_enabled == false);
-        assert(combinatorial.combinatorial_benders_lifting_enabled == false);
-        assert(combinatorial.combinatorial_benders_scenario_sampling_enabled == false);
-        assert(combinatorial.combinatorial_benders_cut_sampling_ratio == 1.0);
-        assert(combinatorial.combinatorial_benders_weighted_recourse_evaluations > 0);
-        assert(combinatorial.combinatorial_benders_cuts_tight_at_incumbent > 0);
-        assert(combinatorial.combinatorial_benders_max_tightness_error <= 1.0e-6);
-        assert(combinatorial.branch_benders_max_cut_violation <= 1.0e-6);
     }
 }
 
-void test_homogeneous_regression() {
+void test_homogeneous_regression_for_lifting() {
     auto implicit = make_instance(true);
     implicit.cell_weight_map = firebreak::core::LandscapeWeightMap();
     implicit.compact_cell_weights.clear();
     const auto explicit_unit = make_instance(true);
-    const auto implicit_result =
-        solve_branch(implicit, firebreak::risk::RiskMeasureConfig(), true);
-    const auto explicit_result =
-        solve_branch(explicit_unit, firebreak::risk::RiskMeasureConfig(), true);
-    assert(implicit_result.status == "Optimal");
-    assert(explicit_result.status == "Optimal");
-    assert_close(implicit_result.objective_value, explicit_result.objective_value);
-    assert(!implicit_result.combinatorial_benders_weighted);
-    assert(!explicit_result.combinatorial_benders_weighted);
-}
-
-void test_phase6c2a_option_rejection() {
-    const auto opt = make_instance(false);
-    firebreak::benders::FppBranchBendersSolver solver;
-    firebreak::benders::FppBranchBendersOptions options;
-    options.combinatorial_options = baseline_options();
-    options.combinatorial_options.cut_sampling_ratio = 0.5;
-    bool threw = false;
-    try {
-        (void)solver.solve(opt, options);
-    } catch (const std::runtime_error& error) {
-        threw = std::string(error.what()).find("Phase 6C2A") != std::string::npos;
+    for (const auto mode : {
+             firebreak::benders::FppCombinatorialBendersLiftMode::Heuristic,
+             firebreak::benders::FppCombinatorialBendersLiftMode::Posterior,
+         }) {
+        const auto implicit_result =
+            solve_branch(implicit, firebreak::risk::RiskMeasureConfig(), mode, true);
+        const auto explicit_result =
+            solve_branch(explicit_unit, firebreak::risk::RiskMeasureConfig(), mode, true);
+        assert(implicit_result.status == "Optimal");
+        assert(explicit_result.status == "Optimal");
+        assert_close(implicit_result.objective_value, explicit_result.objective_value);
+        assert(!implicit_result.combinatorial_benders_weighted);
+        assert(!explicit_result.combinatorial_benders_weighted);
+        assert(implicit_result.combinatorial_lifting_mode ==
+               explicit_result.combinatorial_lifting_mode);
     }
-    assert(threw);
 }
 
 }  // namespace
 
 int main() {
 #ifndef FIREBREAK_WITH_CPLEX
-    std::cout << "Skipping weighted FPP combinatorial CPLEX tests because CPLEX is not enabled.\n";
+    std::cout << "Skipping weighted FPP combinatorial lifting CPLEX tests because CPLEX is not enabled.\n";
     return 0;
 #else
-    compare_expected_cvar_mean_cvar();
-    test_homogeneous_regression();
-    test_phase6c2a_option_rejection();
-    std::cout << "All weighted FPP combinatorial CPLEX tests passed.\n";
+    compare_lift_modes();
+    test_homogeneous_regression_for_lifting();
+    std::cout << "All weighted FPP combinatorial lifting CPLEX tests passed.\n";
     return 0;
 #endif
 }

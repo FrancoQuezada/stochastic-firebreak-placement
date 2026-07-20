@@ -133,7 +133,7 @@ bool has_nonunit_compact_weights(const opt::OptimizationInstance& opt) {
 
 bool uses_unconverted_weighted_strengthening(const FppBranchBendersOptions& options) {
     if (options.combinatorial_options.enabled) {
-        validate_fpp_phase6c1_weighted_combinatorial_baseline(
+        validate_fpp_phase6c2a_weighted_combinatorial_integer_mode(
             options.combinatorial_options,
             options.use_root_user_cuts,
             options.use_lifted_lower_bounds,
@@ -532,6 +532,24 @@ void accumulate_combinatorial_summary(
     stats.max_tightness_error =
         std::max(stats.max_tightness_error, summary.max_tightness_error);
     stats.max_violation = std::max(stats.max_violation, summary.max_violation);
+    stats.lifting_attempts += summary.lifting_attempts;
+    stats.lifting_successes += summary.lifting_successes;
+    stats.lifting_failures += summary.lifting_failures;
+    stats.candidates_considered_for_lifting += summary.candidates_considered_for_lifting;
+    stats.coefficients_changed_by_lifting += summary.coefficients_changed_by_lifting;
+    stats.propagation_evaluations_for_lifting +=
+        summary.propagation_evaluations_for_lifting;
+    stats.baseline_cut_nonzeros += summary.baseline_cut_nonzeros;
+    stats.lifted_cut_nonzeros += summary.lifted_cut_nonzeros;
+    stats.lifted_cuts_dominating_baseline +=
+        summary.lifted_cuts_dominating_baseline;
+    stats.max_coefficient_change =
+        std::max(stats.max_coefficient_change, summary.max_coefficient_change);
+    stats.max_baseline_tightness_error =
+        std::max(stats.max_baseline_tightness_error, summary.max_baseline_tightness_error);
+    stats.max_lifted_tightness_error =
+        std::max(stats.max_lifted_tightness_error, summary.max_lifted_tightness_error);
+    stats.lifting_time_sec += summary.lifting_time_sec;
     stats.num_violated_cuts += summary.violated_cuts;
     stats.lift_fallback_count += summary.lift_fallback_count;
     if (summary.lift_fallback_count > 0) {
@@ -1252,7 +1270,7 @@ solver::ModelResult FppBranchBendersSolver::solve(
     if (has_nonunit_compact_weights(opt) &&
         uses_unconverted_weighted_strengthening(options)) {
         throw std::runtime_error(
-            "Non-homogeneous weighted FPP Branch-Benders Phase 6C1 supports LP lazy cuts, root user cuts, standard downstream-union LLBI, extended CoverageLLBI, extended PathLLBI, projected CoverageLLBI, projected PathLLBI, structural global dominance, conditional zero-benefit diagnostics, and baseline integer-only combinatorial Benders with no lifting, no sampling, no initial cuts, and no fractional cuts.");
+            "Non-homogeneous weighted FPP Branch-Benders Phase 6C2A supports LP lazy cuts, root user cuts, standard downstream-union LLBI, extended CoverageLLBI, extended PathLLBI, projected CoverageLLBI, projected PathLLBI, structural global dominance, conditional zero-benefit diagnostics, and integer-only combinatorial Benders with lift_mode=none|heuristic|posterior, no sampling, no initial cuts, and no fractional cuts.");
     }
     const auto risk_config = effective_risk_config_from(options.risk_config);
     const bool risk_enabled = uses_cvar_risk(risk_config);
@@ -1287,10 +1305,8 @@ solver::ModelResult FppBranchBendersSolver::solve(
             options.combinatorial_options.initial_cuts;
     if (options.combinatorial_options.enabled) {
         result.combinatorial_benders_mode =
-            is_fpp_phase6c1_weighted_combinatorial_baseline(
-                options.combinatorial_options)
-                ? "baseline-integer-exact-no-lifting"
-                : "legacy-combinatorial-path-activation";
+            fpp_phase6c2a_combinatorial_mode(
+                options.combinatorial_options.lift_mode);
     }
 
         const auto projected_options =
@@ -1940,12 +1956,20 @@ solver::ModelResult FppBranchBendersSolver::solve(
             callback_stats.combinatorial_stats.weight_map_hash =
                 combinatorial_separator->weightMapHash();
             callback_stats.combinatorial_stats.mode =
-                is_fpp_phase6c1_weighted_combinatorial_baseline(
-                    options.combinatorial_options)
-                    ? "baseline-integer-exact-no-lifting"
-                    : "legacy-combinatorial-path-activation";
+                fpp_phase6c2a_combinatorial_mode(
+                    options.combinatorial_options.lift_mode);
             callback_stats.combinatorial_stats.validity_mode =
                 combinatorial_separator->validityMode();
+            callback_stats.combinatorial_stats.lifting_weighted =
+                combinatorial_separator->weighted();
+            callback_stats.combinatorial_stats.lifting_mode =
+                to_string(options.combinatorial_options.lift_mode);
+            callback_stats.combinatorial_stats.lifting_weight_map_hash =
+                combinatorial_separator->weightMapHash();
+            callback_stats.combinatorial_stats.lifting_validity_mode =
+                fpp_phase6c2a_lifting_validity_mode(
+                    options.combinatorial_options.lift_mode,
+                    combinatorial_separator->weighted());
         }
         BranchBendersRootUserCutStats root_user_stats;
         root_user_stats.enabled = options.use_root_user_cuts;
@@ -2239,6 +2263,40 @@ solver::ModelResult FppBranchBendersSolver::solve(
             result.combinatorial_benders_initial_cuts_enabled;
         result.combinatorial_scenario_sampling_enabled =
             result.combinatorial_benders_scenario_sampling_enabled;
+        result.combinatorial_lifting_weighted =
+            callback_stats.combinatorial_stats.lifting_weighted;
+        result.combinatorial_lifting_mode =
+            callback_stats.combinatorial_stats.lifting_mode;
+        result.combinatorial_lifting_weight_map_hash =
+            callback_stats.combinatorial_stats.lifting_weight_map_hash;
+        result.combinatorial_lifting_attempts =
+            callback_stats.combinatorial_stats.lifting_attempts;
+        result.combinatorial_lifting_successes =
+            callback_stats.combinatorial_stats.lifting_successes;
+        result.combinatorial_lifting_failures =
+            callback_stats.combinatorial_stats.lifting_failures;
+        result.combinatorial_candidates_considered_for_lifting =
+            callback_stats.combinatorial_stats.candidates_considered_for_lifting;
+        result.combinatorial_coefficients_changed =
+            callback_stats.combinatorial_stats.coefficients_changed_by_lifting;
+        result.combinatorial_propagation_evaluations_for_lifting =
+            callback_stats.combinatorial_stats.propagation_evaluations_for_lifting;
+        result.combinatorial_baseline_cut_nonzeros =
+            callback_stats.combinatorial_stats.baseline_cut_nonzeros;
+        result.combinatorial_lifted_cut_nonzeros =
+            callback_stats.combinatorial_stats.lifted_cut_nonzeros;
+        result.combinatorial_max_coefficient_change =
+            callback_stats.combinatorial_stats.max_coefficient_change;
+        result.combinatorial_max_baseline_tightness_error =
+            callback_stats.combinatorial_stats.max_baseline_tightness_error;
+        result.combinatorial_max_lifted_tightness_error =
+            callback_stats.combinatorial_stats.max_lifted_tightness_error;
+        result.combinatorial_lifted_cuts_dominating_baseline =
+            callback_stats.combinatorial_stats.lifted_cuts_dominating_baseline;
+        result.combinatorial_lifting_time_sec =
+            callback_stats.combinatorial_stats.lifting_time_sec;
+        result.combinatorial_lifting_validity_mode =
+            callback_stats.combinatorial_stats.lifting_validity_mode;
         result.projected_coverage_llbi_enabled =
             projected_stats.projected_coverage_llbi_enabled;
         result.projected_path_llbi_enabled =

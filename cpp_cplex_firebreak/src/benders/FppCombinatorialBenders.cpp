@@ -97,6 +97,57 @@ std::vector<double> compact_weights_or_unit(const opt::OptimizationInstance& opt
     return opt.compact_cell_weights;
 }
 
+bool is_phase6c2a_supported_lift_mode(FppCombinatorialBendersLiftMode mode) {
+    return mode == FppCombinatorialBendersLiftMode::None ||
+           mode == FppCombinatorialBendersLiftMode::Heuristic ||
+           mode == FppCombinatorialBendersLiftMode::Posterior;
+}
+
+BendersCut make_combinatorial_cut_from_counts(
+    int scenario_id,
+    double active_loss,
+    const std::unordered_map<int, double>& coefficient_counts,
+    const opt::OptimizationInstance& opt,
+    const std::vector<double>& y_values_by_eligible_position) {
+    BendersCut cut;
+    cut.scenario_id = scenario_id;
+    cut.rhs_constant = active_loss;
+    cut.subproblem_objective = active_loss;
+    cut.ybar_compact_values.reserve(opt.eligible_indices.size());
+    for (std::size_t pos = 0; pos < opt.eligible_indices.size(); ++pos) {
+        cut.ybar_compact_values.push_back({
+            opt.eligible_indices[pos],
+            y_values_by_eligible_position[pos],
+        });
+    }
+    cut.coefficients_by_compact_index.reserve(coefficient_counts.size());
+    for (const auto& [compact_node, count] : coefficient_counts) {
+        if (std::fabs(count) <= 1.0e-12) {
+            continue;
+        }
+        cut.coefficients_by_compact_index.push_back({compact_node, -count});
+    }
+    std::sort(
+        cut.coefficients_by_compact_index.begin(),
+        cut.coefficients_by_compact_index.end(),
+        [](const auto& lhs, const auto& rhs) { return lhs.first < rhs.first; });
+    return cut;
+}
+
+double coefficient_for_node(const BendersCut& cut, int compact_node) {
+    const auto it = std::lower_bound(
+        cut.coefficients_by_compact_index.begin(),
+        cut.coefficients_by_compact_index.end(),
+        std::pair<int, double>{compact_node, -std::numeric_limits<double>::infinity()},
+        [](const auto& lhs, const auto& rhs) {
+            return lhs.first < rhs.first;
+        });
+    if (it == cut.coefficients_by_compact_index.end() || it->first != compact_node) {
+        return 0.0;
+    }
+    return it->second;
+}
+
 }  // namespace
 
 double FppCombinatorialBendersStats::average_paths_per_cut() const {
@@ -138,6 +189,33 @@ FppCombinatorialBendersLiftMode parse_fpp_combinatorial_benders_lift_mode(
     throw std::runtime_error(
         "Unsupported FPP combinatorial Benders lift mode: " + value +
         ". Supported values are none, posterior, heuristic.");
+}
+
+std::string fpp_phase6c2a_combinatorial_mode(
+    FppCombinatorialBendersLiftMode mode) {
+    if (mode == FppCombinatorialBendersLiftMode::None) {
+        return "baseline-integer-exact-no-lifting";
+    }
+    if (mode == FppCombinatorialBendersLiftMode::Posterior) {
+        return "baseline-integer-exact-posterior-path-dedup-lifting";
+    }
+    return "baseline-integer-exact-heuristic-path-dedup-lifting";
+}
+
+std::string fpp_phase6c2a_lifting_validity_mode(
+    FppCombinatorialBendersLiftMode mode,
+    bool weighted) {
+    if (mode == FppCombinatorialBendersLiftMode::None) {
+        return "none";
+    }
+    if (mode == FppCombinatorialBendersLiftMode::Posterior) {
+        return weighted
+            ? "exact-posterior-weighted-path-dedup-lifting"
+            : "exact-posterior-unit-path-dedup-lifting";
+    }
+    return weighted
+        ? "heuristic-mode-exact-weighted-path-dedup-lifting"
+        : "heuristic-mode-exact-unit-path-dedup-lifting";
 }
 
 std::string to_string(FppCombinatorialBendersScenarioOrder order) {
@@ -207,6 +285,16 @@ bool is_fpp_phase6c1_weighted_combinatorial_baseline(
            !options.initial_cuts;
 }
 
+bool is_fpp_phase6c2a_weighted_combinatorial_integer_mode(
+    const FppCombinatorialBendersOptions& options) {
+    return options.enabled &&
+           is_phase6c2a_supported_lift_mode(options.lift_mode) &&
+           options.scenario_order == FppCombinatorialBendersScenarioOrder::EtaAscending &&
+           std::fabs(options.cut_sampling_ratio - 1.0) <= 1.0e-12 &&
+           !options.separate_fractional &&
+           !options.initial_cuts;
+}
+
 void validate_fpp_phase6c1_weighted_combinatorial_baseline(
     const FppCombinatorialBendersOptions& options,
     bool use_root_user_cuts,
@@ -240,6 +328,42 @@ void validate_fpp_phase6c1_weighted_combinatorial_baseline(
     if (strengthening_options.use_conditional_zero_benefit_fixing) {
         throw std::runtime_error(
             "Non-homogeneous weighted FPP combinatorial Benders Phase 6C1 does not combine with conditional zero-benefit fixing.");
+    }
+}
+
+void validate_fpp_phase6c2a_weighted_combinatorial_integer_mode(
+    const FppCombinatorialBendersOptions& options,
+    bool use_root_user_cuts,
+    bool use_lifted_lower_bounds,
+    const FppStrengtheningOptions& strengthening_options) {
+    if (!options.enabled) {
+        return;
+    }
+    if (!is_fpp_phase6c2a_weighted_combinatorial_integer_mode(options)) {
+        throw std::runtime_error(
+            "Non-homogeneous weighted FPP combinatorial Benders Phase 6C2A supports only integer incumbent cuts with lift_mode=none|heuristic|posterior, scenario_order=eta-asc, cut_sampling_ratio=1, separate_fractional=false, and initial_cuts=false.");
+    }
+    if (use_root_user_cuts) {
+        throw std::runtime_error(
+            "Non-homogeneous weighted FPP combinatorial Benders Phase 6C2A does not combine with root user cuts.");
+    }
+    if (use_lifted_lower_bounds ||
+        strengthening_options.use_coverage_llbi ||
+        strengthening_options.use_path_llbi ||
+        strengthening_options.use_projected_coverage_llbi_exp ||
+        strengthening_options.use_projected_path_llbi_exp ||
+        strengthening_options.use_projected_coverage_llbi_poly ||
+        strengthening_options.use_projected_path_llbi_poly) {
+        throw std::runtime_error(
+            "Non-homogeneous weighted FPP combinatorial Benders Phase 6C2A does not combine with LLBI or projected LLBI families.");
+    }
+    if (strengthening_options.use_global_dominance_preprocessing) {
+        throw std::runtime_error(
+            "Non-homogeneous weighted FPP combinatorial Benders Phase 6C2A keeps global dominance disabled until the combinatorial separator remapping is separately validated.");
+    }
+    if (strengthening_options.use_conditional_zero_benefit_fixing) {
+        throw std::runtime_error(
+            "Non-homogeneous weighted FPP combinatorial Benders Phase 6C2A does not combine with conditional zero-benefit fixing.");
     }
 }
 
@@ -362,7 +486,8 @@ FppCombinatorialCut FppCombinatorialBendersSeparator::separateScenario(
         std::chrono::duration<double>(std::chrono::steady_clock::now() - propagation_start).count();
 
     const auto cut_build_start = std::chrono::steady_clock::now();
-    std::unordered_map<int, double> coefficient_counts;
+    std::unordered_map<int, double> baseline_coefficient_counts;
+    std::unordered_map<int, double> lifted_coefficient_counts;
     int active_nodes = 0;
     int paths = 0;
     double active_loss = 0.0;
@@ -383,56 +508,97 @@ FppCombinatorialCut FppCombinatorialBendersSeparator::separateScenario(
         int guard = 0;
         while (current != root && current >= 0 && guard <= node_count_) {
             if (eligible_[static_cast<std::size_t>(current)] != 0) {
-                if (lift_mode == FppCombinatorialBendersLiftMode::None) {
-                    coefficient_counts[current] += destination_weight;
-                } else {
-                    blockers_on_path.insert(current);
-                }
+                baseline_coefficient_counts[current] += destination_weight;
+                blockers_on_path.insert(current);
             }
             current = parent[static_cast<std::size_t>(current)];
             ++guard;
         }
         if (lift_mode != FppCombinatorialBendersLiftMode::None) {
             for (const int blocker : blockers_on_path) {
-                coefficient_counts[blocker] += destination_weight;
+                lifted_coefficient_counts[blocker] += destination_weight;
             }
         }
     }
 
-    BendersCut cut;
-    cut.scenario_id = scenario.scenario_id;
-    cut.rhs_constant = active_loss;
-    cut.subproblem_objective = active_loss;
-    cut.ybar_compact_values.reserve(opt_.eligible_indices.size());
-    for (std::size_t pos = 0; pos < opt_.eligible_indices.size(); ++pos) {
-        cut.ybar_compact_values.push_back({
-            opt_.eligible_indices[pos],
-            y_values_by_eligible_position[pos],
-        });
-    }
-    cut.coefficients_by_compact_index.reserve(coefficient_counts.size());
-    for (const auto& [compact_node, count] : coefficient_counts) {
-        if (std::fabs(count) <= 1.0e-12) {
-            continue;
+    const auto baseline_cut = make_combinatorial_cut_from_counts(
+        scenario.scenario_id,
+        active_loss,
+        baseline_coefficient_counts,
+        opt_,
+        y_values_by_eligible_position);
+    auto lifted_cut = lift_mode == FppCombinatorialBendersLiftMode::None
+        ? baseline_cut
+        : make_combinatorial_cut_from_counts(
+              scenario.scenario_id,
+              active_loss,
+              lifted_coefficient_counts,
+              opt_,
+              y_values_by_eligible_position);
+    const auto lifting_start = std::chrono::steady_clock::now();
+    separated.baseline_nonzeros =
+        static_cast<int>(baseline_cut.coefficients_by_compact_index.size());
+    separated.lifted_nonzeros =
+        static_cast<int>(lifted_cut.coefficients_by_compact_index.size());
+    separated.lifting_attempted =
+        lift_mode != FppCombinatorialBendersLiftMode::None && !fractional;
+    separated.lifting_success = separated.lifting_attempted;
+    separated.candidates_considered_for_lifting = separated.lifting_attempted
+        ? separated.baseline_nonzeros
+        : 0;
+    if (separated.lifting_attempted) {
+        for (const auto& [compact_node, baseline_coefficient] :
+             baseline_cut.coefficients_by_compact_index) {
+            const double lifted_coefficient =
+                coefficient_for_node(lifted_cut, compact_node);
+            const double change = lifted_coefficient - baseline_coefficient;
+            if (change < -1.0e-9) {
+                separated.lifted_dominates_baseline = false;
+                separated.lifting_failure = true;
+                separated.lifting_success = false;
+            }
+            if (std::fabs(change) > 1.0e-9) {
+                ++separated.coefficients_changed;
+                separated.max_coefficient_change =
+                    std::max(separated.max_coefficient_change, std::fabs(change));
+            }
         }
-        cut.coefficients_by_compact_index.push_back({compact_node, -count});
+        for (const auto& [compact_node, lifted_coefficient] :
+             lifted_cut.coefficients_by_compact_index) {
+            const double baseline_coefficient =
+                coefficient_for_node(baseline_cut, compact_node);
+            if (lifted_coefficient < baseline_coefficient - 1.0e-9) {
+                separated.lifted_dominates_baseline = false;
+                separated.lifting_failure = true;
+                separated.lifting_success = false;
+            }
+        }
     }
-    std::sort(
-        cut.coefficients_by_compact_index.begin(),
-        cut.coefficients_by_compact_index.end(),
-        [](const auto& lhs, const auto& rhs) { return lhs.first < rhs.first; });
+    separated.lifting_time_sec =
+        std::chrono::duration<double>(std::chrono::steady_clock::now() - lifting_start).count();
     separated.cut_build_time_sec =
         std::chrono::duration<double>(std::chrono::steady_clock::now() - cut_build_start).count();
-    separated.cut = std::move(cut);
+    separated.baseline_cut = baseline_cut;
+    separated.cut = std::move(lifted_cut);
+    separated.baseline_rhs_at_ybar = separated.baseline_cut.evaluateAt(y_compact);
+    separated.lifted_rhs_at_ybar = separated.cut.evaluateAt(y_compact);
     separated.rhs_at_ybar = separated.cut.evaluateAt(y_compact);
     separated.incumbent_weighted_loss = active_loss;
     separated.incumbent_eta = eta_value;
     separated.violation = separated.rhs_at_ybar - eta_value;
+    separated.baseline_tightness_error =
+        std::fabs(separated.baseline_rhs_at_ybar - active_loss);
+    separated.lifted_tightness_error =
+        std::fabs(separated.lifted_rhs_at_ybar - active_loss);
     separated.tightness_error = std::fabs(separated.rhs_at_ybar - active_loss);
     separated.active_nodes = active_nodes;
     separated.activation_paths = paths;
     separated.nonzeros =
         static_cast<int>(separated.cut.coefficients_by_compact_index.size());
+    if (separated.lifting_failure) {
+        throw std::runtime_error(
+            "FPP combinatorial Benders Phase 6C2A lifting produced a coefficient weaker than the baseline dominance check allows.");
+    }
     if (separated.lift_mode_fallback) {
         separated.cut.notes.push_back(
             "Fractional combinatorial separation used non-lifted path cuts because heuristic lifting is not asserted as a stronger fractional dual-feasible cut.");
@@ -480,6 +646,32 @@ FppCombinatorialBendersSeparator::separateViolatedCuts(
         ++summary.weighted_recourse_evaluations;
         summary.max_tightness_error =
             std::max(summary.max_tightness_error, cut.tightness_error);
+        summary.max_baseline_tightness_error =
+            std::max(summary.max_baseline_tightness_error, cut.baseline_tightness_error);
+        summary.max_lifted_tightness_error =
+            std::max(summary.max_lifted_tightness_error, cut.lifted_tightness_error);
+        summary.baseline_cut_nonzeros += cut.baseline_nonzeros;
+        summary.lifted_cut_nonzeros += cut.lifted_nonzeros;
+        summary.lifting_time_sec += cut.lifting_time_sec;
+        summary.candidates_considered_for_lifting +=
+            cut.candidates_considered_for_lifting;
+        summary.coefficients_changed_by_lifting += cut.coefficients_changed;
+        summary.propagation_evaluations_for_lifting +=
+            cut.propagation_evaluations_for_lifting;
+        summary.max_coefficient_change =
+            std::max(summary.max_coefficient_change, cut.max_coefficient_change);
+        if (cut.lifting_attempted) {
+            ++summary.lifting_attempts;
+        }
+        if (cut.lifting_success) {
+            ++summary.lifting_successes;
+        }
+        if (cut.lifting_failure) {
+            ++summary.lifting_failures;
+        }
+        if (cut.lifted_dominates_baseline) {
+            ++summary.lifted_cuts_dominating_baseline;
+        }
         if (cut.tightness_error <= std::max(1.0, std::fabs(cut.incumbent_weighted_loss)) * 1.0e-8) {
             ++summary.tight_cuts;
         }
