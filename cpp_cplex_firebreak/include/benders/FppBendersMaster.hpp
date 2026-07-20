@@ -46,6 +46,7 @@ public:
         int scenario_position,
         const FppLiftedLowerBoundInequality& inequality);
     double addCoverageLlbi(const FppCoverageLlbiData& data);
+    double addPathLlbi(const FppPathLlbiData& data);
     double getObjective() const;
     double getBestBound() const;
     double getMipGap() const;

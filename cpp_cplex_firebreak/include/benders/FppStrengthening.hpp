@@ -85,12 +85,18 @@ struct FppPathLlbiPathRecord {
 
 struct FppPathLlbiNodeRecord {
     int compact_node = -1;
+    int original_node = -1;
+    double cell_weight = 1.0;
+    bool path_enumeration_complete = true;
     std::vector<FppPathLlbiPathRecord> paths;
 };
 
 struct FppPathLlbiScenarioRecord {
     int scenario_index = -1;
     int scenario_id = 0;
+    int baseline_reachable_node_count = 0;
+    int nodes_without_paths = 0;
+    bool path_enumeration_complete = true;
     std::vector<FppPathLlbiNodeRecord> nodes;
 };
 
@@ -99,7 +105,21 @@ struct FppPathLlbiData {
     int num_b_vars = 0;
     int num_path_constraints = 0;
     int num_paths_used = 0;
+    bool weighted = false;
+    std::string weight_map_hash;
+    int scenarios_precomputed = 0;
+    int baseline_nodes = 0;
+    int auxiliary_variables = 0;
+    int path_constraints = 0;
+    int loss_constraints = 0;
+    int total_paths = 0;
+    int total_candidate_incidence_terms = 0;
+    int nodes_without_paths = 0;
+    bool path_enumeration_complete = true;
+    int paths_truncated = 0;
     double precompute_time_sec = 0.0;
+    double build_time_sec = 0.0;
+    std::string validity_mode;
     std::vector<FppPathLlbiScenarioRecord> scenarios;
     std::vector<std::string> notes;
 };
@@ -283,8 +303,12 @@ inline std::vector<FppPathLlbiPathRecord> enumerate_capped_paths(
     const std::vector<char>& eligible,
     int root,
     int target,
-    int max_paths) {
+    int max_paths,
+    bool* truncated = nullptr) {
     std::vector<FppPathLlbiPathRecord> paths;
+    if (truncated != nullptr) {
+        *truncated = false;
+    }
     if (max_paths <= 0) {
         return paths;
     }
@@ -300,10 +324,36 @@ inline std::vector<FppPathLlbiPathRecord> enumerate_capped_paths(
         successors,
         eligible,
         root,
-        max_paths,
+        max_paths + 1,
         on_path,
         current_blockers,
         paths);
+    const bool raw_path_limit_exceeded = static_cast<int>(paths.size()) > max_paths;
+    std::set<std::vector<int>> seen_blocker_sets;
+    std::vector<FppPathLlbiPathRecord> deduplicated;
+    deduplicated.reserve(paths.size());
+    for (auto& path : paths) {
+        std::sort(
+            path.blocking_candidate_compact_nodes.begin(),
+            path.blocking_candidate_compact_nodes.end());
+        path.blocking_candidate_compact_nodes.erase(
+            std::unique(
+                path.blocking_candidate_compact_nodes.begin(),
+                path.blocking_candidate_compact_nodes.end()),
+            path.blocking_candidate_compact_nodes.end());
+        if (seen_blocker_sets.insert(path.blocking_candidate_compact_nodes).second) {
+            deduplicated.push_back(std::move(path));
+        }
+    }
+    paths = std::move(deduplicated);
+    if (raw_path_limit_exceeded || static_cast<int>(paths.size()) > max_paths) {
+        if (truncated != nullptr) {
+            *truncated = true;
+        }
+    }
+    if (static_cast<int>(paths.size()) > max_paths) {
+        paths.resize(static_cast<std::size_t>(max_paths));
+    }
     return paths;
 }
 
@@ -576,6 +626,11 @@ inline FppPathLlbiData build_fpp_path_llbi_data(
     }
     const auto start = std::chrono::steady_clock::now();
     const int node_count = opt.node_mapper.size();
+    const auto compact_weights = detail::compact_weights_or_unit(opt, "PathLLBI");
+    data.weighted = detail::has_nonunit_weights(compact_weights);
+    data.weight_map_hash = detail::weight_map_hash_for_strengthening(opt, compact_weights);
+    data.scenarios_precomputed = static_cast<int>(opt.scenarios.size());
+    data.validity_mode = "directed-simple-path-burning-lower-bound";
     const auto eligible = detail::eligible_mask(opt);
     for (std::size_t s = 0; s < opt.scenarios.size(); ++s) {
         const auto& scenario = opt.scenarios[s];
@@ -584,21 +639,50 @@ inline FppPathLlbiData build_fpp_path_llbi_data(
         FppPathLlbiScenarioRecord scenario_record;
         scenario_record.scenario_index = static_cast<int>(s);
         scenario_record.scenario_id = scenario.scenario_id;
-        const auto nodes = detail::unique_nodes_from_scenario(scenario, root_reachable);
+        scenario_record.baseline_reachable_node_count =
+            static_cast<int>(root_reachable.size());
+        data.baseline_nodes += scenario_record.baseline_reachable_node_count;
+        const auto nodes = root_reachable;
         for (const int node : nodes) {
+            bool truncated = false;
             auto paths = detail::enumerate_capped_paths(
                 successors,
                 eligible,
                 scenario.ignition_index,
                 node,
-                max_paths_per_node);
+                max_paths_per_node,
+                &truncated);
             if (paths.empty()) {
+                ++scenario_record.nodes_without_paths;
+                ++data.nodes_without_paths;
                 continue;
             }
+            int incidence_terms = 0;
+            for (const auto& path : paths) {
+                incidence_terms +=
+                    static_cast<int>(path.blocking_candidate_compact_nodes.size());
+            }
             data.num_paths_used += static_cast<int>(paths.size());
+            data.total_paths += static_cast<int>(paths.size());
             data.num_path_constraints += static_cast<int>(paths.size());
+            data.path_constraints += static_cast<int>(paths.size());
+            data.total_candidate_incidence_terms += incidence_terms;
             ++data.num_b_vars;
-            scenario_record.nodes.push_back(FppPathLlbiNodeRecord{node, std::move(paths)});
+            ++data.auxiliary_variables;
+            if (truncated) {
+                ++data.paths_truncated;
+                data.path_enumeration_complete = false;
+                scenario_record.path_enumeration_complete = false;
+            }
+            scenario_record.nodes.push_back(FppPathLlbiNodeRecord{
+                node,
+                opt.node_mapper.to_node(node),
+                compact_weights[static_cast<std::size_t>(node)],
+                !truncated,
+                std::move(paths)});
+        }
+        if (!scenario_record.nodes.empty()) {
+            ++data.loss_constraints;
         }
         data.scenarios.push_back(std::move(scenario_record));
     }
@@ -607,6 +691,10 @@ inline FppPathLlbiData build_fpp_path_llbi_data(
     if (data.num_paths_used == 0) {
         data.notes.push_back("Path LLBI generated no paths for the loaded FPP scenarios.");
     }
+    data.notes.push_back(
+        "PathLLBI uses directed simple ignition-to-node paths with structural, unweighted candidate incidence.");
+    data.notes.push_back(
+        "PathLLBI coefficients are destination-node weights; truncation keeps only real paths and weakens the lower bound.");
     return data;
 }
 

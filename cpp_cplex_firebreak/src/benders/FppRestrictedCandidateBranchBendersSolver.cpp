@@ -227,7 +227,7 @@ void validate_weighted_phase5c2b2_options(
         options.strengthening_options.use_projected_coverage_llbi_poly ||
         options.strengthening_options.use_projected_path_llbi_poly) {
         throw std::runtime_error(
-            "Non-homogeneous weighted restricted Branch-Benders Phase 6B2A allows structural global dominance and conditional zero-benefit diagnostics; restricted standard LLBI and restricted CoverageLLBI remain disabled because inactive candidate coefficients are not retained safely. Path/projected LLBI and combinatorial Benders remain unconverted.");
+            "Non-homogeneous weighted restricted Branch-Benders Phase 6B2B allows structural global dominance and conditional zero-benefit diagnostics; restricted standard LLBI, restricted CoverageLLBI, and restricted PathLLBI remain disabled because inactive candidate coefficients are not retained safely. Projected LLBI and combinatorial Benders remain unconverted.");
     }
     if (options.candidate_score_mode == "cvar-tail-blend" &&
         options.activation_policy != "benders-coefficients") {
@@ -964,15 +964,16 @@ double add_coverage_llbi_constraints(
     return std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
 }
 
-void add_path_llbi_constraints(
+double add_path_llbi_constraints(
     IloEnv& env,
     IloModel& model,
     const FppPathLlbiData& data,
     const IloBoolVarArray& y,
     const IloNumVarArray& eta,
     const std::vector<int>& y_position_by_node) {
+    const auto start = std::chrono::steady_clock::now();
     if (!data.enabled) {
-        return;
+        return 0.0;
     }
     for (const auto& scenario_record : data.scenarios) {
         IloExpr eta_lower_bound(env);
@@ -982,7 +983,7 @@ void add_path_llbi_constraints(
             b_name << "path_b_s" << scenario_record.scenario_id
                    << "_" << node_record.compact_node;
             burn_lb.setName(b_name.str().c_str());
-            eta_lower_bound += burn_lb;
+            eta_lower_bound += node_record.cell_weight * burn_lb;
             for (const auto& path : node_record.paths) {
                 IloExpr expr(env);
                 expr += burn_lb;
@@ -1008,6 +1009,7 @@ void add_path_llbi_constraints(
         }
         eta_lower_bound.end();
     }
+    return std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
 }
 
 void add_benders_cut_to_model(
@@ -2024,7 +2026,7 @@ RestrictedStageSolveResult solve_stage_impl(
             y,
             eta,
             y_position_by_node);
-        add_path_llbi_constraints(
+        const double path_llbi_build_time_sec = add_path_llbi_constraints(
             env,
             model,
             path_llbi,
@@ -2055,7 +2057,23 @@ RestrictedStageSolveResult solve_stage_impl(
         stage.model_result.path_llbi_num_b_vars = path_llbi.num_b_vars;
         stage.model_result.path_llbi_num_path_constraints = path_llbi.num_path_constraints;
         stage.model_result.path_llbi_num_paths_used = path_llbi.num_paths_used;
+        stage.model_result.path_llbi_weighted = path_llbi.weighted;
+        stage.model_result.path_llbi_weight_map_hash = path_llbi.weight_map_hash;
+        stage.model_result.path_llbi_scenarios_precomputed = path_llbi.scenarios_precomputed;
+        stage.model_result.path_llbi_baseline_nodes = path_llbi.baseline_nodes;
+        stage.model_result.path_llbi_auxiliary_variables = path_llbi.auxiliary_variables;
+        stage.model_result.path_llbi_path_constraints = path_llbi.path_constraints;
+        stage.model_result.path_llbi_loss_constraints = path_llbi.loss_constraints;
+        stage.model_result.path_llbi_total_paths = path_llbi.total_paths;
+        stage.model_result.path_llbi_total_candidate_incidence_terms =
+            path_llbi.total_candidate_incidence_terms;
+        stage.model_result.path_llbi_nodes_without_paths = path_llbi.nodes_without_paths;
+        stage.model_result.path_llbi_path_enumeration_complete =
+            path_llbi.path_enumeration_complete;
+        stage.model_result.path_llbi_paths_truncated = path_llbi.paths_truncated;
         stage.model_result.path_llbi_precompute_time_sec = path_llbi.precompute_time_sec;
+        stage.model_result.path_llbi_build_time_sec = path_llbi_build_time_sec;
+        stage.model_result.path_llbi_validity_mode = path_llbi.validity_mode;
         stage.model_result.conditional_zero_benefit_enabled =
             options.strengthening_options.use_conditional_zero_benefit_fixing;
         if (options.strengthening_options.use_conditional_zero_benefit_fixing) {

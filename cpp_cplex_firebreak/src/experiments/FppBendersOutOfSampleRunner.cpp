@@ -531,6 +531,27 @@ int FppBendersOutOfSampleRunner::run(const FppBendersOutOfSampleOptions& options
         solve_result.coverage_llbi_total_incidence_terms;
     result.coverage_llbi_build_time_sec = solve_result.coverage_llbi_build_time_sec;
     result.coverage_llbi_validity_mode = solve_result.coverage_llbi_validity_mode;
+    result.path_llbi_enabled = solve_result.path_llbi_enabled;
+    result.path_llbi_num_b_vars = solve_result.path_llbi_num_b_vars;
+    result.path_llbi_num_path_constraints = solve_result.path_llbi_num_path_constraints;
+    result.path_llbi_num_paths_used = solve_result.path_llbi_num_paths_used;
+    result.path_llbi_weighted = solve_result.path_llbi_weighted;
+    result.path_llbi_weight_map_hash = solve_result.path_llbi_weight_map_hash;
+    result.path_llbi_scenarios_precomputed = solve_result.path_llbi_scenarios_precomputed;
+    result.path_llbi_baseline_nodes = solve_result.path_llbi_baseline_nodes;
+    result.path_llbi_auxiliary_variables = solve_result.path_llbi_auxiliary_variables;
+    result.path_llbi_path_constraints = solve_result.path_llbi_path_constraints;
+    result.path_llbi_loss_constraints = solve_result.path_llbi_loss_constraints;
+    result.path_llbi_total_paths = solve_result.path_llbi_total_paths;
+    result.path_llbi_total_candidate_incidence_terms =
+        solve_result.path_llbi_total_candidate_incidence_terms;
+    result.path_llbi_nodes_without_paths = solve_result.path_llbi_nodes_without_paths;
+    result.path_llbi_path_enumeration_complete =
+        solve_result.path_llbi_path_enumeration_complete;
+    result.path_llbi_paths_truncated = solve_result.path_llbi_paths_truncated;
+    result.path_llbi_precompute_time_sec = solve_result.path_llbi_precompute_time_sec;
+    result.path_llbi_build_time_sec = solve_result.path_llbi_build_time_sec;
+    result.path_llbi_validity_mode = solve_result.path_llbi_validity_mode;
     result.benders_iteration_log = solve_result.benders_iteration_log;
     result.fpp_mode = "fpp_benders_explicit_loop";
     result.formulation = "benders";

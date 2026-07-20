@@ -221,6 +221,8 @@ bool has_benders_diagnostics(const StandardExperimentResult& result) {
            result.benders_lifted_lower_bound_constraints_added > 0 ||
            result.coverage_llbi_enabled ||
            result.coverage_llbi_auxiliary_variables > 0 ||
+           result.path_llbi_enabled ||
+           result.path_llbi_auxiliary_variables > 0 ||
            !result.benders_lifted_lower_bound_notes.empty();
 }
 
@@ -997,8 +999,35 @@ void write_experiment_result_json(
     out << "  \"path_llbi_num_b_vars\": " << result.path_llbi_num_b_vars << ",\n";
     out << "  \"path_llbi_num_path_constraints\": " << result.path_llbi_num_path_constraints << ",\n";
     out << "  \"path_llbi_num_paths_used\": " << result.path_llbi_num_paths_used << ",\n";
+    out << "  \"path_llbi_weighted\": "
+        << (result.path_llbi_weighted ? "true" : "false") << ",\n";
+    out << "  \"path_llbi_weight_map_hash\": \""
+        << json_escape_local(result.path_llbi_weight_map_hash) << "\",\n";
+    out << "  \"path_llbi_scenarios_precomputed\": "
+        << result.path_llbi_scenarios_precomputed << ",\n";
+    out << "  \"path_llbi_baseline_nodes\": "
+        << result.path_llbi_baseline_nodes << ",\n";
+    out << "  \"path_llbi_auxiliary_variables\": "
+        << result.path_llbi_auxiliary_variables << ",\n";
+    out << "  \"path_llbi_path_constraints\": "
+        << result.path_llbi_path_constraints << ",\n";
+    out << "  \"path_llbi_loss_constraints\": "
+        << result.path_llbi_loss_constraints << ",\n";
+    out << "  \"path_llbi_total_paths\": " << result.path_llbi_total_paths << ",\n";
+    out << "  \"path_llbi_total_candidate_incidence_terms\": "
+        << result.path_llbi_total_candidate_incidence_terms << ",\n";
+    out << "  \"path_llbi_nodes_without_paths\": "
+        << result.path_llbi_nodes_without_paths << ",\n";
+    out << "  \"path_llbi_path_enumeration_complete\": "
+        << (result.path_llbi_path_enumeration_complete ? "true" : "false") << ",\n";
+    out << "  \"path_llbi_paths_truncated\": "
+        << result.path_llbi_paths_truncated << ",\n";
     out << "  \"path_llbi_precompute_time_sec\": "
         << format_json_number(result.path_llbi_precompute_time_sec) << ",\n";
+    out << "  \"path_llbi_build_time_sec\": "
+        << format_json_number(result.path_llbi_build_time_sec) << ",\n";
+    out << "  \"path_llbi_validity_mode\": \""
+        << json_escape_local(result.path_llbi_validity_mode) << "\",\n";
     out << "  \"projected_coverage_llbi_enabled\": "
         << (result.projected_coverage_llbi_enabled ? "true" : "false") << ",\n";
     out << "  \"projected_path_llbi_enabled\": "
@@ -1254,6 +1283,8 @@ void append_experiment_result_csv(
         write_header || existing_csv_has_column(output_path, "coverage_llbi_enabled");
     const bool include_coverage_llbi_extended =
         write_header || existing_csv_has_column(output_path, "coverage_llbi_weighted");
+    const bool include_path_llbi_extended =
+        write_header || existing_csv_has_column(output_path, "path_llbi_weighted");
     const bool include_branch_benders_root_user_cut_summary =
         write_header || existing_csv_has_column(output_path, "branch_benders_use_root_user_cuts");
     const bool include_restricted_candidate_summary =
@@ -1331,7 +1362,15 @@ void append_experiment_result_csv(
             << "coverage_llbi_total_incidence_terms,coverage_llbi_build_time_sec,"
             << "coverage_llbi_validity_mode,"
             << "path_llbi_enabled,path_llbi_num_b_vars,"
-            << "path_llbi_num_path_constraints,path_llbi_num_paths_used,path_llbi_precompute_time_sec,"
+            << "path_llbi_num_path_constraints,path_llbi_num_paths_used,"
+            << "path_llbi_precompute_time_sec,"
+            << "path_llbi_weighted,path_llbi_weight_map_hash,"
+            << "path_llbi_scenarios_precomputed,path_llbi_baseline_nodes,"
+            << "path_llbi_auxiliary_variables,path_llbi_path_constraints,"
+            << "path_llbi_loss_constraints,path_llbi_total_paths,"
+            << "path_llbi_total_candidate_incidence_terms,path_llbi_nodes_without_paths,"
+            << "path_llbi_path_enumeration_complete,path_llbi_paths_truncated,"
+            << "path_llbi_build_time_sec,path_llbi_validity_mode,"
             << "projected_coverage_llbi_enabled,projected_path_llbi_enabled,"
             << "projected_llbi_family,projected_llbi_strategy,projected_llbi_mode,"
             << "projected_llbi_root_rounds,projected_llbi_cuts_added,"
@@ -1519,7 +1558,26 @@ void append_experiment_result_csv(
             << result.path_llbi_num_b_vars << ","
             << result.path_llbi_num_path_constraints << ","
             << result.path_llbi_num_paths_used << ","
-            << format_csv_number(result.path_llbi_precompute_time_sec) << ","
+            << format_csv_number(result.path_llbi_precompute_time_sec) << ",";
+    }
+    if (include_path_llbi_extended) {
+        out << (result.path_llbi_weighted ? "true" : "false") << ","
+            << csv_escape(result.path_llbi_weight_map_hash) << ","
+            << result.path_llbi_scenarios_precomputed << ","
+            << result.path_llbi_baseline_nodes << ","
+            << result.path_llbi_auxiliary_variables << ","
+            << result.path_llbi_path_constraints << ","
+            << result.path_llbi_loss_constraints << ","
+            << result.path_llbi_total_paths << ","
+            << result.path_llbi_total_candidate_incidence_terms << ","
+            << result.path_llbi_nodes_without_paths << ","
+            << (result.path_llbi_path_enumeration_complete ? "true" : "false") << ","
+            << result.path_llbi_paths_truncated << ","
+            << format_csv_number(result.path_llbi_build_time_sec) << ","
+            << csv_escape(result.path_llbi_validity_mode) << ",";
+    }
+    if (include_fpp_strengthening_summary) {
+        out
             << (result.projected_coverage_llbi_enabled ? "true" : "false") << ","
             << (result.projected_path_llbi_enabled ? "true" : "false") << ","
             << csv_escape(result.projected_llbi_family) << ","

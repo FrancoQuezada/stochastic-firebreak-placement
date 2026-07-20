@@ -106,7 +106,6 @@ bool uses_unconverted_weighted_strengthening(
     const benders::FppStrengtheningOptions& strengthening_options) {
     (void)use_lifted_lower_bounds;
     return combinatorial_options.enabled ||
-           strengthening_options.use_path_llbi ||
            strengthening_options.use_projected_coverage_llbi_exp ||
            strengthening_options.use_projected_path_llbi_exp ||
            strengthening_options.use_projected_coverage_llbi_poly ||
@@ -196,7 +195,21 @@ std::vector<std::pair<std::string, std::string>> strengthening_summary_fields(
         {"path_llbi_num_b_vars", std::to_string(result.path_llbi_num_b_vars)},
         {"path_llbi_num_path_constraints", std::to_string(result.path_llbi_num_path_constraints)},
         {"path_llbi_num_paths_used", std::to_string(result.path_llbi_num_paths_used)},
+        {"path_llbi_weighted", result.path_llbi_weighted ? "true" : "false"},
+        {"path_llbi_weight_map_hash", result.path_llbi_weight_map_hash},
+        {"path_llbi_scenarios_precomputed", std::to_string(result.path_llbi_scenarios_precomputed)},
+        {"path_llbi_baseline_nodes", std::to_string(result.path_llbi_baseline_nodes)},
+        {"path_llbi_auxiliary_variables", std::to_string(result.path_llbi_auxiliary_variables)},
+        {"path_llbi_path_constraints", std::to_string(result.path_llbi_path_constraints)},
+        {"path_llbi_loss_constraints", std::to_string(result.path_llbi_loss_constraints)},
+        {"path_llbi_total_paths", std::to_string(result.path_llbi_total_paths)},
+        {"path_llbi_total_candidate_incidence_terms", std::to_string(result.path_llbi_total_candidate_incidence_terms)},
+        {"path_llbi_nodes_without_paths", std::to_string(result.path_llbi_nodes_without_paths)},
+        {"path_llbi_path_enumeration_complete", result.path_llbi_path_enumeration_complete ? "true" : "false"},
+        {"path_llbi_paths_truncated", std::to_string(result.path_llbi_paths_truncated)},
         {"path_llbi_precompute_time_sec", format_compact_double(result.path_llbi_precompute_time_sec)},
+        {"path_llbi_build_time_sec", format_compact_double(result.path_llbi_build_time_sec)},
+        {"path_llbi_validity_mode", result.path_llbi_validity_mode},
         {"projected_coverage_llbi_enabled", result.projected_coverage_llbi_enabled ? "true" : "false"},
         {"projected_path_llbi_enabled", result.projected_path_llbi_enabled ? "true" : "false"},
         {"projected_llbi_family", result.projected_llbi_family},
@@ -398,7 +411,7 @@ int FppBranchBendersOutOfSampleRunner::run(
             options.combinatorial_options,
             options.strengthening_options)) {
         throw std::runtime_error(
-            "Non-homogeneous weighted run-fpp-branch-benders-oos Phase 6B2A supports LP lazy cuts, root user cuts, standard downstream-union LLBI, extended CoverageLLBI, structural global dominance, and conditional zero-benefit diagnostics; Path/projected LLBI and combinatorial Benders remain unconverted.");
+            "Non-homogeneous weighted run-fpp-branch-benders-oos Phase 6B2B supports LP lazy cuts, root user cuts, standard downstream-union LLBI, extended CoverageLLBI, extended PathLLBI, structural global dominance, and conditional zero-benefit diagnostics; projected LLBI and combinatorial Benders remain unconverted.");
     }
     const auto dominance_preprocess = benders::apply_fpp_global_dominance_preprocessing(
         opt_instance,
@@ -653,7 +666,23 @@ int FppBranchBendersOutOfSampleRunner::run(
     result.path_llbi_num_b_vars = solve_result.path_llbi_num_b_vars;
     result.path_llbi_num_path_constraints = solve_result.path_llbi_num_path_constraints;
     result.path_llbi_num_paths_used = solve_result.path_llbi_num_paths_used;
+    result.path_llbi_weighted = solve_result.path_llbi_weighted;
+    result.path_llbi_weight_map_hash = solve_result.path_llbi_weight_map_hash;
+    result.path_llbi_scenarios_precomputed = solve_result.path_llbi_scenarios_precomputed;
+    result.path_llbi_baseline_nodes = solve_result.path_llbi_baseline_nodes;
+    result.path_llbi_auxiliary_variables = solve_result.path_llbi_auxiliary_variables;
+    result.path_llbi_path_constraints = solve_result.path_llbi_path_constraints;
+    result.path_llbi_loss_constraints = solve_result.path_llbi_loss_constraints;
+    result.path_llbi_total_paths = solve_result.path_llbi_total_paths;
+    result.path_llbi_total_candidate_incidence_terms =
+        solve_result.path_llbi_total_candidate_incidence_terms;
+    result.path_llbi_nodes_without_paths = solve_result.path_llbi_nodes_without_paths;
+    result.path_llbi_path_enumeration_complete =
+        solve_result.path_llbi_path_enumeration_complete;
+    result.path_llbi_paths_truncated = solve_result.path_llbi_paths_truncated;
     result.path_llbi_precompute_time_sec = solve_result.path_llbi_precompute_time_sec;
+    result.path_llbi_build_time_sec = solve_result.path_llbi_build_time_sec;
+    result.path_llbi_validity_mode = solve_result.path_llbi_validity_mode;
     result.projected_coverage_llbi_enabled =
         solve_result.projected_coverage_llbi_enabled;
     result.projected_path_llbi_enabled =

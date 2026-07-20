@@ -128,9 +128,12 @@ Weighted landscape status:
 - Extended CoverageLLBI is weight-aware for explicit-loop and callback
   Branch-and-Benders using per-cell capped downstream coverage
   (`docs/WEIGHTED_LANDSCAPES_PHASE6B2A.md`).
-- Restricted-candidate LLBI, restricted-candidate CoverageLLBI, PathLLBI,
-  projected LLBI, combinatorial Benders/lifting, DPV, and Static-DPV remain
-  blocked for non-homogeneous weights until separately validated.
+- Extended PathLLBI is weight-aware for explicit-loop and callback
+  Branch-and-Benders using directed simple ignition-to-node path lower bounds
+  (`docs/WEIGHTED_LANDSCAPES_PHASE6B2B.md`).
+- Restricted-candidate LLBI families, projected LLBI, combinatorial
+  Benders/lifting, DPV, and Static-DPV remain blocked for non-homogeneous
+  weights until separately validated.
 
 Expected objective methods:
 

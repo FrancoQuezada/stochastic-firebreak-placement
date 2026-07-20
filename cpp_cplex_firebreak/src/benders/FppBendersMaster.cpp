@@ -76,6 +76,10 @@ double FppBendersMaster::addCoverageLlbi(const FppCoverageLlbiData&) {
     throw std::runtime_error(solver::cplex_unavailable_message());
 }
 
+double FppBendersMaster::addPathLlbi(const FppPathLlbiData&) {
+    throw std::runtime_error(solver::cplex_unavailable_message());
+}
+
 double FppBendersMaster::getObjective() const {
     throw std::runtime_error(solver::cplex_unavailable_message());
 }
@@ -502,6 +506,67 @@ double FppBendersMaster::addCoverageLlbi(const FppCoverageLlbiData& data) {
             lhs.end();
         }
         lower_bound_rhs.end();
+    }
+    impl_->cplex = std::make_unique<IloCplex>(impl_->model);
+    apply_parameters(*impl_);
+    return std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+}
+
+double FppBendersMaster::addPathLlbi(const FppPathLlbiData& data) {
+    ensure_initialized(*impl_);
+    const auto start = std::chrono::steady_clock::now();
+    if (!data.enabled) {
+        return 0.0;
+    }
+    for (const auto& scenario_record : data.scenarios) {
+        if (scenario_record.scenario_index < 0 ||
+            scenario_record.scenario_index >= impl_->eta.getSize()) {
+            throw std::runtime_error("FPP Benders master PathLLBI scenario position is out of range.");
+        }
+        IloExpr eta_lower_bound(impl_->env);
+        for (const auto& node_record : scenario_record.nodes) {
+            IloNumVar burn_lb(impl_->env, 0.0, 1.0, ILOFLOAT);
+            std::ostringstream b_name;
+            b_name << "path_b_s" << scenario_record.scenario_id
+                   << "_" << node_record.compact_node;
+            burn_lb.setName(b_name.str().c_str());
+            eta_lower_bound += node_record.cell_weight * burn_lb;
+            int path_index = 0;
+            for (const auto& path : node_record.paths) {
+                IloExpr expr(impl_->env);
+                expr += burn_lb;
+                for (const int candidate : path.blocking_candidate_compact_nodes) {
+                    if (candidate < 0 ||
+                        candidate >= static_cast<int>(impl_->y_position_by_node.size()) ||
+                        impl_->y_position_by_node[static_cast<std::size_t>(candidate)] < 0) {
+                        continue;
+                    }
+                    expr += impl_->y[static_cast<IloInt>(
+                        impl_->y_position_by_node[static_cast<std::size_t>(candidate)])];
+                }
+                IloRange path_range = (expr >= 1.0);
+                std::ostringstream path_name;
+                path_name << "path_link_s" << scenario_record.scenario_id
+                          << "_" << node_record.compact_node
+                          << "_" << path_index;
+                path_range.setName(path_name.str().c_str());
+                impl_->model.add(path_range);
+                expr.end();
+                ++path_index;
+            }
+        }
+        if (!scenario_record.nodes.empty()) {
+            IloExpr lhs(impl_->env);
+            lhs += impl_->eta[static_cast<IloInt>(scenario_record.scenario_index)];
+            lhs -= eta_lower_bound;
+            IloRange loss_range = (lhs >= 0.0);
+            std::ostringstream loss_name;
+            loss_name << "path_loss_s" << scenario_record.scenario_id;
+            loss_range.setName(loss_name.str().c_str());
+            impl_->model.add(loss_range);
+            lhs.end();
+        }
+        eta_lower_bound.end();
     }
     impl_->cplex = std::make_unique<IloCplex>(impl_->model);
     apply_parameters(*impl_);

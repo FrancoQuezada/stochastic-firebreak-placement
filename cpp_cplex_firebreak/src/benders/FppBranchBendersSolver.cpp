@@ -77,16 +77,17 @@ void validate_options(const FppBranchBendersOptions& options) {
     projected_options.export_cuts_path =
         options.strengthening_options.projected_llbi_export_cuts_path;
     validate_fpp_projected_llbi_options(projected_options);
-    const int mutually_exclusive_static_families =
+    const int extended_families =
         (options.strengthening_options.use_coverage_llbi ? 1 : 0) +
-        (options.strengthening_options.use_path_llbi ? 1 : 0) +
+        (options.strengthening_options.use_path_llbi ? 1 : 0);
+    const int projected_families =
         (options.strengthening_options.use_projected_coverage_llbi_exp ? 1 : 0) +
         (options.strengthening_options.use_projected_path_llbi_exp ? 1 : 0) +
         (options.strengthening_options.use_projected_coverage_llbi_poly ? 1 : 0) +
         (options.strengthening_options.use_projected_path_llbi_poly ? 1 : 0);
-    if (mutually_exclusive_static_families > 1) {
+    if (projected_families > 1 || (projected_families > 0 && extended_families > 0)) {
         throw std::runtime_error(
-            "Extended CoverageLLBI, extended PathLLBI, and projected LLBI variants are mutually exclusive in the FPP Branch-Benders master.");
+            "Projected LLBI variants are mutually exclusive with each other and with extended CoverageLLBI/PathLLBI in the FPP Branch-Benders master.");
     }
     risk::RiskMeasureConfig effective_risk_config = options.risk_config;
     if (effective_risk_config.type == risk::RiskMeasureType::CVaR) {
@@ -130,7 +131,6 @@ bool has_nonunit_compact_weights(const opt::OptimizationInstance& opt) {
 
 bool uses_unconverted_weighted_strengthening(const FppBranchBendersOptions& options) {
     return options.combinatorial_options.enabled ||
-           options.strengthening_options.use_path_llbi ||
            options.strengthening_options.use_projected_coverage_llbi_exp ||
            options.strengthening_options.use_projected_path_llbi_exp ||
            options.strengthening_options.use_projected_coverage_llbi_poly ||
@@ -393,15 +393,16 @@ double add_coverage_llbi_constraints(
     return std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
 }
 
-void add_path_llbi_constraints(
+double add_path_llbi_constraints(
     IloEnv& env,
     IloModel& model,
     const FppPathLlbiData& data,
     const IloBoolVarArray& y,
     const IloNumVarArray& eta,
     const std::vector<int>& y_position_by_node) {
+    const auto start = std::chrono::steady_clock::now();
     if (!data.enabled) {
-        return;
+        return 0.0;
     }
     for (const auto& scenario_record : data.scenarios) {
         IloExpr eta_lower_bound(env);
@@ -411,7 +412,7 @@ void add_path_llbi_constraints(
             b_name << "path_b_s" << scenario_record.scenario_id
                    << "_" << node_record.compact_node;
             burn_lb.setName(b_name.str().c_str());
-            eta_lower_bound += burn_lb;
+            eta_lower_bound += node_record.cell_weight * burn_lb;
             for (const auto& path : node_record.paths) {
                 IloExpr expr(env);
                 expr += burn_lb;
@@ -437,6 +438,7 @@ void add_path_llbi_constraints(
         }
         eta_lower_bound.end();
     }
+    return std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
 }
 
 void add_benders_cut_to_model(
@@ -1218,7 +1220,7 @@ solver::ModelResult FppBranchBendersSolver::solve(
     if (has_nonunit_compact_weights(opt) &&
         uses_unconverted_weighted_strengthening(options)) {
         throw std::runtime_error(
-            "Non-homogeneous weighted FPP Branch-Benders Phase 6B2A supports LP lazy cuts, root user cuts, standard downstream-union LLBI, extended CoverageLLBI, structural global dominance, and conditional zero-benefit diagnostics; Path/projected LLBI and combinatorial Benders remain unconverted.");
+            "Non-homogeneous weighted FPP Branch-Benders Phase 6B2B supports LP lazy cuts, root user cuts, standard downstream-union LLBI, extended CoverageLLBI, extended PathLLBI, structural global dominance, and conditional zero-benefit diagnostics; projected LLBI and combinatorial Benders remain unconverted.");
     }
     const auto risk_config = effective_risk_config_from(options.risk_config);
     const bool risk_enabled = uses_cvar_risk(risk_config);
@@ -1445,7 +1447,7 @@ solver::ModelResult FppBranchBendersSolver::solve(
             y,
             eta,
             y_position_by_node);
-        add_path_llbi_constraints(
+        const double path_llbi_build_time_sec = add_path_llbi_constraints(
             env,
             model,
             path_llbi,
@@ -1471,7 +1473,23 @@ solver::ModelResult FppBranchBendersSolver::solve(
         result.path_llbi_num_b_vars = path_llbi.num_b_vars;
         result.path_llbi_num_path_constraints = path_llbi.num_path_constraints;
         result.path_llbi_num_paths_used = path_llbi.num_paths_used;
+        result.path_llbi_weighted = path_llbi.weighted;
+        result.path_llbi_weight_map_hash = path_llbi.weight_map_hash;
+        result.path_llbi_scenarios_precomputed = path_llbi.scenarios_precomputed;
+        result.path_llbi_baseline_nodes = path_llbi.baseline_nodes;
+        result.path_llbi_auxiliary_variables = path_llbi.auxiliary_variables;
+        result.path_llbi_path_constraints = path_llbi.path_constraints;
+        result.path_llbi_loss_constraints = path_llbi.loss_constraints;
+        result.path_llbi_total_paths = path_llbi.total_paths;
+        result.path_llbi_total_candidate_incidence_terms =
+            path_llbi.total_candidate_incidence_terms;
+        result.path_llbi_nodes_without_paths = path_llbi.nodes_without_paths;
+        result.path_llbi_path_enumeration_complete =
+            path_llbi.path_enumeration_complete;
+        result.path_llbi_paths_truncated = path_llbi.paths_truncated;
         result.path_llbi_precompute_time_sec = path_llbi.precompute_time_sec;
+        result.path_llbi_build_time_sec = path_llbi_build_time_sec;
+        result.path_llbi_validity_mode = path_llbi.validity_mode;
         result.projected_coverage_llbi_enabled =
             projected_stats.projected_coverage_llbi_enabled;
         result.projected_path_llbi_enabled =

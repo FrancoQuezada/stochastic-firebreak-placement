@@ -1245,7 +1245,23 @@ io::StandardExperimentResult MethodDispatcher::run_method(const MethodDispatchRe
     result.path_llbi_num_b_vars = solver_result.path_llbi_num_b_vars;
     result.path_llbi_num_path_constraints = solver_result.path_llbi_num_path_constraints;
     result.path_llbi_num_paths_used = solver_result.path_llbi_num_paths_used;
+    result.path_llbi_weighted = solver_result.path_llbi_weighted;
+    result.path_llbi_weight_map_hash = solver_result.path_llbi_weight_map_hash;
+    result.path_llbi_scenarios_precomputed = solver_result.path_llbi_scenarios_precomputed;
+    result.path_llbi_baseline_nodes = solver_result.path_llbi_baseline_nodes;
+    result.path_llbi_auxiliary_variables = solver_result.path_llbi_auxiliary_variables;
+    result.path_llbi_path_constraints = solver_result.path_llbi_path_constraints;
+    result.path_llbi_loss_constraints = solver_result.path_llbi_loss_constraints;
+    result.path_llbi_total_paths = solver_result.path_llbi_total_paths;
+    result.path_llbi_total_candidate_incidence_terms =
+        solver_result.path_llbi_total_candidate_incidence_terms;
+    result.path_llbi_nodes_without_paths = solver_result.path_llbi_nodes_without_paths;
+    result.path_llbi_path_enumeration_complete =
+        solver_result.path_llbi_path_enumeration_complete;
+    result.path_llbi_paths_truncated = solver_result.path_llbi_paths_truncated;
     result.path_llbi_precompute_time_sec = solver_result.path_llbi_precompute_time_sec;
+    result.path_llbi_build_time_sec = solver_result.path_llbi_build_time_sec;
+    result.path_llbi_validity_mode = solver_result.path_llbi_validity_mode;
     result.projected_coverage_llbi_enabled =
         solver_result.projected_coverage_llbi_enabled;
     result.projected_path_llbi_enabled =

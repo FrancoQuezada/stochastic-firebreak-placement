@@ -36,15 +36,14 @@ void validate_options(const FppBendersOptions& options) {
     if (options.threads < 0) {
         throw std::runtime_error("FPP Benders threads must be nonnegative.");
     }
-    if (options.strengthening_options.use_path_llbi ||
-        options.strengthening_options.use_projected_coverage_llbi_exp ||
+    if (options.strengthening_options.use_projected_coverage_llbi_exp ||
         options.strengthening_options.use_projected_path_llbi_exp ||
         options.strengthening_options.use_projected_coverage_llbi_poly ||
         options.strengthening_options.use_projected_path_llbi_poly ||
         options.strengthening_options.use_global_dominance_preprocessing ||
         options.strengthening_options.use_conditional_zero_benefit_fixing) {
         throw std::runtime_error(
-            "FPP Benders explicit-loop Phase 6B2A supports standard LLBI and extended CoverageLLBI only; Path/projected LLBI, dominance, and conditional fixing are not explicit-loop options.");
+            "FPP Benders explicit-loop Phase 6B2B supports standard LLBI, extended CoverageLLBI, and extended PathLLBI only; projected LLBI, dominance, and conditional fixing are not explicit-loop options.");
     }
     risk::RiskMeasureConfig effective_risk_config = options.risk_config;
     if (effective_risk_config.type == risk::RiskMeasureType::CVaR) {
@@ -275,6 +274,31 @@ solver::ModelResult FppBendersSolver::solve(
     result.coverage_llbi_total_incidence_terms = coverage_llbi.total_incidence_terms;
     result.coverage_llbi_build_time_sec = coverage_llbi_build_time_sec;
     result.coverage_llbi_validity_mode = coverage_llbi.validity_mode;
+    const auto path_llbi = build_fpp_path_llbi_data(
+        opt,
+        options.strengthening_options.use_path_llbi,
+        options.strengthening_options.path_llbi_max_paths_per_node);
+    const double path_llbi_build_time_sec = master.addPathLlbi(path_llbi);
+    result.path_llbi_enabled = path_llbi.enabled;
+    result.path_llbi_num_b_vars = path_llbi.num_b_vars;
+    result.path_llbi_num_path_constraints = path_llbi.num_path_constraints;
+    result.path_llbi_num_paths_used = path_llbi.num_paths_used;
+    result.path_llbi_weighted = path_llbi.weighted;
+    result.path_llbi_weight_map_hash = path_llbi.weight_map_hash;
+    result.path_llbi_scenarios_precomputed = path_llbi.scenarios_precomputed;
+    result.path_llbi_baseline_nodes = path_llbi.baseline_nodes;
+    result.path_llbi_auxiliary_variables = path_llbi.auxiliary_variables;
+    result.path_llbi_path_constraints = path_llbi.path_constraints;
+    result.path_llbi_loss_constraints = path_llbi.loss_constraints;
+    result.path_llbi_total_paths = path_llbi.total_paths;
+    result.path_llbi_total_candidate_incidence_terms =
+        path_llbi.total_candidate_incidence_terms;
+    result.path_llbi_nodes_without_paths = path_llbi.nodes_without_paths;
+    result.path_llbi_path_enumeration_complete = path_llbi.path_enumeration_complete;
+    result.path_llbi_paths_truncated = path_llbi.paths_truncated;
+    result.path_llbi_precompute_time_sec = path_llbi.precompute_time_sec;
+    result.path_llbi_build_time_sec = path_llbi_build_time_sec;
+    result.path_llbi_validity_mode = path_llbi.validity_mode;
 
     FppScenarioSubproblem subproblem;
     double incumbent_upper_bound = std::numeric_limits<double>::infinity();
