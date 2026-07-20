@@ -1,6 +1,7 @@
 #pragma once
 
 #include <map>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -31,6 +32,8 @@ struct CvarTailAwareBendersScoringSummary {
     int nonzero_generic_coefficients = 0;
     int nonzero_tail_coefficients = 0;
     double gamma = 0.5;
+    bool weighted = false;
+    std::string weight_map_hash;
 };
 
 class CvarTailAwareBendersCandidateScorer {
@@ -43,7 +46,8 @@ public:
         const std::vector<std::pair<int, double>>& scenario_losses_by_id,
         double cvar_beta,
         double gamma,
-        const std::map<int, double>& scenario_probability_by_id = {}) const;
+        const std::map<int, double>& scenario_probability_by_id = {},
+        const std::string& weight_map_hash = {}) const;
 };
 
 std::vector<std::pair<int, double>> topCvarTailAwareCandidates(

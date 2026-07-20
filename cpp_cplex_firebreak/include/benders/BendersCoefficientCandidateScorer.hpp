@@ -1,6 +1,7 @@
 #pragma once
 
 #include <map>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -21,6 +22,8 @@ struct BendersCoefficientScoringSummary {
     int nonzero_inactive_coefficients = 0;
     double max_score = 0.0;
     double average_score = 0.0;
+    bool weighted = false;
+    std::string weight_map_hash;
 };
 
 class BendersCoefficientCandidateScorer {
@@ -30,14 +33,16 @@ public:
         const std::vector<int>& eligible_compact_indices,
         const std::vector<int>& candidates,
         const std::vector<BendersCut>& cuts,
-        const std::map<int, double>& scenario_probability_by_id = {}) const;
+        const std::map<int, double>& scenario_probability_by_id = {},
+        const std::string& weight_map_hash = {}) const;
 
     BendersCoefficientScoringSummary scoreInactiveCandidates(
         int candidate_count,
         const std::vector<int>& eligible_compact_indices,
         const std::vector<int>& inactive_candidates,
         const std::vector<BendersCut>& cuts,
-        const std::map<int, double>& scenario_probability_by_id = {}) const;
+        const std::map<int, double>& scenario_probability_by_id = {},
+        const std::string& weight_map_hash = {}) const;
 };
 
 std::vector<std::pair<int, double>> topBendersCoefficientCandidates(

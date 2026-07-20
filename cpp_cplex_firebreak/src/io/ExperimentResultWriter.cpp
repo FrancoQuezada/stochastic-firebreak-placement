@@ -481,6 +481,26 @@ void write_restricted_candidate_json_block(std::ostream& out, const StandardExpe
         << format_json_number(result.restricted_candidate_tail_score_gamma) << ",\n";
     out << "    \"candidate_tail_protection_size\": "
         << result.restricted_candidate_tail_protection_size << ",\n";
+    out << "    \"candidate_scorer\": \""
+        << json_escape_local(result.restricted_candidate_scorer) << "\",\n";
+    out << "    \"candidate_scorer_weighted\": "
+        << (result.restricted_candidate_scorer_weighted ? "true" : "false") << ",\n";
+    out << "    \"candidate_score_map_hash\": \""
+        << json_escape_local(result.restricted_candidate_score_map_hash) << "\",\n";
+    out << "    \"initial_candidate_ids\": ";
+    write_json_int_array(out, result.restricted_initial_candidate_ids);
+    out << ",\n";
+    out << "    \"initial_candidate_scores\": ";
+    write_candidate_score_pair_array(out, result.restricted_initial_candidate_scores);
+    out << ",\n";
+    out << "    \"score_recomputations\": "
+        << result.restricted_score_recomputations << ",\n";
+    out << "    \"candidates_activated_by_score\": ";
+    write_json_int_array(out, result.restricted_candidates_activated_by_score);
+    out << ",\n";
+    out << "    \"candidates_activated_by_full_fallback\": ";
+    write_json_int_array(out, result.restricted_candidates_activated_by_full_fallback);
+    out << ",\n";
     out << "    \"deactivation_enabled\": "
         << (result.restricted_candidate_deactivation_enabled ? "true" : "false") << ",\n";
     out << "    \"deactivation_rounds\": "

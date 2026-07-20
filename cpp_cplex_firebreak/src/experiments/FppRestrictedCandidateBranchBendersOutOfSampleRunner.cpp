@@ -387,6 +387,21 @@ void attach_restricted_diagnostics(
         solve_result.candidate_tail_score_gamma;
     result.restricted_candidate_tail_protection_size =
         solve_result.candidate_tail_protection_size;
+    result.restricted_candidate_scorer = solve_result.candidate_scorer;
+    result.restricted_candidate_scorer_weighted =
+        solve_result.candidate_scorer_weighted;
+    result.restricted_candidate_score_map_hash =
+        solve_result.candidate_score_map_hash;
+    result.restricted_initial_candidate_ids =
+        solve_result.initial_candidate_ids;
+    result.restricted_initial_candidate_scores =
+        solve_result.initial_candidate_scores;
+    result.restricted_score_recomputations =
+        solve_result.score_recomputations;
+    result.restricted_candidates_activated_by_score =
+        solve_result.candidates_activated_by_score;
+    result.restricted_candidates_activated_by_full_fallback =
+        solve_result.candidates_activated_by_full_fallback;
     result.restricted_candidate_deactivation_blocked_by_tail_protection_count =
         solve_result.deactivation_blocked_by_tail_protection_count;
     result.restricted_candidate_activated_by_tail_blend_count =

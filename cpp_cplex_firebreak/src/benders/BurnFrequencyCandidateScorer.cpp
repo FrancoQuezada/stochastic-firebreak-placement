@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 #include "benders/RestrictedCandidateManager.hpp"
@@ -37,6 +38,24 @@ bool scenario_probabilities_are_usable(const opt::OptimizationInstance& opt) {
         total += scenario.probability;
     }
     return total > 0.0;
+}
+
+std::vector<double> compact_weights_or_unit(const opt::OptimizationInstance& opt) {
+    if (opt.compact_cell_weights.empty()) {
+        return std::vector<double>(static_cast<std::size_t>(opt.node_mapper.size()), 1.0);
+    }
+    if (opt.compact_cell_weights.size() !=
+        static_cast<std::size_t>(opt.node_mapper.size())) {
+        throw std::runtime_error(
+            "Burn-frequency weighted scoring requires one compact weight per mapped node.");
+    }
+    for (const double weight : opt.compact_cell_weights) {
+        if (!std::isfinite(weight) || weight <= 0.0) {
+            throw std::runtime_error(
+                "Burn-frequency weighted scoring requires finite positive compact weights.");
+        }
+    }
+    return opt.compact_cell_weights;
 }
 
 std::vector<char> reachable_nodes_without_firebreaks(
@@ -83,12 +102,18 @@ std::vector<BurnFrequencyCandidateScore> BurnFrequencyCandidateScorer::scoreDeta
 
     std::vector<BurnFrequencyCandidateScore> scores;
     scores.reserve(opt.eligible_indices.size());
+    const auto compact_weights = compact_weights_or_unit(opt);
+    const bool weighted = !opt.compact_cell_weights.empty();
+    const std::string weight_map_hash = opt.cell_weight_map.deterministic_hash;
     for (std::size_t candidate = 0; candidate < opt.eligible_indices.size(); ++candidate) {
         const int compact_index = opt.eligible_indices[candidate];
         BurnFrequencyCandidateScore score;
         score.candidate = static_cast<int>(candidate);
         score.compact_index = compact_index;
         score.original_node = opt.node_mapper.to_node(compact_index);
+        score.cell_weight = compact_weights[static_cast<std::size_t>(compact_index)];
+        score.weighted = weighted;
+        score.weight_map_hash = weight_map_hash;
         scores.push_back(score);
     }
 
@@ -98,7 +123,8 @@ std::vector<BurnFrequencyCandidateScore> BurnFrequencyCandidateScorer::scoreDeta
         const auto reachable = reachable_nodes_without_firebreaks(opt, scenario);
         for (auto& score : scores) {
             if (reachable[static_cast<std::size_t>(score.compact_index)] != 0) {
-                score.score += weight;
+                score.burn_frequency += weight;
+                score.score += weight * score.cell_weight;
                 ++score.scenarios_burned;
             }
         }

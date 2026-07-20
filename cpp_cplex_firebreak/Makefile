@@ -377,11 +377,24 @@ TEST_BURN_FREQUENCY_CANDIDATE_SCORER_SOURCES := \
 	src/opt/OptimizationInstance.cpp \
 	tests/test_burn_frequency_candidate_scorer.cpp
 
+TEST_WEIGHTED_BURN_FREQUENCY_CANDIDATE_SCORER_SOURCES := \
+	src/benders/BurnFrequencyCandidateScorer.cpp \
+	src/benders/RestrictedCandidateManager.cpp \
+	src/opt/IndexMapper.cpp \
+	src/opt/OptimizationInstance.cpp \
+	tests/test_weighted_burn_frequency_candidate_scorer.cpp
+
 TEST_BENDERS_COEFFICIENT_CANDIDATE_SCORER_SOURCES := \
 	src/benders/BendersCut.cpp \
 	src/benders/BendersCoefficientCandidateScorer.cpp \
 	src/benders/RestrictedCandidateManager.cpp \
 	tests/test_benders_coefficient_candidate_scorer.cpp
+
+TEST_WEIGHTED_BENDERS_COEFFICIENT_CANDIDATE_SCORER_SOURCES := \
+	src/benders/BendersCut.cpp \
+	src/benders/BendersCoefficientCandidateScorer.cpp \
+	src/benders/RestrictedCandidateManager.cpp \
+	tests/test_weighted_benders_coefficient_candidate_scorer.cpp
 
 TEST_CVAR_TAIL_SCORE_DIAGNOSTICS_SOURCES := \
 	src/benders/BendersCut.cpp \
@@ -398,6 +411,12 @@ TEST_CVAR_TAIL_AWARE_BENDERS_CANDIDATE_SCORER_SOURCES := \
 	src/benders/BendersCoefficientCandidateScorer.cpp \
 	src/benders/CvarTailAwareBendersCandidateScorer.cpp \
 	tests/test_cvar_tail_aware_benders_candidate_scorer.cpp
+
+TEST_WEIGHTED_CVAR_TAIL_AWARE_CANDIDATE_SCORER_SOURCES := \
+	src/benders/BendersCut.cpp \
+	src/benders/BendersCoefficientCandidateScorer.cpp \
+	src/benders/CvarTailAwareBendersCandidateScorer.cpp \
+	tests/test_weighted_cvar_tail_aware_candidate_scorer.cpp
 
 TEST_RESTRICTED_CANDIDATE_CUT_POOL_SOURCES := \
 	src/benders/BendersCut.cpp \
@@ -598,8 +617,11 @@ TEST_EXES := \
 	$(BUILD_DIR)/test_shared_splits \
 	$(BUILD_DIR)/test_benders_cut \
 	$(BUILD_DIR)/test_burn_frequency_candidate_scorer \
+	$(BUILD_DIR)/test_weighted_burn_frequency_candidate_scorer \
 	$(BUILD_DIR)/test_benders_coefficient_candidate_scorer \
+	$(BUILD_DIR)/test_weighted_benders_coefficient_candidate_scorer \
 	$(BUILD_DIR)/test_cvar_tail_aware_benders_candidate_scorer \
+	$(BUILD_DIR)/test_weighted_cvar_tail_aware_candidate_scorer \
 	$(BUILD_DIR)/test_cvar_tail_score_diagnostics \
 	$(BUILD_DIR)/test_restricted_candidate_cut_pool \
 	$(BUILD_DIR)/test_restricted_candidate_manager \
@@ -753,6 +775,10 @@ $(BUILD_DIR)/test_weighted_restricted_cut_pool: $(TEST_WEIGHTED_FPP_RESTRICTED_B
 	@mkdir -p $(dir $@)
 	$(CXX) $(COMMON_CPPFLAGS) $(CPLEX_CPPFLAGS) $(COMMON_CXXFLAGS) $^ $(CPLEX_LDFLAGS) -o $@
 
+$(BUILD_DIR)/test_weighted_restricted_candidate_scoring_cplex: $(TEST_WEIGHTED_FPP_RESTRICTED_BRANCH_BENDERS_CPLEX_SOURCES)
+	@mkdir -p $(dir $@)
+	$(CXX) $(COMMON_CPPFLAGS) $(CPLEX_CPPFLAGS) $(COMMON_CXXFLAGS) $^ $(CPLEX_LDFLAGS) -o $@
+
 $(BUILD_DIR)/test_dpv_saa_model_structure: $(call test_obj,$(TEST_DPV_STRUCTURE_SOURCES))
 	$(CXX) $^ -o $@
 
@@ -810,10 +836,19 @@ $(BUILD_DIR)/test_benders_cut: $(call test_obj,$(TEST_BENDERS_CUT_SOURCES))
 $(BUILD_DIR)/test_burn_frequency_candidate_scorer: $(call test_obj,$(TEST_BURN_FREQUENCY_CANDIDATE_SCORER_SOURCES))
 	$(CXX) $^ -o $@
 
+$(BUILD_DIR)/test_weighted_burn_frequency_candidate_scorer: $(call test_obj,$(TEST_WEIGHTED_BURN_FREQUENCY_CANDIDATE_SCORER_SOURCES))
+	$(CXX) $^ -o $@
+
 $(BUILD_DIR)/test_benders_coefficient_candidate_scorer: $(call test_obj,$(TEST_BENDERS_COEFFICIENT_CANDIDATE_SCORER_SOURCES))
 	$(CXX) $^ -o $@
 
+$(BUILD_DIR)/test_weighted_benders_coefficient_candidate_scorer: $(call test_obj,$(TEST_WEIGHTED_BENDERS_COEFFICIENT_CANDIDATE_SCORER_SOURCES))
+	$(CXX) $^ -o $@
+
 $(BUILD_DIR)/test_cvar_tail_aware_benders_candidate_scorer: $(call test_obj,$(TEST_CVAR_TAIL_AWARE_BENDERS_CANDIDATE_SCORER_SOURCES))
+	$(CXX) $^ -o $@
+
+$(BUILD_DIR)/test_weighted_cvar_tail_aware_candidate_scorer: $(call test_obj,$(TEST_WEIGHTED_CVAR_TAIL_AWARE_CANDIDATE_SCORER_SOURCES))
 	$(CXX) $^ -o $@
 
 $(BUILD_DIR)/test_cvar_tail_score_diagnostics: $(call test_obj,$(TEST_CVAR_TAIL_SCORE_DIAGNOSTICS_SOURCES))
@@ -884,8 +919,11 @@ test: $(TEST_EXES)
 	./build_gpp/test_shared_splits
 	./build_gpp/test_benders_cut
 	./build_gpp/test_burn_frequency_candidate_scorer
+	./build_gpp/test_weighted_burn_frequency_candidate_scorer
 	./build_gpp/test_benders_coefficient_candidate_scorer
+	./build_gpp/test_weighted_benders_coefficient_candidate_scorer
 	./build_gpp/test_cvar_tail_aware_benders_candidate_scorer
+	./build_gpp/test_weighted_cvar_tail_aware_candidate_scorer
 	./build_gpp/test_cvar_tail_score_diagnostics
 	./build_gpp/test_restricted_candidate_cut_pool
 	./build_gpp/test_restricted_candidate_manager
@@ -997,8 +1035,11 @@ clean:
 	$(TEST_SHARED_SPLITS_SOURCES) \
 	$(TEST_BENDERS_CUT_SOURCES) \
 	$(TEST_BURN_FREQUENCY_CANDIDATE_SCORER_SOURCES) \
+	$(TEST_WEIGHTED_BURN_FREQUENCY_CANDIDATE_SCORER_SOURCES) \
 	$(TEST_BENDERS_COEFFICIENT_CANDIDATE_SCORER_SOURCES) \
+	$(TEST_WEIGHTED_BENDERS_COEFFICIENT_CANDIDATE_SCORER_SOURCES) \
 	$(TEST_CVAR_TAIL_AWARE_BENDERS_CANDIDATE_SCORER_SOURCES) \
+	$(TEST_WEIGHTED_CVAR_TAIL_AWARE_CANDIDATE_SCORER_SOURCES) \
 	$(TEST_CVAR_TAIL_SCORE_DIAGNOSTICS_SOURCES) \
 	$(TEST_RESTRICTED_CANDIDATE_CUT_POOL_SOURCES) \
 	$(TEST_RESTRICTED_CANDIDATE_MANAGER_SOURCES) \

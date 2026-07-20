@@ -330,6 +330,14 @@ struct StandardExperimentResult {
     std::string restricted_candidate_score_mode = "generic";
     double restricted_candidate_tail_score_gamma = 0.5;
     int restricted_candidate_tail_protection_size = 0;
+    std::string restricted_candidate_scorer = "none";
+    bool restricted_candidate_scorer_weighted = false;
+    std::string restricted_candidate_score_map_hash;
+    std::vector<int> restricted_initial_candidate_ids;
+    std::vector<std::pair<int, double>> restricted_initial_candidate_scores;
+    int restricted_score_recomputations = 0;
+    std::vector<int> restricted_candidates_activated_by_score;
+    std::vector<int> restricted_candidates_activated_by_full_fallback;
     int restricted_candidate_deactivation_blocked_by_tail_protection_count = 0;
     int restricted_candidate_activated_by_tail_blend_count = 0;
     int restricted_candidate_activated_tail_top_k_overlap = 0;

@@ -155,18 +155,18 @@ void validate_options(const FppRestrictedCandidateBranchBendersOptions& options)
             throw std::runtime_error(
                 "CVaR tail-aware candidate scoring requires an initial restricted stage.");
         }
-        if (!options.restricted_heuristic_mode || options.eventually_activate_all) {
+        if (effective_risk_config.type == risk::RiskMeasureType::Expected) {
             throw std::runtime_error(
-                "CVaR tail-aware candidate scoring is supported only in restricted heuristic mode.");
+                "CVaR tail-aware candidate scoring requires risk_measure=cvar or risk_measure=mean-cvar.");
         }
-        if (effective_risk_config.type != risk::RiskMeasureType::CVaR) {
+        if (options.activation_policy != "benders-coefficients") {
             throw std::runtime_error(
-                "CVaR tail-aware candidate scoring requires risk_measure=cvar.");
+                "CVaR tail-aware candidate scoring requires candidate_activation_policy=benders-coefficients.");
         }
-        if (options.activation_policy != "benders-coefficients" ||
-            options.candidate_maintenance_policy != "benders-coefficients") {
+        if (options.candidate_maintenance_policy != "none" &&
+            (!options.restricted_heuristic_mode || options.eventually_activate_all)) {
             throw std::runtime_error(
-                "CVaR tail-aware candidate scoring requires Benders-coefficient activation and maintenance policies.");
+                "CVaR tail-aware candidate maintenance is supported only in restricted heuristic mode.");
         }
     }
 }
@@ -203,24 +203,23 @@ bool has_nonunit_compact_weights(const opt::OptimizationInstance& opt) {
     return false;
 }
 
-void validate_weighted_phase5c1_options(
+void validate_weighted_phase5c2a_options(
     const opt::OptimizationInstance& opt,
     const FppRestrictedCandidateBranchBendersOptions& options) {
     if (!has_nonunit_compact_weights(opt)) {
         return;
     }
-    if (options.initial_candidate_policy != "explicit-list") {
+    if (options.candidate_maintenance_policy != "none") {
         throw std::runtime_error(
-            "Non-homogeneous weighted restricted Branch-Benders Phase 5C1 requires initial_candidate_policy=explicit-list; burn-frequency initialization is deferred.");
+            "Non-homogeneous weighted restricted Branch-Benders Phase 5C2A does not support candidate maintenance or deactivation.");
     }
-    if (options.activation_policy != "none" &&
-        options.activation_policy != "activate-all-final") {
+    if (options.export_tail_score_diagnostics) {
         throw std::runtime_error(
-            "Non-homogeneous weighted restricted Branch-Benders Phase 5C1 supports only structural final full activation; burn-frequency and Benders-coefficient activation are deferred.");
+            "Non-homogeneous weighted restricted Branch-Benders Phase 5C2A does not support explicit tail-score diagnostic export.");
     }
     if (!options.eventually_activate_all || options.restricted_heuristic_mode) {
         throw std::runtime_error(
-            "Non-homogeneous weighted restricted Branch-Benders Phase 5C1 supports exact mode with eventual full activation only.");
+            "Non-homogeneous weighted restricted Branch-Benders Phase 5C2A supports scorer-guided exact mode with eventual full activation only.");
     }
     if (options.use_lifted_lower_bounds ||
         options.combinatorial_options.enabled ||
@@ -233,13 +232,12 @@ void validate_weighted_phase5c1_options(
         options.strengthening_options.use_conditional_zero_benefit_fixing ||
         options.strengthening_options.use_global_dominance_preprocessing) {
         throw std::runtime_error(
-            "Non-homogeneous weighted restricted Branch-Benders Phase 5C1 rejects unconverted strengthening/combinatorial modules.");
+            "Non-homogeneous weighted restricted Branch-Benders Phase 5C2A rejects unconverted strengthening/combinatorial modules.");
     }
-    if (options.candidate_maintenance_policy != "none" ||
-        options.candidate_score_mode != "generic" ||
-        options.export_tail_score_diagnostics) {
+    if (options.candidate_score_mode == "cvar-tail-blend" &&
+        options.activation_policy != "benders-coefficients") {
         throw std::runtime_error(
-            "Non-homogeneous weighted restricted Branch-Benders Phase 5C1 rejects unconverted candidate scoring, maintenance, and tail diagnostics.");
+            "Non-homogeneous weighted CVaR-tail-aware scoring requires Benders-coefficient activation.");
     }
 }
 
@@ -694,7 +692,8 @@ void append_tail_score_diagnostics_if_enabled(
             input.scenario_losses_by_id,
             input.cvar_beta,
             options.candidate_tail_score_gamma,
-            input.scenario_probability_by_id);
+            input.scenario_probability_by_id,
+            opt.cell_weight_map.deterministic_hash);
         const int top_k = std::max(1, std::min(input.top_k, input.candidate_count));
         diagnostics.top_tail_blend_candidates =
             tail_rank_array_from_scores(score_summary.blend_scores, top_k);
@@ -2484,9 +2483,11 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
     const FppRestrictedCandidateBranchBendersOptions& options) const {
     validate_options(options);
     validate_instance(opt);
-    validate_weighted_phase5c1_options(opt, options);
+    validate_weighted_phase5c2a_options(opt, options);
     const auto risk_config = effective_risk_config_from(options.risk_config);
     const auto global_start = std::chrono::steady_clock::now();
+    const bool nonunit_weights = has_nonunit_compact_weights(opt);
+    const std::string score_weight_map_hash = opt.cell_weight_map.deterministic_hash;
 
     std::vector<std::pair<int, double>> burn_frequency_scores;
     bool burn_frequency_score_available = false;
@@ -2524,6 +2525,18 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
     result.candidate_tail_score_gamma = options.candidate_tail_score_gamma;
     result.candidate_tail_protection_size =
         effective_tail_protection_size(options);
+    result.candidate_scorer = "none";
+    if (options.initial_candidate_policy == "burn-frequency" ||
+        options.activation_policy == "burn-frequency") {
+        result.candidate_scorer =
+            nonunit_weights ? "weighted-burn-frequency" : "burn-frequency";
+    } else if (options.activation_policy == "benders-coefficients") {
+        result.candidate_scorer = uses_tail_aware_candidate_scoring(options)
+            ? (nonunit_weights ? "weighted-cvar-tail-blend" : "cvar-tail-blend")
+            : (nonunit_weights ? "weighted-benders-coefficients" : "benders-coefficients");
+    }
+    result.candidate_scorer_weighted = nonunit_weights;
+    result.candidate_score_map_hash = score_weight_map_hash;
     result.candidate_min_active_size = maintenance_options.min_active_size;
     result.candidate_max_active_size = maintenance_options.max_active_size;
     result.candidate_deactivation_batch_size =
@@ -2549,6 +2562,14 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
               burn_frequency_scores,
               static_cast<int>(std::min<std::size_t>(10, burn_frequency_scores.size())))
         : std::vector<std::pair<int, double>>();
+    result.initial_candidate_ids = initial_active_candidates;
+    if (burn_frequency_score_available) {
+        result.initial_candidate_scores =
+            topBurnFrequencyCandidates(
+                burn_frequency_scores,
+                static_cast<int>(burn_frequency_scores.size()));
+        ++result.score_recomputations;
+    }
     if (options.initial_candidate_policy == "burn-frequency") {
         result.initial_candidates_from_burn_frequency = initial_active_candidates;
     }
@@ -2568,10 +2589,10 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
     }
     if (uses_tail_aware_candidate_scoring(options)) {
         result.notes.push_back(
-            "DPV and reduced-cost activation remain disabled; LLBI and root cuts follow their restricted Branch-and-Benders options.");
+            "Weighted CVaR-tail-aware candidate scoring is used only for activation ordering; DPV and reduced-cost activation remain disabled.");
     } else {
         result.notes.push_back(
-            "DPV, reduced-cost activation, and CVaR-aware activation weighting are disabled; LLBI and root cuts follow their restricted Branch-and-Benders options.");
+            "DPV, reduced-cost activation, and tail-aware activation weighting are disabled; LLBI and root cuts follow their restricted Branch-and-Benders options.");
     }
     result.notes.push_back("Exactness is claimed only after eventual full activation and an optimal final solve.");
     result.notes.push_back("Restricted-stage cuts are generated over the full y-vector and persisted in a reusable cut pool.");
@@ -2592,14 +2613,14 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
     }
     if (uses_tail_aware_candidate_scoring(options)) {
         result.notes.push_back(
-            "Phase 1S CVaR-tail-aware blended Benders scoring is enabled for restricted FPP-CVaR heuristic maintenance only.");
+            "Phase 5C2A CVaR-tail-aware blended Benders scoring is enabled for restricted FPP-CVaR activation ordering.");
         result.notes.push_back(
-            "Tail-aware scoring changes candidate activation/deactivation choices but does not change the FPP-CVaR objective, cuts, or feasibility logic.");
+            "Tail-aware scoring changes candidate activation order but does not change the FPP objective, cuts, feasibility logic, or eventual full activation guarantee.");
         result.notes.push_back(
-            "Tail-score diagnostics are auto-enabled for cvar-tail-blend mode.");
+            "Tail membership is computed from weighted scenario losses when a weight map is attached.");
     }
     if (burn_frequency_score_available) {
-        result.notes.push_back("Burn-frequency candidate scores were computed from no-firebreak scenario reachability.");
+        result.notes.push_back("Burn-frequency candidate scores were computed from no-firebreak scenario reachability and candidate cell value when a weight map is attached.");
     }
     if (result.global_time_budget_enabled) {
         result.notes.push_back(
@@ -2786,6 +2807,7 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
             burn_frequency_scores = scorer.scoreCandidates(opt);
             burn_frequency_score_available = true;
             result.burn_frequency_score_available = true;
+            ++result.score_recomputations;
             result.top_burn_frequency_candidates = topBurnFrequencyCandidates(
                 burn_frequency_scores,
                 static_cast<int>(std::min<std::size_t>(10, burn_frequency_scores.size())));
@@ -2807,6 +2829,10 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
             }
             result.candidates_activated_by_burn_frequency.insert(
                 result.candidates_activated_by_burn_frequency.end(),
+                activated.begin(),
+                activated.end());
+            result.candidates_activated_by_score.insert(
+                result.candidates_activated_by_score.end(),
                 activated.begin(),
                 activated.end());
 
@@ -2892,7 +2918,8 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
                     latest_scenario_losses_by_id,
                     risk_config.cvarBeta,
                     options.candidate_tail_score_gamma,
-                    probability_by_id);
+                    probability_by_id,
+                    score_weight_map_hash);
                 raw_activation_scores = inactive_tail_summary.blend_scores;
                 activation_cuts_used = inactive_tail_summary.cuts_used;
                 activation_nonzero_coefficients =
@@ -2903,12 +2930,14 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
                     opt.eligible_indices,
                     manager.inactiveCandidates(),
                     cut_pool.cuts(),
-                    probability_by_id);
+                    probability_by_id,
+                    score_weight_map_hash);
                 raw_activation_scores = inactive_summary.scores;
                 activation_cuts_used = inactive_summary.cuts_used;
                 activation_nonzero_coefficients =
                     inactive_summary.nonzero_inactive_coefficients;
             }
+            ++result.score_recomputations;
             auto activation_scores = maintenance_tracker.filterActivationScores(
                 raw_activation_scores,
                 maintenance_options.reactivation_cooldown_rounds,
@@ -2968,6 +2997,10 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
                 result.candidates_activated_by_benders_coefficients.end(),
                 activated.begin(),
                 activated.end());
+            result.candidates_activated_by_score.insert(
+                result.candidates_activated_by_score.end(),
+                activated.begin(),
+                activated.end());
             if (tail_aware_scoring) {
                 result.activated_by_tail_blend_count +=
                     static_cast<int>(activated.size());
@@ -2991,7 +3024,8 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
                     latest_scenario_losses_by_id,
                     risk_config.cvarBeta,
                     options.candidate_tail_score_gamma,
-                    probability_by_id);
+                    probability_by_id,
+                    score_weight_map_hash);
                 deactivation_scores = active_tail_summary.blend_scores;
                 top_tail_scores = topCvarTailAwareCandidates(
                     active_tail_summary.tail_scores,
@@ -3003,7 +3037,8 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
                     opt.eligible_indices,
                     manager.activeCandidates(),
                     cut_pool.cuts(),
-                    probability_by_id);
+                    probability_by_id,
+                    score_weight_map_hash);
                 deactivation_scores = active_summary.scores;
             }
             const auto selected_candidates = candidate_ids_from_selected_compact_indices(
@@ -3138,33 +3173,80 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
         effective_candidate_round_limit(options) > 0 &&
         options.activation_batch_size > 0) {
         BendersCoefficientCandidateScorer scorer;
+        CvarTailAwareBendersCandidateScorer tail_scorer;
+        const bool tail_aware_scoring = uses_tail_aware_candidate_scoring(options);
         const auto probability_by_id = scenario_probability_by_id(opt);
         for (int activation_round = 0;
              activation_round < effective_candidate_round_limit(options) && !manager.allActive();
              ++activation_round) {
             const auto active_before_round = manager.activeCandidates();
-            const auto summary = scorer.scoreInactiveCandidates(
-                manager.candidateCount(),
-                opt.eligible_indices,
-                manager.inactiveCandidates(),
-                cut_pool.cuts(),
-                probability_by_id);
+            BendersCoefficientScoringSummary summary;
+            CvarTailAwareBendersScoringSummary tail_summary;
+            std::vector<std::pair<int, double>> activation_scores;
+            if (tail_aware_scoring) {
+                tail_summary = tail_scorer.scoreCandidates(
+                    manager.candidateCount(),
+                    opt.eligible_indices,
+                    manager.inactiveCandidates(),
+                    cut_pool.cuts(),
+                    latest_scenario_losses_by_id,
+                    risk_config.cvarBeta,
+                    options.candidate_tail_score_gamma,
+                    probability_by_id,
+                    score_weight_map_hash);
+                activation_scores = tail_summary.blend_scores;
+            } else {
+                summary = scorer.scoreInactiveCandidates(
+                    manager.candidateCount(),
+                    opt.eligible_indices,
+                    manager.inactiveCandidates(),
+                    cut_pool.cuts(),
+                    probability_by_id,
+                    score_weight_map_hash);
+                activation_scores = summary.scores;
+            }
+            ++result.score_recomputations;
             result.benders_coefficient_scores_available = true;
-            result.number_of_cuts_used_for_activation = summary.cuts_used;
+            result.number_of_cuts_used_for_activation =
+                tail_aware_scoring ? tail_summary.cuts_used : summary.cuts_used;
             result.number_of_nonzero_inactive_coefficients =
-                summary.nonzero_inactive_coefficients;
-            result.max_benders_coefficient_score = summary.max_score;
-            result.avg_benders_coefficient_score = summary.average_score;
-            result.top_benders_coefficient_candidates =
-                topBendersCoefficientCandidates(
-                    summary.scores,
-                    static_cast<int>(std::min<std::size_t>(10, summary.scores.size())));
+                tail_aware_scoring
+                    ? tail_summary.nonzero_generic_coefficients
+                    : summary.nonzero_inactive_coefficients;
+            result.max_benders_coefficient_score = 0.0;
+            result.avg_benders_coefficient_score = 0.0;
+            if (!activation_scores.empty()) {
+                double total_score = 0.0;
+                result.max_benders_coefficient_score =
+                    -std::numeric_limits<double>::infinity();
+                for (const auto& [candidate, score] : activation_scores) {
+                    (void)candidate;
+                    result.max_benders_coefficient_score =
+                        std::max(result.max_benders_coefficient_score, score);
+                    total_score += score;
+                }
+                result.avg_benders_coefficient_score =
+                    total_score / static_cast<double>(activation_scores.size());
+            }
+            result.top_benders_coefficient_candidates = tail_aware_scoring
+                ? topCvarTailAwareCandidates(
+                      tail_summary.generic_scores,
+                      static_cast<int>(std::min<std::size_t>(
+                          10,
+                          tail_summary.generic_scores.size())))
+                : topBendersCoefficientCandidates(
+                      summary.scores,
+                      static_cast<int>(std::min<std::size_t>(10, summary.scores.size())));
 
-            const auto top_scores = topBendersCoefficientCandidates(
-                summary.scores,
-                options.activation_batch_size);
+            const auto top_scores = tail_aware_scoring
+                ? topCvarTailAwareCandidates(
+                      activation_scores,
+                      options.activation_batch_size)
+                : topBendersCoefficientCandidates(
+                      activation_scores,
+                      options.activation_batch_size);
             const auto activated = manager.activateTopK(
-                summary.scores,
+                activation_scores,
                 options.activation_batch_size);
             if (activated.empty()) {
                 break;
@@ -3173,6 +3255,14 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
                 result.candidates_activated_by_benders_coefficients.end(),
                 activated.begin(),
                 activated.end());
+            result.candidates_activated_by_score.insert(
+                result.candidates_activated_by_score.end(),
+                activated.begin(),
+                activated.end());
+            if (tail_aware_scoring) {
+                result.activated_by_tail_blend_count +=
+                    static_cast<int>(activated.size());
+            }
 
             bounds.apply(manager);
             const std::string stage_name =
@@ -3206,8 +3296,44 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
                 stage.cut_pool_size_before,
                 stage.new_cuts_added_to_pool,
                 stage.duplicate_cuts_skipped,
-                summary.cuts_used,
-                summary.nonzero_inactive_coefficients);
+                tail_aware_scoring ? tail_summary.cuts_used : summary.cuts_used,
+                tail_aware_scoring
+                    ? tail_summary.nonzero_generic_coefficients
+                    : summary.nonzero_inactive_coefficients);
+            log.candidate_score_mode = options.candidate_score_mode;
+            log.candidate_tail_score_gamma = options.candidate_tail_score_gamma;
+            log.candidate_tail_protection_size = effective_tail_protection_size(options);
+            if (tail_aware_scoring) {
+                const int diagnostic_top_k = std::max(
+                    1,
+                    std::min(
+                        static_cast<int>(std::max<std::size_t>(
+                            tail_summary.blend_scores.size(),
+                            tail_summary.tail_scores.size())),
+                        std::max(10, options.activation_batch_size)));
+                log.top_blend_candidates = topCvarTailAwareCandidates(
+                    tail_summary.blend_scores,
+                    diagnostic_top_k);
+                log.top_generic_candidates_for_score_mode =
+                    topCvarTailAwareCandidates(
+                        tail_summary.generic_scores,
+                        diagnostic_top_k);
+                log.top_tail_candidates = topCvarTailAwareCandidates(
+                    tail_summary.tail_scores,
+                    diagnostic_top_k);
+                log.top_blend_tail_overlap = overlap_count(
+                    candidate_ids_from_scores(log.top_blend_candidates),
+                    candidate_ids_from_scores(log.top_tail_candidates));
+                log.top_blend_generic_overlap = overlap_count(
+                    candidate_ids_from_scores(log.top_blend_candidates),
+                    candidate_ids_from_scores(log.top_generic_candidates_for_score_mode));
+                log.activated_tail_top_k_overlap =
+                    overlap_count(
+                        activated,
+                        candidate_ids_from_scores(topCvarTailAwareCandidates(
+                            tail_summary.tail_scores,
+                            options.activation_batch_size)));
+            }
             append_tail_score_diagnostics_if_enabled(
                 result,
                 opt,
@@ -3281,6 +3407,7 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
     if (manager.activationHistory().size() > history_size_before_full_activation) {
         full_activation_batch = manager.activationHistory().back().activated;
     }
+    result.candidates_activated_by_full_fallback = full_activation_batch;
     result.full_activation_performed = true;
     result.activation_history = manager.activationHistory();
 

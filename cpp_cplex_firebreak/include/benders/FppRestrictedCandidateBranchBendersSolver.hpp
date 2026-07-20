@@ -167,6 +167,14 @@ struct FppRestrictedCandidateBranchBendersResult {
     std::string candidate_score_mode = "generic";
     double candidate_tail_score_gamma = 0.5;
     int candidate_tail_protection_size = 0;
+    std::string candidate_scorer = "none";
+    bool candidate_scorer_weighted = false;
+    std::string candidate_score_map_hash;
+    std::vector<int> initial_candidate_ids;
+    std::vector<std::pair<int, double>> initial_candidate_scores;
+    int score_recomputations = 0;
+    std::vector<int> candidates_activated_by_score;
+    std::vector<int> candidates_activated_by_full_fallback;
     std::vector<std::vector<int>> tail_protected_candidates_by_round;
     std::vector<int> tail_protected_count_by_round;
     int protected_tail_count = 0;

@@ -341,25 +341,96 @@ void test_root_cuts_preserve_weighted_optimum() {
     assert(root.full_activation_performed);
 }
 
+void test_weighted_burn_frequency_initial_and_activation() {
+    const auto opt = make_weighted_branch_instance(false);
+    firebreak::benders::FppRestrictedCandidateBranchBendersSolver solver;
+    const auto reference =
+        solve_unrestricted_callback(opt, firebreak::risk::RiskMeasureConfig());
+
+    auto initial_options = restricted_options(firebreak::risk::RiskMeasureConfig(), {});
+    initial_options.initial_candidate_policy = "burn-frequency";
+    initial_options.initial_candidate_size = 1;
+    const auto initial_result = solver.solve(opt, initial_options);
+    assert(initial_result.status == "Optimal");
+    assert(initial_result.candidate_scorer == "weighted-burn-frequency");
+    assert(initial_result.candidate_scorer_weighted);
+    assert(initial_result.score_recomputations == 1);
+    assert(!initial_result.initial_candidate_scores.empty());
+    assert_close(final_restricted_objective(initial_result), reference.objective_value);
+
+    auto activation_options = restricted_options(firebreak::risk::RiskMeasureConfig(), {0});
+    activation_options.activation_policy = "burn-frequency";
+    activation_options.activation_batch_size = 1;
+    activation_options.max_candidate_rounds = 1;
+    const auto activation_result = solver.solve(opt, activation_options);
+    assert(activation_result.status == "Optimal");
+    assert(!activation_result.candidates_activated_by_score.empty());
+    assert(!activation_result.candidates_activated_by_full_fallback.empty() ||
+           activation_result.eventually_activated_all);
+    assert_close(final_restricted_objective(activation_result), reference.objective_value);
+}
+
+void test_weighted_benders_coefficient_activation() {
+    const auto opt = make_weighted_branch_instance(false);
+    firebreak::benders::FppRestrictedCandidateBranchBendersSolver solver;
+    const auto reference =
+        solve_unrestricted_callback(opt, firebreak::risk::RiskMeasureConfig());
+
+    auto options = restricted_options(firebreak::risk::RiskMeasureConfig(), {0});
+    options.activation_policy = "benders-coefficients";
+    options.activation_batch_size = 1;
+    options.max_candidate_rounds = 1;
+    const auto result = solver.solve(opt, options);
+    assert(result.status == "Optimal");
+    assert(result.candidate_scorer == "weighted-benders-coefficients");
+    assert(result.candidate_scorer_weighted);
+    assert(result.score_recomputations >= 1);
+    assert(!result.candidates_activated_by_benders_coefficients.empty());
+    assert(!result.candidates_activated_by_score.empty());
+    assert(result.candidate_score_map_hash == opt.cell_weight_map.deterministic_hash);
+    assert_close(final_restricted_objective(result), reference.objective_value);
+}
+
+void test_weighted_tail_aware_activation() {
+    const auto opt = make_weighted_risk_instance();
+    firebreak::benders::FppRestrictedCandidateBranchBendersSolver solver;
+
+    firebreak::risk::RiskMeasureConfig cvar;
+    cvar.type = firebreak::risk::RiskMeasureType::CVaR;
+    cvar.cvarBeta = 0.5;
+    cvar.cvarLambda = 1.0;
+    const auto cvar_reference = solve_unrestricted_callback(opt, cvar);
+    auto cvar_options = restricted_options(cvar, {0});
+    cvar_options.activation_policy = "benders-coefficients";
+    cvar_options.activation_batch_size = 1;
+    cvar_options.max_candidate_rounds = 1;
+    cvar_options.candidate_score_mode = "cvar-tail-blend";
+    const auto cvar_result = solver.solve(opt, cvar_options);
+    assert(cvar_result.status == "Optimal");
+    assert(cvar_result.candidate_scorer == "weighted-cvar-tail-blend");
+    assert(cvar_result.activated_by_tail_blend_count > 0);
+    assert(cvar_result.score_recomputations >= 1);
+    assert_close(final_restricted_objective(cvar_result), cvar_reference.objective_value);
+
+    firebreak::risk::RiskMeasureConfig mean_cvar;
+    mean_cvar.type = firebreak::risk::RiskMeasureType::MeanCVaR;
+    mean_cvar.cvarBeta = 0.5;
+    mean_cvar.cvarLambda = 0.5;
+    const auto mean_reference = solve_unrestricted_callback(opt, mean_cvar);
+    auto mean_options = restricted_options(mean_cvar, {0});
+    mean_options.activation_policy = "benders-coefficients";
+    mean_options.activation_batch_size = 1;
+    mean_options.max_candidate_rounds = 1;
+    mean_options.candidate_score_mode = "cvar-tail-blend";
+    const auto mean_result = solver.solve(opt, mean_options);
+    assert(mean_result.status == "Optimal");
+    assert(mean_result.candidate_scorer == "weighted-cvar-tail-blend");
+    assert_close(final_restricted_objective(mean_result), mean_reference.objective_value);
+}
+
 void test_unsupported_weighted_restricted_options_rejected() {
     const auto opt = make_weighted_branch_instance(false);
     firebreak::benders::FppRestrictedCandidateBranchBendersSolver solver;
-
-    auto burn_frequency_initial =
-        restricted_options(firebreak::risk::RiskMeasureConfig(), {0});
-    burn_frequency_initial.initial_candidate_policy = "burn-frequency";
-    burn_frequency_initial.initial_candidate_size = 1;
-    assert_throws(
-        [&] { (void)solver.solve(opt, burn_frequency_initial); },
-        "burn-frequency initial policy");
-
-    auto activation = restricted_options(firebreak::risk::RiskMeasureConfig(), {0});
-    activation.activation_policy = "benders-coefficients";
-    activation.activation_batch_size = 1;
-    activation.max_candidate_rounds = 1;
-    assert_throws(
-        [&] { (void)solver.solve(opt, activation); },
-        "benders-coefficients activation");
 
     auto llbi = restricted_options(firebreak::risk::RiskMeasureConfig(), {0});
     llbi.use_lifted_lower_bounds = true;
@@ -377,6 +448,21 @@ void test_unsupported_weighted_restricted_options_rejected() {
     assert_throws(
         [&] { (void)solver.solve(opt, maintenance); },
         "candidate maintenance");
+
+    auto expected_tail = restricted_options(firebreak::risk::RiskMeasureConfig(), {0});
+    expected_tail.activation_policy = "benders-coefficients";
+    expected_tail.activation_batch_size = 1;
+    expected_tail.max_candidate_rounds = 1;
+    expected_tail.candidate_score_mode = "cvar-tail-blend";
+    assert_throws(
+        [&] { (void)solver.solve(opt, expected_tail); },
+        "tail-aware expected");
+
+    auto export_tail = restricted_options(firebreak::risk::RiskMeasureConfig(), {0});
+    export_tail.export_tail_score_diagnostics = true;
+    assert_throws(
+        [&] { (void)solver.solve(opt, export_tail); },
+        "tail diagnostic export");
 }
 
 }  // namespace
@@ -391,6 +477,9 @@ int main() {
     test_cut_pool_keeps_inactive_candidate_coefficients();
     test_homogeneous_regression();
     test_root_cuts_preserve_weighted_optimum();
+    test_weighted_burn_frequency_initial_and_activation();
+    test_weighted_benders_coefficient_activation();
+    test_weighted_tail_aware_activation();
     test_unsupported_weighted_restricted_options_rejected();
     std::cout << "All weighted restricted FPP Branch-Benders tests passed.\n";
     return 0;

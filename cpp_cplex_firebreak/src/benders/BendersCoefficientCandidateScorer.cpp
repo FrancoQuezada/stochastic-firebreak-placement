@@ -60,7 +60,8 @@ BendersCoefficientScoringSummary BendersCoefficientCandidateScorer::scoreCandida
     const std::vector<int>& eligible_compact_indices,
     const std::vector<int>& candidates,
     const std::vector<BendersCut>& cuts,
-    const std::map<int, double>& scenario_probability_by_id) const {
+    const std::map<int, double>& scenario_probability_by_id,
+    const std::string& weight_map_hash) const {
     validate_candidate_count(candidate_count);
     if (static_cast<int>(eligible_compact_indices.size()) != candidate_count) {
         throw std::invalid_argument(
@@ -83,6 +84,8 @@ BendersCoefficientScoringSummary BendersCoefficientCandidateScorer::scoreCandida
 
     BendersCoefficientScoringSummary summary;
     summary.cuts_used = static_cast<int>(cuts.size());
+    summary.weighted = !weight_map_hash.empty();
+    summary.weight_map_hash = weight_map_hash;
     summary.detailed_scores.reserve(candidates.size());
     summary.scores.reserve(candidates.size());
 
@@ -160,13 +163,15 @@ BendersCoefficientScoringSummary BendersCoefficientCandidateScorer::scoreInactiv
     const std::vector<int>& eligible_compact_indices,
     const std::vector<int>& inactive_candidates,
     const std::vector<BendersCut>& cuts,
-    const std::map<int, double>& scenario_probability_by_id) const {
+    const std::map<int, double>& scenario_probability_by_id,
+    const std::string& weight_map_hash) const {
     return scoreCandidates(
         candidate_count,
         eligible_compact_indices,
         inactive_candidates,
         cuts,
-        scenario_probability_by_id);
+        scenario_probability_by_id,
+        weight_map_hash);
 }
 
 std::vector<std::pair<int, double>> topBendersCoefficientCandidates(
