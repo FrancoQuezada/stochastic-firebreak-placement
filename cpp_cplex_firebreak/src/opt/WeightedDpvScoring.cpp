@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cctype>
 #include <cmath>
 #include <iomanip>
 #include <limits>
@@ -238,6 +239,25 @@ std::string weighted_dpv_ignition_policy_name(WeightedDpvIgnitionPolicy policy) 
             return "fpp_ignition_no_protection";
     }
     return "unknown";
+}
+
+WeightedDpvIgnitionPolicy parse_weighted_dpv_ignition_policy(const std::string& value) {
+    std::string key;
+    key.reserve(value.size());
+    for (const char ch : value) {
+        if (ch == '-' || ch == '_' || std::isspace(static_cast<unsigned char>(ch))) {
+            continue;
+        }
+        key.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
+    }
+    if (key == "fppsafe" || key == "fppignitionnoprotection") {
+        return WeightedDpvIgnitionPolicy::FppIgnitionNoProtection;
+    }
+    if (key == "legacy" || key == "legacyincludereachable") {
+        return WeightedDpvIgnitionPolicy::LegacyIncludeReachable;
+    }
+    throw std::runtime_error(
+        "Invalid DPV ignition policy '" + value + "'. Supported values: fpp-safe, legacy.");
 }
 
 std::string weighted_dpv_structural_definition(const WeightedDpvScoringOptions& options) {

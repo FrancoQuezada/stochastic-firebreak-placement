@@ -6,6 +6,7 @@
 #include <iostream>
 #include <limits>
 #include <stdexcept>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -56,13 +57,63 @@ bool better_choice(double score, int original_node, const CandidateChoice& incum
     return original_node < incumbent.original_node;
 }
 
+bool is_dpv_metric(GreedyMetricType metric) {
+    return metric == GreedyMetricType::DPV2 || metric == GreedyMetricType::DPV3;
+}
+
+std::string greedy_dpv_variant_name(GreedyMetricType metric) {
+    switch (metric) {
+        case GreedyMetricType::DPV2:
+            return "greedy_dpv2_cumulative_closed_reachability";
+        case GreedyMetricType::DPV3:
+            return "greedy_dpv3_cumulative_inverse_frequency_distance";
+        case GreedyMetricType::Betweenness:
+        case GreedyMetricType::Closeness:
+            return "";
+    }
+    return "";
+}
+
+std::string greedy_dpv_structural_definition(GreedyMetricType metric) {
+    switch (metric) {
+        case GreedyMetricType::DPV2:
+            return "active cumulative propagation graph; score = active outgoing frequency sum times weighted closed reachable destination set";
+        case GreedyMetricType::DPV3:
+            return "active cumulative propagation graph; score = active outgoing frequency sum times weighted inverse-distance destination sum using arc cost 1/frequency";
+        case GreedyMetricType::Betweenness:
+        case GreedyMetricType::Closeness:
+            return "";
+    }
+    return "";
+}
+
+std::string dpv_weight_profile_for_opt(const opt::OptimizationInstance& opt) {
+    if (opt.compact_cell_weights.empty()) {
+        return "homogeneous";
+    }
+    return opt.cell_weight_map.profile.empty() ? "provided_compact_weights" : opt.cell_weight_map.profile;
+}
+
+std::string dpv_weight_hash_for_opt(const opt::OptimizationInstance& opt) {
+    return opt.compact_cell_weights.empty() ? "" : opt.cell_weight_map.deterministic_hash;
+}
+
+struct ScoreSummary {
+    double min = 0.0;
+    double max = 0.0;
+    double mean = 0.0;
+};
+
 class LowMemoryGreedyScorer {
 public:
     LowMemoryGreedyScorer(
         const opt::OptimizationInstance& opt,
-        const CumulativePropagationGraph& graph)
+        const CumulativePropagationGraph& graph,
+        opt::WeightedDpvIgnitionPolicy ignition_policy)
         : opt_(opt),
           graph_(graph),
+          ignition_policy_(ignition_policy),
+          compact_weights_(opt::canonical_compact_dpv_weights_or_unit(opt)),
           node_count_(graph.numNodes()),
           forward_(static_cast<std::size_t>(node_count_)),
           reverse_(static_cast<std::size_t>(node_count_)),
@@ -80,9 +131,17 @@ public:
           brandes_sigma_(static_cast<std::size_t>(node_count_), 0.0),
           brandes_delta_(static_cast<std::size_t>(node_count_), 0.0),
           brandes_predecessors_(static_cast<std::size_t>(node_count_)) {
+        if (compact_weights_.size() != static_cast<std::size_t>(node_count_)) {
+            throw std::runtime_error("Greedy weighted DPV compact weights do not match the graph node count.");
+        }
         for (const int candidate : opt_.eligible_indices) {
             validate_node(candidate, "eligible candidate");
             eligible_[static_cast<std::size_t>(candidate)] = 1;
+        }
+        ignition_candidate_.assign(static_cast<std::size_t>(node_count_), 0);
+        for (const auto& scenario : opt_.scenarios) {
+            validate_node(scenario.ignition_index, "scenario ignition");
+            ignition_candidate_[static_cast<std::size_t>(scenario.ignition_index)] = 1;
         }
         build_weighted_adjacency();
     }
@@ -114,6 +173,32 @@ public:
             }
         }
         return best;
+    }
+
+    ScoreSummary eligibleScoreSummary() const {
+        ScoreSummary summary;
+        bool found = false;
+        double total = 0.0;
+        int count = 0;
+        for (const int candidate : opt_.eligible_indices) {
+            const double score = scores_[static_cast<std::size_t>(candidate)];
+            if (!found) {
+                summary.min = score;
+                summary.max = score;
+                found = true;
+            } else {
+                summary.min = std::min(summary.min, score);
+                summary.max = std::max(summary.max, score);
+            }
+            total += score;
+            ++count;
+        }
+        summary.mean = count > 0 ? total / static_cast<double>(count) : 0.0;
+        return summary;
+    }
+
+    int scoreRecomputations() const {
+        return score_recomputations_;
     }
 
     void blockSelectedAndRefreshAffected(int selected, GreedyMetricType metric) {
@@ -189,6 +274,9 @@ public:
 private:
     const opt::OptimizationInstance& opt_;
     const CumulativePropagationGraph& graph_;
+    opt::WeightedDpvIgnitionPolicy ignition_policy_;
+    std::vector<double> compact_weights_;
+    std::vector<char> ignition_candidate_;
     int node_count_ = 0;
     std::vector<std::vector<WeightedArc>> forward_;
     std::vector<std::vector<WeightedArc>> reverse_;
@@ -214,6 +302,7 @@ private:
     std::vector<std::vector<int>> brandes_predecessors_;
     std::vector<int> brandes_queue_;
     std::vector<int> brandes_order_;
+    int score_recomputations_ = 0;
 
     void validate_node(int node, const char* context) const {
         if (node < 0 || node >= node_count_) {
@@ -282,6 +371,9 @@ private:
         if (blocked_[static_cast<std::size_t>(candidate)]) {
             return 0.0;
         }
+        if (is_dpv_metric(metric)) {
+            ++score_recomputations_;
+        }
 
         switch (metric) {
             case GreedyMetricType::DPV3:
@@ -297,14 +389,22 @@ private:
     }
 
     double dpv2Score(int candidate) {
+        if (ignition_policy_ == opt::WeightedDpvIgnitionPolicy::FppIgnitionNoProtection &&
+            ignition_candidate_[static_cast<std::size_t>(candidate)]) {
+            return 0.0;
+        }
         const double outgoing_sum = active_out_freq_[static_cast<std::size_t>(candidate)];
         if (outgoing_sum <= 0.0) {
             return 0.0;
         }
-        return outgoing_sum * static_cast<double>(closedReachableCount(candidate));
+        return outgoing_sum * closedReachableWeight(candidate);
     }
 
     double dpv3Score(int candidate) {
+        if (ignition_policy_ == opt::WeightedDpvIgnitionPolicy::FppIgnitionNoProtection &&
+            ignition_candidate_[static_cast<std::size_t>(candidate)]) {
+            return 0.0;
+        }
         const double outgoing_sum = active_out_freq_[static_cast<std::size_t>(candidate)];
         if (outgoing_sum <= 0.0) {
             return 0.0;
@@ -312,16 +412,16 @@ private:
         return outgoing_sum * inverseWeightedDownstream(candidate);
     }
 
-    int closedReachableCount(int source) {
+    double closedReachableWeight(int source) {
         const int stamp = nextStamp();
         queue_.clear();
         visit_stamp_[static_cast<std::size_t>(source)] = stamp;
         queue_.push_back(source);
 
-        int count = 0;
+        double total_weight = 0.0;
         for (std::size_t head = 0; head < queue_.size(); ++head) {
             const int current = queue_[head];
-            ++count;
+            total_weight += compact_weights_[static_cast<std::size_t>(current)];
             for (const auto& arc : forward_[static_cast<std::size_t>(current)]) {
                 const int next = arc.node;
                 if (blocked_[static_cast<std::size_t>(next)]) {
@@ -334,7 +434,7 @@ private:
                 queue_.push_back(next);
             }
         }
-        return count;
+        return total_weight;
     }
 
     double inverseWeightedDownstream(int source) {
@@ -354,7 +454,7 @@ private:
                 continue;
             }
 
-            downstream += 1.0 / (1.0 + current_distance);
+            downstream += compact_weights_[static_cast<std::size_t>(current)] / (1.0 + current_distance);
             for (const auto& arc : forward_[static_cast<std::size_t>(current)]) {
                 const int next = arc.node;
                 if (blocked_[static_cast<std::size_t>(next)]) {
@@ -498,6 +598,20 @@ GreedyResult GreedyHeuristic::runGreedy(
     GreedyMetricType metric,
     bool recompute_each_iteration,
     bool verbose) const {
+    return runGreedy(
+        opt,
+        metric,
+        recompute_each_iteration,
+        verbose,
+        GreedyHeuristicOptions{});
+}
+
+GreedyResult GreedyHeuristic::runGreedy(
+    const opt::OptimizationInstance& opt,
+    GreedyMetricType metric,
+    bool recompute_each_iteration,
+    bool verbose,
+    const GreedyHeuristicOptions& options) const {
     (void)recompute_each_iteration;
     validate_input(opt);
 
@@ -505,15 +619,38 @@ GreedyResult GreedyHeuristic::runGreedy(
 
     CumulativePropagationGraph graph;
     graph.buildFromOptimizationInstance(opt);
-    LowMemoryGreedyScorer scorer(opt, graph);
+    LowMemoryGreedyScorer scorer(opt, graph, options.dpv_ignition_policy);
 
     GreedyResult result;
     result.method_name = greedyMethodName(metric);
     result.objective_metric = greedyObjectiveMetricName(metric);
     result.metric_notes = metric_notes_for_implementation(metric);
+    if (is_dpv_metric(metric)) {
+        result.dpv_weighted = true;
+        result.dpv_variant = greedy_dpv_variant_name(metric);
+        result.dpv_structural_definition = greedy_dpv_structural_definition(metric);
+        result.dpv_ignition_policy = opt::weighted_dpv_ignition_policy_name(options.dpv_ignition_policy);
+        result.dpv_weight_profile = dpv_weight_profile_for_opt(opt);
+        result.dpv_weight_map_hash = dpv_weight_hash_for_opt(opt);
+        result.dpv_scenario_aggregation = "cumulative_arc_frequency_sum_over_training_scenarios";
+        result.dpv_normalization = "none";
+        result.dpv_candidates_scored = static_cast<int>(opt.eligible_indices.size());
+        result.metric_notes.push_back(
+            "Greedy-DPV destination contributions use canonical compact cell weights; omitted weight maps are homogeneous unit weights.");
+        if (options.dpv_ignition_policy == opt::WeightedDpvIgnitionPolicy::FppIgnitionNoProtection) {
+            result.metric_notes.push_back(
+                "FPP-safe DPV ignition policy gives zero downstream-protection credit to any training ignition candidate.");
+        }
+    }
 
     if (metric != GreedyMetricType::Betweenness) {
         scorer.initializeScores(metric);
+        if (is_dpv_metric(metric)) {
+            const auto summary = scorer.eligibleScoreSummary();
+            result.dpv_score_min = summary.min;
+            result.dpv_score_max = summary.max;
+            result.dpv_score_mean = summary.mean;
+        }
     }
 
     for (int step = 0; step < opt.budget; ++step) {
@@ -546,6 +683,15 @@ GreedyResult GreedyHeuristic::runGreedy(
 
     const auto end = std::chrono::steady_clock::now();
     result.runtime_seconds = std::chrono::duration<double>(end - start).count();
+    if (is_dpv_metric(metric)) {
+        result.dpv_candidates_selected = static_cast<int>(result.selected_firebreak_indices.size());
+        result.dpv_selected_score_sum = result.total_score;
+        result.dpv_selection_time_sec = result.runtime_seconds;
+        result.dpv_surrogate_objective = result.total_score;
+        result.dpv_greedy_iterations = result.dpv_candidates_selected;
+        result.dpv_score_recomputations = scorer.scoreRecomputations();
+        result.dpv_marginal_scores_evaluated = scorer.scoreRecomputations();
+    }
     return result;
 }
 

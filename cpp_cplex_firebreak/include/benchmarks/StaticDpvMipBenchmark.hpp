@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "opt/OptimizationInstance.hpp"
+#include "opt/WeightedDpvScoring.hpp"
 
 namespace firebreak::benchmarks {
 
@@ -15,6 +16,8 @@ struct StaticDpvMipOptions {
     bool enable_treatment_loss_constraint = false;
     double treatment_loss_beta = std::numeric_limits<double>::quiet_NaN();
     double baseline_expected_loss = std::numeric_limits<double>::quiet_NaN();
+    opt::WeightedDpvIgnitionPolicy ignition_policy =
+        opt::WeightedDpvIgnitionPolicy::LegacyIncludeReachable;
 };
 
 struct StaticDpvMipNodeScore {
@@ -34,6 +37,22 @@ struct StaticDpvMipBenchmarkResult {
     std::string solver_status = "ExactTopBudget";
     std::size_t num_variables = 0;
     std::size_t num_constraints = 1;
+    std::string dpv_variant;
+    std::string dpv_structural_definition;
+    std::string dpv_ignition_policy;
+    std::string dpv_weight_profile;
+    std::string dpv_weight_map_hash;
+    std::string dpv_scenario_aggregation = "scenario_probability_weighted_sum";
+    std::string dpv_normalization = "none";
+    int dpv_candidates_scored = 0;
+    int dpv_candidates_selected = 0;
+    double dpv_score_min = 0.0;
+    double dpv_score_max = 0.0;
+    double dpv_score_mean = 0.0;
+    double dpv_score_precompute_time_sec = 0.0;
+    double dpv_selection_time_sec = 0.0;
+    bool dpv_structural_cache_hit = false;
+    bool dpv_weighted_cache_hit = false;
 };
 
 class StaticDpvMipBenchmark {

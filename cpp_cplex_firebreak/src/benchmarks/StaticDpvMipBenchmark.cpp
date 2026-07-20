@@ -8,25 +8,6 @@ namespace firebreak::benchmarks {
 
 namespace {
 
-const opt::DpvNodeIndexSet& node_set_for_index(
-    const opt::OptimizationScenario& scenario,
-    int node_index) {
-    if (node_index >= 0 && node_index < static_cast<int>(scenario.dpv.node_sets.size())) {
-        const auto& candidate = scenario.dpv.node_sets[static_cast<std::size_t>(node_index)];
-        if (candidate.node_index == node_index) {
-            return candidate;
-        }
-    }
-
-    for (const auto& node_set : scenario.dpv.node_sets) {
-        if (node_set.node_index == node_index) {
-            return node_set;
-        }
-    }
-
-    throw std::runtime_error("Static-DPV-MIP could not find a DPV node set for a mapped node.");
-}
-
 void validate_static_dpv_mip_input(
     const opt::OptimizationInstance& opt,
     int budget,
@@ -71,15 +52,6 @@ void validate_static_dpv_mip_input(
     }
 }
 
-double downstream_value_for_node(
-    const StaticDpvMipOptions& options,
-    int compact_index) {
-    if (options.downstream_values_by_compact_index.empty()) {
-        return 1.0;
-    }
-    return options.downstream_values_by_compact_index[static_cast<std::size_t>(compact_index)];
-}
-
 double treatment_loss_for_node(
     const StaticDpvMipOptions& options,
     int compact_index) {
@@ -102,36 +74,31 @@ StaticDpvMipBenchmarkResult StaticDpvMipBenchmark::run(
     StaticDpvMipBenchmarkResult result;
     result.num_variables = opt.eligible_indices.size();
     result.num_constraints = 1;
-    result.all_scores.reserve(opt.eligible_indices.size());
+    opt::WeightedDpvScoringOptions scoring_options;
+    scoring_options.variant = opt::WeightedDpvVariant::StaticClosedDescendants;
+    scoring_options.ignition_policy = options.ignition_policy;
+    const auto structural_data = opt::build_weighted_dpv_structural_data(
+        opt,
+        opt.eligible_indices,
+        scoring_options);
+    const auto compact_weights = options.downstream_values_by_compact_index.empty()
+        ? opt::canonical_compact_dpv_weights_or_unit(opt)
+        : options.downstream_values_by_compact_index;
+    const auto score_report = opt::evaluate_weighted_dpv_scores(
+        opt,
+        structural_data,
+        compact_weights,
+        scoring_options);
 
-    for (const int compact_index : opt.eligible_indices) {
-        double dpv_score = 0.0;
-        for (const auto& scenario : opt.scenarios) {
-            const auto& node_set = node_set_for_index(scenario, compact_index);
-            double scenario_score = 0.0;
-            for (const int descendant_index : node_set.descendant_indices) {
-                scenario_score += downstream_value_for_node(options, descendant_index);
-            }
-            dpv_score += scenario.probability * scenario_score;
-        }
-
+    result.all_scores.reserve(score_report.candidate_scores.size());
+    for (const auto& score : score_report.candidate_scores) {
         result.all_scores.push_back(StaticDpvMipNodeScore{
-            compact_index,
-            opt.node_mapper.to_node(compact_index),
-            dpv_score,
-            treatment_loss_for_node(options, compact_index),
+            score.compact_index,
+            score.original_node,
+            score.weighted_score,
+            treatment_loss_for_node(options, score.compact_index),
         });
     }
-
-    std::sort(
-        result.all_scores.begin(),
-        result.all_scores.end(),
-        [](const StaticDpvMipNodeScore& lhs, const StaticDpvMipNodeScore& rhs) {
-            if (lhs.dpv_score != rhs.dpv_score) {
-                return lhs.dpv_score > rhs.dpv_score;
-            }
-            return lhs.original_node < rhs.original_node;
-        });
 
     const auto selected_count = static_cast<std::size_t>(budget);
     result.selected_firebreak_indices.reserve(selected_count);
@@ -145,9 +112,25 @@ StaticDpvMipBenchmarkResult StaticDpvMipBenchmark::run(
         result.selected_scores.push_back(score.dpv_score);
         result.total_static_dpv_score += score.dpv_score;
     }
+    result.dpv_variant = score_report.diagnostics.dpv_variant;
+    result.dpv_structural_definition = score_report.diagnostics.dpv_structural_definition;
+    result.dpv_ignition_policy = opt::weighted_dpv_ignition_policy_name(options.ignition_policy);
+    result.dpv_weight_profile = score_report.diagnostics.dpv_weight_profile;
+    result.dpv_weight_map_hash = score_report.diagnostics.dpv_weight_map_hash;
+    result.dpv_candidates_scored = score_report.diagnostics.dpv_candidates;
+    result.dpv_candidates_selected = static_cast<int>(result.selected_firebreak_indices.size());
+    result.dpv_score_min = score_report.diagnostics.dpv_score_min;
+    result.dpv_score_max = score_report.diagnostics.dpv_score_max;
+    result.dpv_score_mean = score_report.diagnostics.dpv_score_mean;
+    result.dpv_score_precompute_time_sec =
+        score_report.diagnostics.dpv_precompute_time_sec +
+        score_report.diagnostics.dpv_weighted_evaluation_time_sec;
+    result.dpv_structural_cache_hit = score_report.diagnostics.dpv_structural_cache_hit;
+    result.dpv_weighted_cache_hit = score_report.diagnostics.dpv_weighted_cache_hit;
 
     const auto end = std::chrono::steady_clock::now();
     result.runtime_seconds = std::chrono::duration<double>(end - start).count();
+    result.dpv_selection_time_sec = result.runtime_seconds;
     return result;
 }
 

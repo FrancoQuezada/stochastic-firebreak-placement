@@ -105,6 +105,7 @@ struct WeightedDpvScoreReport {
 
 std::string weighted_dpv_variant_name(WeightedDpvVariant variant);
 std::string weighted_dpv_ignition_policy_name(WeightedDpvIgnitionPolicy policy);
+WeightedDpvIgnitionPolicy parse_weighted_dpv_ignition_policy(const std::string& value);
 std::string weighted_dpv_structural_definition(const WeightedDpvScoringOptions& options);
 
 std::vector<double> canonical_compact_dpv_weights_or_unit(const OptimizationInstance& opt);

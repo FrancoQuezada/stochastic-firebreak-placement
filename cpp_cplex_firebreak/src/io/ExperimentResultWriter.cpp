@@ -1435,6 +1435,39 @@ void write_experiment_result_json(
         << format_json_number(result.objective_validation_rel_difference) << ",\n";
     out << "  \"objective_validation_passed\": "
         << (result.objective_validation_passed ? "true" : "false") << ",\n";
+    out << "  \"dpv_weighted\": " << (result.dpv_weighted ? "true" : "false") << ",\n";
+    out << "  \"dpv_variant\": \"" << json_escape_local(result.dpv_variant) << "\",\n";
+    out << "  \"dpv_structural_definition\": \""
+        << json_escape_local(result.dpv_structural_definition) << "\",\n";
+    out << "  \"dpv_ignition_policy\": \"" << json_escape_local(result.dpv_ignition_policy) << "\",\n";
+    out << "  \"dpv_weight_profile\": \"" << json_escape_local(result.dpv_weight_profile) << "\",\n";
+    out << "  \"dpv_weight_map_hash\": \"" << json_escape_local(result.dpv_weight_map_hash) << "\",\n";
+    out << "  \"dpv_scenario_aggregation\": \""
+        << json_escape_local(result.dpv_scenario_aggregation) << "\",\n";
+    out << "  \"dpv_normalization\": \"" << json_escape_local(result.dpv_normalization) << "\",\n";
+    out << "  \"dpv_candidates_scored\": " << result.dpv_candidates_scored << ",\n";
+    out << "  \"dpv_candidates_selected\": " << result.dpv_candidates_selected << ",\n";
+    out << "  \"dpv_score_min\": " << format_json_number(result.dpv_score_min) << ",\n";
+    out << "  \"dpv_score_max\": " << format_json_number(result.dpv_score_max) << ",\n";
+    out << "  \"dpv_score_mean\": " << format_json_number(result.dpv_score_mean) << ",\n";
+    out << "  \"dpv_selected_score_sum\": "
+        << format_json_number(result.dpv_selected_score_sum) << ",\n";
+    out << "  \"dpv_structural_cache_hit\": "
+        << (result.dpv_structural_cache_hit ? "true" : "false") << ",\n";
+    out << "  \"dpv_weighted_cache_hit\": "
+        << (result.dpv_weighted_cache_hit ? "true" : "false") << ",\n";
+    out << "  \"dpv_score_precompute_time_sec\": "
+        << format_json_number(result.dpv_score_precompute_time_sec) << ",\n";
+    out << "  \"dpv_selection_time_sec\": "
+        << format_json_number(result.dpv_selection_time_sec) << ",\n";
+    out << "  \"dpv_surrogate_objective\": "
+        << format_json_number(result.dpv_surrogate_objective) << ",\n";
+    out << "  \"dpv_greedy_iterations\": " << result.dpv_greedy_iterations << ",\n";
+    out << "  \"dpv_score_recomputations\": " << result.dpv_score_recomputations << ",\n";
+    out << "  \"dpv_marginal_scores_evaluated\": "
+        << result.dpv_marginal_scores_evaluated << ",\n";
+    out << "  \"dpv_overlap_value_removed\": "
+        << format_json_number(result.dpv_overlap_value_removed) << ",\n";
     out << "  \"risk_measure\": \"" << json_escape_local(result.risk_measure) << "\",\n";
     out << "  \"cvar_beta\": " << format_json_number(result.cvar_beta) << ",\n";
     out << "  \"cvar_lambda\": " << format_json_number(result.cvar_lambda) << ",\n";
@@ -1555,6 +1588,8 @@ void append_experiment_result_csv(
         write_header || existing_csv_has_column(output_path, "risk_measure");
     const bool include_weight_reporting =
         write_header || existing_csv_has_column(output_path, "weight_profile");
+    const bool include_dpv_reporting =
+        write_header || existing_csv_has_column(output_path, "dpv_weighted");
     const bool include_graph_ratios =
         write_header || existing_csv_has_column(output_path, "train_graph_classification_ratios");
     ensure_parent_directory(output_path);
@@ -1797,6 +1832,14 @@ void append_experiment_result_csv(
             << "solver_weighted_objective,evaluator_weighted_objective,"
             << "objective_validation_abs_difference,objective_validation_rel_difference,"
             << "objective_validation_passed,"
+            << "dpv_weighted,dpv_variant,dpv_structural_definition,dpv_ignition_policy,"
+            << "dpv_weight_profile,dpv_weight_map_hash,dpv_scenario_aggregation,dpv_normalization,"
+            << "dpv_candidates_scored,dpv_candidates_selected,"
+            << "dpv_score_min,dpv_score_max,dpv_score_mean,dpv_selected_score_sum,"
+            << "dpv_structural_cache_hit,dpv_weighted_cache_hit,"
+            << "dpv_score_precompute_time_sec,dpv_selection_time_sec,dpv_surrogate_objective,"
+            << "dpv_greedy_iterations,dpv_score_recomputations,dpv_marginal_scores_evaluated,"
+            << "dpv_overlap_value_removed,"
             << "validation_status,"
             << "risk_measure,cvar_beta,cvar_lambda,train_cvar_burned_area,test_cvar_burned_area,"
             << "train_expected_weighted_burn_loss,test_expected_weighted_burn_loss,"
@@ -2225,6 +2268,31 @@ void append_experiment_result_csv(
             << format_csv_number(result.objective_validation_abs_difference) << ","
             << format_csv_number(result.objective_validation_rel_difference) << ","
             << (result.objective_validation_passed ? "true" : "false") << ",";
+    }
+    if (include_dpv_reporting) {
+        out << (result.dpv_weighted ? "true" : "false") << ","
+            << csv_escape(result.dpv_variant) << ","
+            << csv_escape(result.dpv_structural_definition) << ","
+            << csv_escape(result.dpv_ignition_policy) << ","
+            << csv_escape(result.dpv_weight_profile) << ","
+            << csv_escape(result.dpv_weight_map_hash) << ","
+            << csv_escape(result.dpv_scenario_aggregation) << ","
+            << csv_escape(result.dpv_normalization) << ","
+            << result.dpv_candidates_scored << ","
+            << result.dpv_candidates_selected << ","
+            << format_csv_number(result.dpv_score_min) << ","
+            << format_csv_number(result.dpv_score_max) << ","
+            << format_csv_number(result.dpv_score_mean) << ","
+            << format_csv_number(result.dpv_selected_score_sum) << ","
+            << (result.dpv_structural_cache_hit ? "true" : "false") << ","
+            << (result.dpv_weighted_cache_hit ? "true" : "false") << ","
+            << format_csv_number(result.dpv_score_precompute_time_sec) << ","
+            << format_csv_number(result.dpv_selection_time_sec) << ","
+            << format_csv_number(result.dpv_surrogate_objective) << ","
+            << result.dpv_greedy_iterations << ","
+            << result.dpv_score_recomputations << ","
+            << result.dpv_marginal_scores_evaluated << ","
+            << format_csv_number(result.dpv_overlap_value_removed) << ",";
     }
     if (include_validation_status) {
         out << csv_escape(result.validation_status) << ",";

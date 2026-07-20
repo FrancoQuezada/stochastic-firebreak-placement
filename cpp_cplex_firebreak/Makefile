@@ -247,6 +247,78 @@ TEST_WEIGHTED_FPP_DPV_DIAGNOSTICS_SOURCES := \
 	src/opt/WeightedDpvScoring.cpp \
 	tests/test_weighted_fpp_dpv_diagnostics.cpp
 
+TEST_WEIGHTED_STATIC_DPV_HEURISTIC_SOURCES := \
+	src/benchmarks/StaticDpvBenchmark.cpp \
+	src/opt/IndexMapper.cpp \
+	src/opt/OptimizationInstance.cpp \
+	src/opt/DpvIndexBuilder.cpp \
+	src/opt/WeightedDpvScoring.cpp \
+	tests/test_weighted_static_dpv_heuristic.cpp
+
+TEST_WEIGHTED_STATIC_DPV_MIP_SOURCES := \
+	src/benchmarks/StaticDpvMipBenchmark.cpp \
+	src/opt/IndexMapper.cpp \
+	src/opt/OptimizationInstance.cpp \
+	src/opt/DpvIndexBuilder.cpp \
+	src/opt/WeightedDpvScoring.cpp \
+	tests/test_weighted_static_dpv_mip.cpp
+
+TEST_WEIGHTED_GREEDY_DPV2_SOURCES := \
+	src/heuristics/CumulativePropagationGraph.cpp \
+	src/heuristics/GreedyMetrics.cpp \
+	src/heuristics/GreedyHeuristic.cpp \
+	src/opt/IndexMapper.cpp \
+	src/opt/OptimizationInstance.cpp \
+	src/opt/DpvIndexBuilder.cpp \
+	src/opt/WeightedDpvScoring.cpp \
+	tests/test_weighted_greedy_dpv2.cpp
+
+TEST_WEIGHTED_GREEDY_DPV3_SOURCES := \
+	src/heuristics/CumulativePropagationGraph.cpp \
+	src/heuristics/GreedyMetrics.cpp \
+	src/heuristics/GreedyHeuristic.cpp \
+	src/opt/IndexMapper.cpp \
+	src/opt/OptimizationInstance.cpp \
+	src/opt/DpvIndexBuilder.cpp \
+	src/opt/WeightedDpvScoring.cpp \
+	tests/test_weighted_greedy_dpv3.cpp
+
+TEST_WEIGHTED_DPV_HEURISTIC_OOS_SOURCES := \
+	src/analysis/GraphDiagnostics.cpp \
+	src/benchmarks/StaticDpvBenchmark.cpp \
+	src/benchmarks/StaticDpvMipBenchmark.cpp \
+	src/core/FirebreakSolution.cpp \
+	src/core/Graph.cpp \
+	src/core/Scenario.cpp \
+	src/core/Instance.cpp \
+	src/core/LandscapeWeightMap.cpp \
+	src/eval/BurnedAreaEvaluator.cpp \
+	src/eval/FppRecourseEvaluator.cpp \
+	src/experiments/StaticDpvOutOfSampleRunner.cpp \
+	src/experiments/GreedyOutOfSampleRunner.cpp \
+	src/heuristics/CumulativePropagationGraph.cpp \
+	src/heuristics/GreedyMetrics.cpp \
+	src/heuristics/GreedyHeuristic.cpp \
+	src/io/Cell2FireReader.cpp \
+	src/io/ExperimentResultWriter.cpp \
+	src/io/PathUtils.cpp \
+	src/io/ScenarioFileUtils.cpp \
+	src/io/ScenarioSplitUtils.cpp \
+	src/io/SolutionIO.cpp \
+	src/opt/IndexMapper.cpp \
+	src/opt/OptimizationInstance.cpp \
+	src/opt/OptimizationInstanceBuilder.cpp \
+	src/opt/DpvIndexBuilder.cpp \
+	src/opt/WeightedDpvScoring.cpp \
+	src/risk/RiskMeasure.cpp \
+	src/solver/FppWeightedLossUtils.cpp \
+	tests/test_weighted_dpv_heuristic_oos.cpp
+
+TEST_WEIGHTED_DPV_HEURISTIC_REPORTING_SOURCES := \
+	src/io/ExperimentResultWriter.cpp \
+	src/io/PathUtils.cpp \
+	tests/test_weighted_dpv_heuristic_reporting.cpp
+
 TEST_FPP_STRUCTURE_SOURCES := \
 	src/core/LandscapeWeightMap.cpp \
 	src/io/PathUtils.cpp \
@@ -454,6 +526,7 @@ TEST_STATIC_DPV_SOURCES := \
 	src/opt/IndexMapper.cpp \
 	src/opt/OptimizationInstance.cpp \
 	src/opt/DpvIndexBuilder.cpp \
+	src/opt/WeightedDpvScoring.cpp \
 	tests/test_static_dpv_benchmark.cpp
 
 TEST_STATIC_DPV_MIP_SOURCES := \
@@ -462,6 +535,7 @@ TEST_STATIC_DPV_MIP_SOURCES := \
 	src/opt/IndexMapper.cpp \
 	src/opt/OptimizationInstance.cpp \
 	src/opt/DpvIndexBuilder.cpp \
+	src/opt/WeightedDpvScoring.cpp \
 	tests/test_static_dpv_mip_benchmark.cpp
 
 TEST_CUMULATIVE_GRAPH_SOURCES := \
@@ -476,6 +550,7 @@ TEST_GREEDY_SOURCES := \
 	src/heuristics/GreedyHeuristic.cpp \
 	src/opt/IndexMapper.cpp \
 	src/opt/OptimizationInstance.cpp \
+	src/opt/WeightedDpvScoring.cpp \
 	tests/test_greedy_heuristics.cpp
 
 TEST_WARM_START_SOURCES := \
@@ -839,6 +914,12 @@ TEST_EXES := \
 	$(BUILD_DIR)/test_weighted_fpp_dpv_variants \
 	$(BUILD_DIR)/test_weighted_fpp_dpv_cache \
 	$(BUILD_DIR)/test_weighted_fpp_dpv_diagnostics \
+	$(BUILD_DIR)/test_weighted_static_dpv_heuristic \
+	$(BUILD_DIR)/test_weighted_static_dpv_mip \
+	$(BUILD_DIR)/test_weighted_greedy_dpv2 \
+	$(BUILD_DIR)/test_weighted_greedy_dpv3 \
+	$(BUILD_DIR)/test_weighted_dpv_heuristic_oos \
+	$(BUILD_DIR)/test_weighted_dpv_heuristic_reporting \
 	$(BUILD_DIR)/test_fpp_recourse_evaluator \
 	$(BUILD_DIR)/test_weighted_fpp_recourse_evaluator \
 	$(BUILD_DIR)/test_fpp_saa_model_structure \
@@ -1014,6 +1095,24 @@ $(BUILD_DIR)/test_weighted_fpp_dpv_cache: $(call test_obj,$(TEST_WEIGHTED_FPP_DP
 	$(CXX) $^ -o $@
 
 $(BUILD_DIR)/test_weighted_fpp_dpv_diagnostics: $(call test_obj,$(TEST_WEIGHTED_FPP_DPV_DIAGNOSTICS_SOURCES))
+	$(CXX) $^ -o $@
+
+$(BUILD_DIR)/test_weighted_static_dpv_heuristic: $(call test_obj,$(TEST_WEIGHTED_STATIC_DPV_HEURISTIC_SOURCES))
+	$(CXX) $^ -o $@
+
+$(BUILD_DIR)/test_weighted_static_dpv_mip: $(call test_obj,$(TEST_WEIGHTED_STATIC_DPV_MIP_SOURCES))
+	$(CXX) $^ -o $@
+
+$(BUILD_DIR)/test_weighted_greedy_dpv2: $(call test_obj,$(TEST_WEIGHTED_GREEDY_DPV2_SOURCES))
+	$(CXX) $^ -o $@
+
+$(BUILD_DIR)/test_weighted_greedy_dpv3: $(call test_obj,$(TEST_WEIGHTED_GREEDY_DPV3_SOURCES))
+	$(CXX) $^ -o $@
+
+$(BUILD_DIR)/test_weighted_dpv_heuristic_oos: $(call test_obj,$(TEST_WEIGHTED_DPV_HEURISTIC_OOS_SOURCES))
+	$(CXX) $^ -o $@
+
+$(BUILD_DIR)/test_weighted_dpv_heuristic_reporting: $(call test_obj,$(TEST_WEIGHTED_DPV_HEURISTIC_REPORTING_SOURCES))
 	$(CXX) $^ -o $@
 
 $(BUILD_DIR)/test_fpp_saa_model_structure: $(call test_obj,$(TEST_FPP_STRUCTURE_SOURCES))
@@ -1324,6 +1423,12 @@ test: $(TEST_EXES)
 	./build_gpp/test_weighted_fpp_dpv_variants
 	./build_gpp/test_weighted_fpp_dpv_cache
 	./build_gpp/test_weighted_fpp_dpv_diagnostics
+	./build_gpp/test_weighted_static_dpv_heuristic
+	./build_gpp/test_weighted_static_dpv_mip
+	./build_gpp/test_weighted_greedy_dpv2
+	./build_gpp/test_weighted_greedy_dpv3
+	./build_gpp/test_weighted_dpv_heuristic_oos
+	./build_gpp/test_weighted_dpv_heuristic_reporting
 	./build_gpp/test_burned_area_evaluator
 	./build_gpp/test_fpp_recourse_evaluator
 	./build_gpp/test_weighted_fpp_recourse_evaluator

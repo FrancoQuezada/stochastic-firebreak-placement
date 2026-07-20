@@ -12,6 +12,7 @@
 #include "benchmarks/StaticDpvMipBenchmark.hpp"
 #include "core/FirebreakSolution.hpp"
 #include "eval/BurnedAreaEvaluator.hpp"
+#include "eval/FppRecourseEvaluator.hpp"
 #include "io/Cell2FireReader.hpp"
 #include "io/ExperimentResultWriter.hpp"
 #include "io/PathUtils.hpp"
@@ -19,6 +20,8 @@
 #include "io/ScenarioSplitUtils.hpp"
 #include "io/SolutionIO.hpp"
 #include "opt/OptimizationInstanceBuilder.hpp"
+#include "opt/WeightedDpvScoring.hpp"
+#include "solver/FppWeightedLossUtils.hpp"
 
 namespace firebreak::experiments {
 
@@ -51,8 +54,8 @@ std::string method_label(const StaticDpvOutOfSampleOptions& options) {
 
 std::string objective_metric(const StaticDpvOutOfSampleOptions& options) {
     return options.use_static_dpv_mip
-        ? "static_DPV_MIP_unit_downstream_value"
-        : "precomputed_static_DPV_unit_weights";
+        ? "static_DPV_MIP_weighted_closed_descendants_surrogate"
+        : "precomputed_static_DPV_weighted_closed_descendants_times_out_degree";
 }
 
 std::filesystem::path default_experiment_csv_path(const StaticDpvOutOfSampleOptions& options) {
@@ -103,6 +106,102 @@ void print_summary(
     std::cout << "Solution CSV: " << firebreak::io::path_to_string(solution_csv_path) << "\n";
 }
 
+void attach_weighted_eval_fields(
+    io::StandardExperimentResult& result,
+    const opt::OptimizationInstance& train_opt,
+    const opt::OptimizationInstance& test_opt,
+    const eval::FppRecourseResult& train_weighted_eval,
+    const eval::FppRecourseResult& test_weighted_eval,
+    const std::filesystem::path& weight_map_file) {
+    if (train_weighted_eval.weight_map_hash != test_weighted_eval.weight_map_hash) {
+        throw std::runtime_error("Train/test weighted evaluation hash mismatch.");
+    }
+    result.weight_profile = train_weighted_eval.weight_profile;
+    result.weight_map_file = weight_map_file.empty() ? "" : weight_map_file.string();
+    result.weight_map_hash = train_weighted_eval.weight_map_hash;
+    result.weight_normalized =
+        !train_opt.cell_weight_map.weight_by_original_cell_id.empty() &&
+        train_opt.cell_weight_map.normalized;
+    result.weight_mean = train_opt.cell_weight_map.weight_by_original_cell_id.empty()
+        ? 1.0
+        : train_opt.cell_weight_map.normalized_mean;
+    result.weight_min = train_opt.cell_weight_map.weight_by_original_cell_id.empty()
+        ? 1.0
+        : train_opt.cell_weight_map.minimum_weight;
+    result.weight_max = train_opt.cell_weight_map.weight_by_original_cell_id.empty()
+        ? 1.0
+        : train_opt.cell_weight_map.maximum_weight;
+    result.weight_total = train_weighted_eval.total_landscape_weight;
+    result.solver_weighted_objective = std::numeric_limits<double>::quiet_NaN();
+    result.evaluator_weighted_objective = train_weighted_eval.expected_weighted_burn_loss;
+    result.train_expected_weighted_burn_loss = train_weighted_eval.expected_weighted_burn_loss;
+    result.test_expected_weighted_burn_loss = test_weighted_eval.expected_weighted_burn_loss;
+    result.train_weighted_var = train_weighted_eval.weighted_loss_statistics.var;
+    result.test_weighted_var = test_weighted_eval.weighted_loss_statistics.var;
+    result.train_weighted_cvar = train_weighted_eval.weighted_loss_statistics.cvar;
+    result.test_weighted_cvar = test_weighted_eval.weighted_loss_statistics.cvar;
+    result.train_percentage_landscape_value_burned =
+        train_weighted_eval.expected_percentage_landscape_value_burned;
+    result.test_percentage_landscape_value_burned =
+        test_weighted_eval.expected_percentage_landscape_value_burned;
+    result.train_percentage_high_value_weight_burned =
+        train_weighted_eval.expected_percentage_high_value_weight_burned;
+    result.test_percentage_high_value_weight_burned =
+        test_weighted_eval.expected_percentage_high_value_weight_burned;
+    result.validation_status = "not_applicable_dpv_surrogate";
+    (void)test_opt;
+}
+
+void attach_static_dpv_fields(
+    io::StandardExperimentResult& result,
+    const benchmarks::StaticDpvBenchmarkResult& benchmark_result) {
+    result.dpv_weighted = true;
+    result.dpv_variant = benchmark_result.dpv_variant;
+    result.dpv_structural_definition = benchmark_result.dpv_structural_definition;
+    result.dpv_ignition_policy = benchmark_result.dpv_ignition_policy;
+    result.dpv_weight_profile = benchmark_result.dpv_weight_profile;
+    result.dpv_weight_map_hash = benchmark_result.dpv_weight_map_hash;
+    result.dpv_scenario_aggregation = benchmark_result.dpv_scenario_aggregation;
+    result.dpv_normalization = benchmark_result.dpv_normalization;
+    result.dpv_candidates_scored = benchmark_result.dpv_candidates_scored;
+    result.dpv_candidates_selected = benchmark_result.dpv_candidates_selected;
+    result.dpv_score_min = benchmark_result.dpv_score_min;
+    result.dpv_score_max = benchmark_result.dpv_score_max;
+    result.dpv_score_mean = benchmark_result.dpv_score_mean;
+    result.dpv_selected_score_sum = benchmark_result.total_static_dpv_score;
+    result.dpv_structural_cache_hit = benchmark_result.dpv_structural_cache_hit;
+    result.dpv_weighted_cache_hit = benchmark_result.dpv_weighted_cache_hit;
+    result.dpv_score_precompute_time_sec = benchmark_result.dpv_score_precompute_time_sec;
+    result.dpv_selection_time_sec = benchmark_result.dpv_selection_time_sec;
+    result.dpv_surrogate_objective = benchmark_result.total_static_dpv_score;
+    result.dpv_overlap_value_removed = 0.0;
+}
+
+void attach_static_dpv_mip_fields(
+    io::StandardExperimentResult& result,
+    const benchmarks::StaticDpvMipBenchmarkResult& benchmark_result) {
+    result.dpv_weighted = true;
+    result.dpv_variant = benchmark_result.dpv_variant;
+    result.dpv_structural_definition = benchmark_result.dpv_structural_definition;
+    result.dpv_ignition_policy = benchmark_result.dpv_ignition_policy;
+    result.dpv_weight_profile = benchmark_result.dpv_weight_profile;
+    result.dpv_weight_map_hash = benchmark_result.dpv_weight_map_hash;
+    result.dpv_scenario_aggregation = benchmark_result.dpv_scenario_aggregation;
+    result.dpv_normalization = benchmark_result.dpv_normalization;
+    result.dpv_candidates_scored = benchmark_result.dpv_candidates_scored;
+    result.dpv_candidates_selected = benchmark_result.dpv_candidates_selected;
+    result.dpv_score_min = benchmark_result.dpv_score_min;
+    result.dpv_score_max = benchmark_result.dpv_score_max;
+    result.dpv_score_mean = benchmark_result.dpv_score_mean;
+    result.dpv_selected_score_sum = benchmark_result.total_static_dpv_score;
+    result.dpv_structural_cache_hit = benchmark_result.dpv_structural_cache_hit;
+    result.dpv_weighted_cache_hit = benchmark_result.dpv_weighted_cache_hit;
+    result.dpv_score_precompute_time_sec = benchmark_result.dpv_score_precompute_time_sec;
+    result.dpv_selection_time_sec = benchmark_result.dpv_selection_time_sec;
+    result.dpv_surrogate_objective = benchmark_result.total_static_dpv_score;
+    result.dpv_overlap_value_removed = 0.0;
+}
+
 }  // namespace
 
 int StaticDpvOutOfSampleRunner::run(const StaticDpvOutOfSampleOptions& options) const {
@@ -145,6 +244,11 @@ int StaticDpvOutOfSampleRunner::run(const StaticDpvOutOfSampleOptions& options) 
     const auto solution_csv_path = options.solution_csv_path.empty()
         ? default_solution_csv_path(options.run_id)
         : firebreak::io::resolve_output_path(options.solution_csv_path.string());
+    const auto resolved_weight_map_path = options.weight_map_file.empty()
+        ? std::filesystem::path{}
+        : firebreak::io::resolve_input_path(options.weight_map_file.string());
+    const auto dpv_ignition_policy =
+        opt::parse_weighted_dpv_ignition_policy(options.dpv_ignition_policy);
 
     const auto inventory = firebreak::io::detect_message_files(results_path);
 
@@ -185,6 +289,7 @@ int StaticDpvOutOfSampleRunner::run(const StaticDpvOutOfSampleOptions& options) 
 
     opt::OptimizationInstanceBuilder builder;
     auto opt_instance = builder.build(train_instance, options.alpha, true);
+    solver::attach_weight_map_to_optimization_instance(opt_instance, resolved_weight_map_path);
 
     std::vector<int> selected_firebreak_indices;
     std::vector<int> selected_firebreak_original_nodes;
@@ -194,25 +299,31 @@ int StaticDpvOutOfSampleRunner::run(const StaticDpvOutOfSampleOptions& options) 
     std::string solver_status;
     std::size_t num_variables = 0;
     std::size_t num_constraints = 0;
+    benchmarks::StaticDpvBenchmarkResult static_benchmark_result;
+    benchmarks::StaticDpvMipBenchmarkResult mip_benchmark_result;
     if (options.use_static_dpv_mip) {
         benchmarks::StaticDpvMipBenchmark benchmark;
-        const auto benchmark_result = benchmark.run(opt_instance, opt_instance.budget);
-        selected_firebreak_indices = benchmark_result.selected_firebreak_indices;
-        selected_firebreak_original_nodes = benchmark_result.selected_firebreak_original_nodes;
-        selected_scores = benchmark_result.selected_scores;
-        objective_value = benchmark_result.total_static_dpv_score;
-        runtime_seconds = benchmark_result.runtime_seconds;
-        solver_status = benchmark_result.solver_status;
-        num_variables = benchmark_result.num_variables;
-        num_constraints = benchmark_result.num_constraints;
+        benchmarks::StaticDpvMipOptions benchmark_options;
+        benchmark_options.ignition_policy = dpv_ignition_policy;
+        mip_benchmark_result = benchmark.run(opt_instance, opt_instance.budget, benchmark_options);
+        selected_firebreak_indices = mip_benchmark_result.selected_firebreak_indices;
+        selected_firebreak_original_nodes = mip_benchmark_result.selected_firebreak_original_nodes;
+        selected_scores = mip_benchmark_result.selected_scores;
+        objective_value = mip_benchmark_result.total_static_dpv_score;
+        runtime_seconds = mip_benchmark_result.runtime_seconds;
+        solver_status = mip_benchmark_result.solver_status;
+        num_variables = mip_benchmark_result.num_variables;
+        num_constraints = mip_benchmark_result.num_constraints;
     } else {
         benchmarks::StaticDpvBenchmark benchmark;
-        const auto benchmark_result = benchmark.run(opt_instance, opt_instance.budget);
-        selected_firebreak_indices = benchmark_result.selected_firebreak_indices;
-        selected_firebreak_original_nodes = benchmark_result.selected_firebreak_original_nodes;
-        selected_scores = benchmark_result.selected_scores;
-        objective_value = benchmark_result.total_static_dpv_score;
-        runtime_seconds = benchmark_result.runtime_seconds;
+        benchmarks::StaticDpvBenchmarkOptions benchmark_options;
+        benchmark_options.ignition_policy = dpv_ignition_policy;
+        static_benchmark_result = benchmark.run(opt_instance, opt_instance.budget, benchmark_options);
+        selected_firebreak_indices = static_benchmark_result.selected_firebreak_indices;
+        selected_firebreak_original_nodes = static_benchmark_result.selected_firebreak_original_nodes;
+        selected_scores = static_benchmark_result.selected_scores;
+        objective_value = static_benchmark_result.total_static_dpv_score;
+        runtime_seconds = static_benchmark_result.runtime_seconds;
         solver_status = "NotApplicable";
         num_variables = 0;
         num_constraints = 0;
@@ -246,6 +357,17 @@ int StaticDpvOutOfSampleRunner::run(const StaticDpvOutOfSampleOptions& options) 
     const auto test_load_end = std::chrono::steady_clock::now();
     const double test_loading_seconds = std::chrono::duration<double>(test_load_end - test_load_start).count();
     const auto test_eval = eval::evaluate_instance_burned_area(test_instance, firebreaks);
+    auto test_opt_instance = builder.build(test_instance, options.alpha, false);
+    solver::attach_weight_map_to_optimization_instance(test_opt_instance, resolved_weight_map_path);
+    std::vector<int> selected_test_compact_indices;
+    selected_test_compact_indices.reserve(selected_firebreak_original_nodes.size());
+    for (const int original_node : selected_firebreak_original_nodes) {
+        selected_test_compact_indices.push_back(test_opt_instance.node_mapper.to_index(original_node));
+    }
+    const auto train_weighted_eval =
+        eval::FppRecourseEvaluator(opt_instance).evaluate(selected_firebreak_indices, false, 0.9);
+    const auto test_weighted_eval =
+        eval::FppRecourseEvaluator(test_opt_instance).evaluate(selected_test_compact_indices, false, 0.9);
 
     io::StandardExperimentResult result;
     result.run_id = options.run_id;
@@ -287,9 +409,21 @@ int StaticDpvOutOfSampleRunner::run(const StaticDpvOutOfSampleOptions& options) 
         analysis::graph_classification_ratio_summary(train_instance.scenarios);
     result.test_graph_classification_ratios =
         analysis::graph_classification_ratio_summary(test_instance.scenarios);
+    attach_weighted_eval_fields(
+        result,
+        opt_instance,
+        test_opt_instance,
+        train_weighted_eval,
+        test_weighted_eval,
+        resolved_weight_map_path);
+    if (options.use_static_dpv_mip) {
+        attach_static_dpv_mip_fields(result, mip_benchmark_result);
+    } else {
+        attach_static_dpv_fields(result, static_benchmark_result);
+    }
     if (options.use_static_dpv_mip) {
         result.notes.push_back(
-            "Static-DPV-MIP uses unit downstream values and closed downstream reachability.");
+            "Static-DPV-MIP uses weighted destination-cell downstream values and closed downstream reachability.");
         result.notes.push_back(
             "Static-DPV-MIP scores are computed from training scenarios only.");
         result.notes.push_back(
@@ -299,9 +433,12 @@ int StaticDpvOutOfSampleRunner::run(const StaticDpvOutOfSampleOptions& options) 
         result.notes.push_back(
             "Pure-cardinality Static-DPV-MIP is solved exactly by deterministic top-budget sorting.");
     } else {
-        result.notes.push_back("Static-DPV uses unit weights and closed downstream reachability.");
+        result.notes.push_back("Static-DPV uses weighted destination-cell values and closed downstream reachability.");
         result.notes.push_back("Static-DPV scores are computed from training scenarios only.");
     }
+    result.notes.push_back(
+        "DPV ignition policy: " + opt::weighted_dpv_ignition_policy_name(dpv_ignition_policy) + ".");
+    result.notes.push_back("Final weighted evaluation uses FppRecourseEvaluator, not the DPV surrogate.");
     result.notes.push_back("Tie-breaking uses larger score first, then smaller original Cell2Fire node ID.");
     result.notes.insert(result.notes.end(), notes.begin(), notes.end());
     for (const auto& warning : train_warnings) {

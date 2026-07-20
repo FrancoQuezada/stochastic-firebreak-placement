@@ -145,16 +145,19 @@ void print_usage(std::ostream& out) {
         << "[--train-ids 1-5 --test-ids 6:30 | --seed 123 --train-count 2 --test-count 3] "
         << "--alpha 0.01 --run-id RUN_ID "
         << "[--forest-path PATH] [--results-path PATH] "
+        << "[--weight-map-file weights.csv] [--dpv-ignition-policy fpp-safe|legacy] "
         << "[--output-json results/out.json] [--output-csv results/out.csv]\n"
         << "  firebreak_cpp run-static-dpv-mip-oos --landscape Sub20 "
         << "[--train-ids 1-5 --test-ids 6:30 | --seed 123 --train-count 2 --test-count 3] "
         << "--alpha 0.01 --run-id RUN_ID "
         << "[--forest-path PATH] [--results-path PATH] "
+        << "[--weight-map-file weights.csv] [--dpv-ignition-policy fpp-safe|legacy] "
         << "[--output-json results/out.json] [--output-csv results/out.csv]\n"
         << "  firebreak_cpp run-greedy-oos --landscape Sub20 "
         << "[--train-ids 1-5 --test-ids 6:30 | --seed 123 --train-count 2 --test-count 3] "
         << "--alpha 0.01 --metric DPV3 --run-id RUN_ID "
         << "[--forest-path PATH] [--results-path PATH] "
+        << "[--weight-map-file weights.csv] [--dpv-ignition-policy fpp-safe|legacy] "
         << "[--output-json results/out.json] [--output-csv results/out.csv]\n"
         << "  firebreak_cpp run-dpv-saa-oos --landscape Sub20 "
         << "[--train-ids 1-5 --test-ids 6:30 | --seed 123 --train-count 2 --test-count 3] "
@@ -796,6 +799,8 @@ int main(int argc, char** argv) {
                     options.forest_path = require_value(i, argc, argv, arg);
                 } else if (arg == "--results-path") {
                     options.results_path = require_value(i, argc, argv, arg);
+                } else if (arg == "--weight-map-file") {
+                    options.weight_map_file = require_value(i, argc, argv, arg);
                 } else if (arg == "--train-ids") {
                     if (has_generated_arg) {
                         throw std::runtime_error("Use either explicit train/test IDs or generated split parameters, not both.");
@@ -906,6 +911,8 @@ int main(int argc, char** argv) {
                     options.forest_path = require_value(i, argc, argv, arg);
                 } else if (arg == "--results-path") {
                     options.results_path = require_value(i, argc, argv, arg);
+                } else if (arg == "--weight-map-file") {
+                    options.weight_map_file = require_value(i, argc, argv, arg);
                 } else if (arg == "--train-ids") {
                     if (has_generated_arg) {
                         throw std::runtime_error("Use either explicit train/test IDs or generated split parameters, not both.");
@@ -1330,6 +1337,10 @@ int main(int argc, char** argv) {
                     options.forest_path = require_value(i, argc, argv, arg);
                 } else if (arg == "--results-path") {
                     options.results_path = require_value(i, argc, argv, arg);
+                } else if (arg == "--weight-map-file") {
+                    options.weight_map_file = require_value(i, argc, argv, arg);
+                } else if (arg == "--dpv-ignition-policy") {
+                    options.dpv_ignition_policy = require_value(i, argc, argv, arg);
                 } else if (arg == "--train-ids") {
                     if (has_generated_arg) {
                         throw std::runtime_error("Use either explicit train/test IDs or generated split parameters, not both.");
@@ -1412,6 +1423,10 @@ int main(int argc, char** argv) {
                     options.forest_path = require_value(i, argc, argv, arg);
                 } else if (arg == "--results-path") {
                     options.results_path = require_value(i, argc, argv, arg);
+                } else if (arg == "--weight-map-file") {
+                    options.weight_map_file = require_value(i, argc, argv, arg);
+                } else if (arg == "--dpv-ignition-policy") {
+                    options.dpv_ignition_policy = require_value(i, argc, argv, arg);
                 } else if (arg == "--train-ids") {
                     if (has_generated_arg) {
                         throw std::runtime_error("Use either explicit train/test IDs or generated split parameters, not both.");
