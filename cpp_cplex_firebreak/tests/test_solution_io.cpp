@@ -3,6 +3,8 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <sstream>
+#include <string>
 #include <vector>
 
 #include "io/ExperimentResultWriter.hpp"
@@ -97,6 +99,25 @@ int main() {
     result.path_llbi_num_path_constraints = 10;
     result.path_llbi_num_paths_used = 11;
     result.path_llbi_precompute_time_sec = 0.04;
+    result.projected_path_llbi_enabled = true;
+    result.projected_path_llbi_weighted = true;
+    result.projected_path_llbi_mode = "exp-exact-stored-path-separation";
+    result.projected_path_llbi_weight_map_hash = "hash-path";
+    result.projected_path_llbi_scenarios_precomputed = 2;
+    result.projected_path_llbi_destination_nodes = 5;
+    result.projected_path_llbi_total_paths = 8;
+    result.projected_path_llbi_total_incidence_terms = 13;
+    result.projected_path_llbi_nodes_without_paths = 0;
+    result.projected_path_llbi_enumeration_complete = true;
+    result.projected_path_llbi_paths_truncated = 0;
+    result.projected_path_llbi_separation_calls = 3;
+    result.projected_path_llbi_cuts_generated = 4;
+    result.projected_path_llbi_cuts_added = 3;
+    result.projected_path_llbi_duplicate_cuts = 1;
+    result.projected_path_llbi_max_violation = 1.25;
+    result.projected_path_llbi_precompute_time_sec = 0.08;
+    result.projected_path_llbi_separation_time_sec = 0.09;
+    result.projected_path_llbi_validity_mode = "exact-directed-path-projection";
     result.global_dominance_enabled = true;
     result.global_dominance_candidates_removed = 1;
     result.global_dominance_equivalence_classes = 1;
@@ -106,6 +127,7 @@ int main() {
     result.conditional_zero_benefit_fixings_applied = 0;
     result.conditional_zero_benefit_time_sec = 0.06;
     firebreak::io::write_experiment_result_json(result_json_path, result);
+    firebreak::io::append_experiment_result_csv(result_csv_path, result);
     firebreak::io::append_experiment_result_csv(result_csv_path, result);
     assert(std::filesystem::exists(result_json_path));
     assert(std::filesystem::exists(result_csv_path));
@@ -127,9 +149,35 @@ int main() {
         assert(text.find("combinatorial_benders_integer_cuts_added") != std::string::npos);
         assert(text.find("coverage_llbi_enabled") != std::string::npos);
         assert(text.find("path_llbi_num_paths_used") != std::string::npos);
+        assert(text.find("projected_path_llbi_weighted") != std::string::npos);
+        assert(text.find("exact-directed-path-projection") != std::string::npos);
         assert(text.find("global_dominance_candidates_removed") != std::string::npos);
         assert(text.find("conditional_zero_benefit_fixings_attempted") != std::string::npos);
         assert(text.find("fpp_cut_dominator_separator_greedy") != std::string::npos);
+        std::istringstream rows(text);
+        std::string line;
+        std::vector<int> column_counts;
+        int header_count = 0;
+        while (std::getline(rows, line)) {
+            if (line.empty()) {
+                continue;
+            }
+            assert(line != "projected_path_llbi_weighted");
+            if (line.find("experiment_id") == 0) {
+                ++header_count;
+            }
+            int columns = 1;
+            for (const char ch : line) {
+                if (ch == ',') {
+                    ++columns;
+                }
+            }
+            column_counts.push_back(columns);
+        }
+        assert(header_count == 1);
+        assert(column_counts.size() == 3);
+        assert(column_counts[0] == column_counts[1]);
+        assert(column_counts[1] == column_counts[2]);
     }
     {
         std::ifstream in(result_json_path);
@@ -142,6 +190,8 @@ int main() {
         assert(text.find("\"combinatorial_benders_scenario_order\": \"eta-desc\"") != std::string::npos);
         assert(text.find("\"combinatorial_benders_integer_cuts_added\": 3") != std::string::npos);
         assert(text.find("\"path_llbi_num_paths_used\": 11") != std::string::npos);
+        assert(text.find("\"projected_path_llbi_weighted\": true") != std::string::npos);
+        assert(text.find("\"projected_path_llbi_validity_mode\": \"exact-directed-path-projection\"") != std::string::npos);
         assert(text.find("\"global_dominance_candidates_removed\": 1") != std::string::npos);
         assert(text.find("\"conditional_zero_benefit_fixings_attempted\": 12") != std::string::npos);
     }

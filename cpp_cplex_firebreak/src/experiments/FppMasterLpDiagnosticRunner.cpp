@@ -551,6 +551,7 @@ DiagnosticResult solve_master_lp(
         projected_options.violation_tolerance = options.projected_llbi_violation_tolerance;
         projected_options.cut_density_limit = options.projected_llbi_cut_density_limit;
         projected_options.poly_max_cuts = options.projected_poly_max_cuts;
+        projected_options.path_max_paths_per_node = options.path_llbi_max_paths_per_node;
         result.projected_coverage_llbi_enabled =
             use_projected_coverage_exp || use_projected_coverage_poly;
         result.projected_path_llbi_enabled =

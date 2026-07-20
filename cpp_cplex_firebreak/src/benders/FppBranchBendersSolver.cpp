@@ -74,6 +74,8 @@ void validate_options(const FppBranchBendersOptions& options) {
         options.strengthening_options.projected_llbi_cut_density_limit;
     projected_options.poly_max_cuts =
         options.strengthening_options.projected_poly_max_cuts;
+    projected_options.path_max_paths_per_node =
+        options.strengthening_options.path_llbi_max_paths_per_node;
     projected_options.export_cuts_path =
         options.strengthening_options.projected_llbi_export_cuts_path;
     validate_fpp_projected_llbi_options(projected_options);
@@ -130,9 +132,7 @@ bool has_nonunit_compact_weights(const opt::OptimizationInstance& opt) {
 }
 
 bool uses_unconverted_weighted_strengthening(const FppBranchBendersOptions& options) {
-    return options.combinatorial_options.enabled ||
-           options.strengthening_options.use_projected_path_llbi_exp ||
-           options.strengthening_options.use_projected_path_llbi_poly;
+    return options.combinatorial_options.enabled;
 }
 
 #endif
@@ -179,6 +179,8 @@ FppProjectedLlbiOptions projected_llbi_options_from_strengthening(
     options.cut_density_limit =
         strengthening_options.projected_llbi_cut_density_limit;
     options.poly_max_cuts = strengthening_options.projected_poly_max_cuts;
+    options.path_max_paths_per_node =
+        strengthening_options.path_llbi_max_paths_per_node;
     options.export_cuts_path =
         strengthening_options.projected_llbi_export_cuts_path;
     return options;
@@ -1218,7 +1220,7 @@ solver::ModelResult FppBranchBendersSolver::solve(
     if (has_nonunit_compact_weights(opt) &&
         uses_unconverted_weighted_strengthening(options)) {
         throw std::runtime_error(
-            "Non-homogeneous weighted FPP Branch-Benders Phase 6B3A supports LP lazy cuts, root user cuts, standard downstream-union LLBI, extended CoverageLLBI, extended PathLLBI, projected CoverageLLBI, structural global dominance, and conditional zero-benefit diagnostics; projected PathLLBI and combinatorial Benders remain unconverted.");
+            "Non-homogeneous weighted FPP Branch-Benders Phase 6B3B supports LP lazy cuts, root user cuts, standard downstream-union LLBI, extended CoverageLLBI, extended PathLLBI, projected CoverageLLBI, projected PathLLBI, structural global dominance, and conditional zero-benefit diagnostics; combinatorial Benders remains unconverted.");
     }
     const auto risk_config = effective_risk_config_from(options.risk_config);
     const bool risk_enabled = uses_cvar_risk(risk_config);
@@ -1518,6 +1520,30 @@ solver::ModelResult FppBranchBendersSolver::solve(
             projected_stats.projected_coverage_llbi_precompute_time_sec;
         result.projected_coverage_llbi_validity_mode =
             projected_stats.projected_coverage_llbi_validity_mode;
+        result.projected_path_llbi_weighted =
+            projected_stats.projected_path_llbi_weighted;
+        result.projected_path_llbi_mode =
+            projected_stats.projected_path_llbi_mode;
+        result.projected_path_llbi_weight_map_hash =
+            projected_stats.projected_path_llbi_weight_map_hash;
+        result.projected_path_llbi_scenarios_precomputed =
+            projected_stats.projected_path_llbi_scenarios_precomputed;
+        result.projected_path_llbi_destination_nodes =
+            projected_stats.projected_path_llbi_destination_nodes;
+        result.projected_path_llbi_total_paths =
+            projected_stats.projected_path_llbi_total_paths;
+        result.projected_path_llbi_total_incidence_terms =
+            projected_stats.projected_path_llbi_total_incidence_terms;
+        result.projected_path_llbi_nodes_without_paths =
+            projected_stats.projected_path_llbi_nodes_without_paths;
+        result.projected_path_llbi_enumeration_complete =
+            projected_stats.projected_path_llbi_enumeration_complete;
+        result.projected_path_llbi_paths_truncated =
+            projected_stats.projected_path_llbi_paths_truncated;
+        result.projected_path_llbi_precompute_time_sec =
+            projected_stats.projected_path_llbi_precompute_time_sec;
+        result.projected_path_llbi_validity_mode =
+            projected_stats.projected_path_llbi_validity_mode;
         result.conditional_zero_benefit_enabled =
             options.strengthening_options.use_conditional_zero_benefit_fixing;
         if (options.strengthening_options.use_conditional_zero_benefit_fixing) {
@@ -1554,6 +1580,9 @@ solver::ModelResult FppBranchBendersSolver::solve(
                     if (projected_stats.projected_coverage_llbi_enabled) {
                         ++projected_stats.projected_coverage_llbi_duplicate_cuts;
                     }
+                    if (projected_stats.projected_path_llbi_enabled) {
+                        ++projected_stats.projected_path_llbi_duplicate_cuts;
+                    }
                     continue;
                 }
                 add_benders_cut_to_model(
@@ -1589,6 +1618,10 @@ solver::ModelResult FppBranchBendersSolver::solve(
             if (projected_stats.projected_coverage_llbi_enabled) {
                 projected_stats.projected_coverage_llbi_cuts_added =
                     projected_stats.projected_llbi_coverage_cuts_added;
+            }
+            if (projected_stats.projected_path_llbi_enabled) {
+                projected_stats.projected_path_llbi_cuts_added =
+                    projected_stats.projected_llbi_path_cuts_added;
             }
         }
 
@@ -1689,6 +1722,41 @@ solver::ModelResult FppBranchBendersSolver::solve(
                             projected_stats.projected_coverage_llbi_max_violation,
                             separated.max_violation);
                 }
+                if (projected_stats.projected_path_llbi_enabled) {
+                    projected_stats.projected_path_llbi_weighted =
+                        separated.projected_path_llbi_weighted;
+                    projected_stats.projected_path_llbi_mode =
+                        separated.projected_path_llbi_mode;
+                    projected_stats.projected_path_llbi_weight_map_hash =
+                        separated.projected_path_llbi_weight_map_hash;
+                    projected_stats.projected_path_llbi_scenarios_precomputed =
+                        separated.projected_path_llbi_scenarios_precomputed;
+                    projected_stats.projected_path_llbi_destination_nodes =
+                        separated.projected_path_llbi_destination_nodes;
+                    projected_stats.projected_path_llbi_total_paths =
+                        separated.projected_path_llbi_total_paths;
+                    projected_stats.projected_path_llbi_total_incidence_terms =
+                        separated.projected_path_llbi_total_incidence_terms;
+                    projected_stats.projected_path_llbi_nodes_without_paths =
+                        separated.projected_path_llbi_nodes_without_paths;
+                    projected_stats.projected_path_llbi_enumeration_complete =
+                        separated.projected_path_llbi_enumeration_complete;
+                    projected_stats.projected_path_llbi_paths_truncated =
+                        separated.projected_path_llbi_paths_truncated;
+                    projected_stats.projected_path_llbi_precompute_time_sec +=
+                        separated.projected_path_llbi_precompute_time_sec;
+                    projected_stats.projected_path_llbi_validity_mode =
+                        separated.projected_path_llbi_validity_mode;
+                    ++projected_stats.projected_path_llbi_separation_calls;
+                    projected_stats.projected_path_llbi_separation_time_sec +=
+                        separated.separation_time_sec;
+                    projected_stats.projected_path_llbi_cuts_generated +=
+                        separated.violated_cuts_found;
+                    projected_stats.projected_path_llbi_max_violation =
+                        std::max(
+                            projected_stats.projected_path_llbi_max_violation,
+                            separated.max_violation);
+                }
                 projected_stats.projected_llbi_violated_cuts_found +=
                     separated.violated_cuts_found;
                 if (!std::isnan(separated.min_violation)) {
@@ -1717,6 +1785,9 @@ solver::ModelResult FppBranchBendersSolver::solve(
                         if (projected_stats.projected_coverage_llbi_enabled) {
                             ++projected_stats.projected_coverage_llbi_duplicate_cuts;
                         }
+                        if (projected_stats.projected_path_llbi_enabled) {
+                            ++projected_stats.projected_path_llbi_duplicate_cuts;
+                        }
                         continue;
                     }
                     add_benders_cut_to_model(
@@ -1733,6 +1804,7 @@ solver::ModelResult FppBranchBendersSolver::solve(
                     }
                     if (projected_stats.projected_path_llbi_enabled) {
                         ++projected_stats.projected_llbi_path_cuts_added;
+                        ++projected_stats.projected_path_llbi_cuts_added;
                     }
                     projected_stats.projected_llbi_total_nonzeros += separated_cut.nonzeros;
                     projected_stats.projected_llbi_max_nonzeros_per_cut = std::max(
@@ -2141,6 +2213,42 @@ solver::ModelResult FppBranchBendersSolver::solve(
             projected_stats.projected_coverage_llbi_separation_time_sec;
         result.projected_coverage_llbi_validity_mode =
             projected_stats.projected_coverage_llbi_validity_mode;
+        result.projected_path_llbi_weighted =
+            projected_stats.projected_path_llbi_weighted;
+        result.projected_path_llbi_mode =
+            projected_stats.projected_path_llbi_mode;
+        result.projected_path_llbi_weight_map_hash =
+            projected_stats.projected_path_llbi_weight_map_hash;
+        result.projected_path_llbi_scenarios_precomputed =
+            projected_stats.projected_path_llbi_scenarios_precomputed;
+        result.projected_path_llbi_destination_nodes =
+            projected_stats.projected_path_llbi_destination_nodes;
+        result.projected_path_llbi_total_paths =
+            projected_stats.projected_path_llbi_total_paths;
+        result.projected_path_llbi_total_incidence_terms =
+            projected_stats.projected_path_llbi_total_incidence_terms;
+        result.projected_path_llbi_nodes_without_paths =
+            projected_stats.projected_path_llbi_nodes_without_paths;
+        result.projected_path_llbi_enumeration_complete =
+            projected_stats.projected_path_llbi_enumeration_complete;
+        result.projected_path_llbi_paths_truncated =
+            projected_stats.projected_path_llbi_paths_truncated;
+        result.projected_path_llbi_separation_calls =
+            projected_stats.projected_path_llbi_separation_calls;
+        result.projected_path_llbi_cuts_generated =
+            projected_stats.projected_path_llbi_cuts_generated;
+        result.projected_path_llbi_cuts_added =
+            projected_stats.projected_path_llbi_cuts_added;
+        result.projected_path_llbi_duplicate_cuts =
+            projected_stats.projected_path_llbi_duplicate_cuts;
+        result.projected_path_llbi_max_violation =
+            projected_stats.projected_path_llbi_max_violation;
+        result.projected_path_llbi_precompute_time_sec =
+            projected_stats.projected_path_llbi_precompute_time_sec;
+        result.projected_path_llbi_separation_time_sec =
+            projected_stats.projected_path_llbi_separation_time_sec;
+        result.projected_path_llbi_validity_mode =
+            projected_stats.projected_path_llbi_validity_mode;
         result.branch_benders_use_root_user_cuts = options.use_root_user_cuts;
         result.branch_benders_root_user_cut_max_rounds = options.root_user_cut_max_rounds;
         result.branch_benders_root_user_cut_tolerance = root_user_cut_tolerance;

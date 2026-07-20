@@ -5,9 +5,7 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
-#include <functional>
 #include <limits>
-#include <queue>
 #include <sstream>
 #include <stdexcept>
 #include <unordered_map>
@@ -20,15 +18,6 @@ namespace firebreak::benders {
 namespace {
 
 constexpr double kZeroTolerance = 1.0e-12;
-
-std::vector<int> y_positions_by_node(const opt::OptimizationInstance& opt) {
-    std::vector<int> positions(static_cast<std::size_t>(opt.node_mapper.size()), -1);
-    for (std::size_t pos = 0; pos < opt.eligible_indices.size(); ++pos) {
-        positions[static_cast<std::size_t>(opt.eligible_indices[pos])] =
-            static_cast<int>(pos);
-    }
-    return positions;
-}
 
 std::vector<double> compact_y_values(
     const opt::OptimizationInstance& opt,
@@ -127,46 +116,44 @@ void populate_projected_coverage_result_from_data(
     result.projected_coverage_llbi_validity_mode = validity_mode;
 }
 
-std::vector<std::vector<int>> scenario_successors(
-    const opt::OptimizationScenario& scenario,
-    int node_count) {
-    std::vector<std::vector<int>> successors(static_cast<std::size_t>(node_count));
-    for (const auto& arc : scenario.arcs) {
-        if (arc.u_index < 0 || arc.u_index >= node_count ||
-            arc.v_index < 0 || arc.v_index >= node_count) {
-            throw std::runtime_error("Projected LLBI scenario arc references an out-of-range node.");
-        }
-        successors[static_cast<std::size_t>(arc.u_index)].push_back(arc.v_index);
-    }
-    for (auto& items : successors) {
-        std::sort(items.begin(), items.end());
-        items.erase(std::unique(items.begin(), items.end()), items.end());
-    }
-    return successors;
+void populate_projected_path_stats_from_data(
+    FppProjectedLlbiStats& stats,
+    const FppPathLlbiData& data,
+    const std::string& mode,
+    const std::string& validity_mode) {
+    stats.projected_path_llbi_weighted = data.weighted;
+    stats.projected_path_llbi_mode = mode;
+    stats.projected_path_llbi_weight_map_hash = data.weight_map_hash;
+    stats.projected_path_llbi_scenarios_precomputed = data.scenarios_precomputed;
+    stats.projected_path_llbi_destination_nodes = data.baseline_nodes;
+    stats.projected_path_llbi_total_paths = data.total_paths;
+    stats.projected_path_llbi_total_incidence_terms =
+        data.total_candidate_incidence_terms;
+    stats.projected_path_llbi_nodes_without_paths = data.nodes_without_paths;
+    stats.projected_path_llbi_enumeration_complete = data.path_enumeration_complete;
+    stats.projected_path_llbi_paths_truncated = data.paths_truncated;
+    stats.projected_path_llbi_precompute_time_sec = data.precompute_time_sec;
+    stats.projected_path_llbi_validity_mode = validity_mode;
 }
 
-std::vector<int> reachable_from(
-    const std::vector<std::vector<int>>& successors,
-    int root) {
-    std::vector<char> seen(successors.size(), 0);
-    std::queue<int> frontier;
-    seen[static_cast<std::size_t>(root)] = 1;
-    frontier.push(root);
-    std::vector<int> reached;
-    while (!frontier.empty()) {
-        const int current = frontier.front();
-        frontier.pop();
-        reached.push_back(current);
-        for (const int next : successors[static_cast<std::size_t>(current)]) {
-            if (seen[static_cast<std::size_t>(next)]) {
-                continue;
-            }
-            seen[static_cast<std::size_t>(next)] = 1;
-            frontier.push(next);
-        }
-    }
-    std::sort(reached.begin(), reached.end());
-    return reached;
+void populate_projected_path_result_from_data(
+    FppProjectedLlbiSeparationResult& result,
+    const FppPathLlbiData& data,
+    const std::string& mode,
+    const std::string& validity_mode) {
+    result.projected_path_llbi_weighted = data.weighted;
+    result.projected_path_llbi_mode = mode;
+    result.projected_path_llbi_weight_map_hash = data.weight_map_hash;
+    result.projected_path_llbi_scenarios_precomputed = data.scenarios_precomputed;
+    result.projected_path_llbi_destination_nodes = data.baseline_nodes;
+    result.projected_path_llbi_total_paths = data.total_paths;
+    result.projected_path_llbi_total_incidence_terms =
+        data.total_candidate_incidence_terms;
+    result.projected_path_llbi_nodes_without_paths = data.nodes_without_paths;
+    result.projected_path_llbi_enumeration_complete = data.path_enumeration_complete;
+    result.projected_path_llbi_paths_truncated = data.paths_truncated;
+    result.projected_path_llbi_precompute_time_sec = data.precompute_time_sec;
+    result.projected_path_llbi_validity_mode = validity_mode;
 }
 
 BendersCut build_projected_coverage_cut_from_support_zero(
@@ -195,9 +182,9 @@ BendersCut build_projected_path_static_cut(
         if (node_record.paths.empty()) {
             continue;
         }
-        rhs += 1.0;
+        rhs += node_record.cell_weight;
         for (const int candidate : node_record.paths.front().blocking_candidate_compact_nodes) {
-            add_negative_coeff(coefficients, candidate, 1.0);
+            add_negative_coeff(coefficients, candidate, node_record.cell_weight);
         }
     }
 
@@ -257,79 +244,59 @@ FppProjectedLlbiSeparatedCut separate_coverage_scenario(
 }
 
 FppProjectedLlbiSeparatedCut separate_path_scenario(
-    const opt::OptimizationInstance& opt,
-    std::size_t scenario_index,
+    const FppPathLlbiScenarioRecord& scenario_record,
     const std::vector<double>& y_values_by_compact_node,
     double eta_value,
     const FppProjectedLlbiOptions& options) {
-    const auto& scenario = opt.scenarios[scenario_index];
-    const int node_count = opt.node_mapper.size();
-    const auto y_pos = y_positions_by_node(opt);
-    const auto successors = scenario_successors(scenario, node_count);
-    const auto relevant_nodes = reachable_from(successors, scenario.ignition_index);
-
-    const double inf = std::numeric_limits<double>::infinity();
-    std::vector<double> dist(static_cast<std::size_t>(node_count), inf);
-    std::vector<int> pred(static_cast<std::size_t>(node_count), -1);
-    using QueueItem = std::pair<double, int>;
-    std::priority_queue<QueueItem, std::vector<QueueItem>, std::greater<QueueItem>> queue;
-    dist[static_cast<std::size_t>(scenario.ignition_index)] = 0.0;
-    queue.push({0.0, scenario.ignition_index});
-    while (!queue.empty()) {
-        const auto [current_dist, current] = queue.top();
-        queue.pop();
-        if (current_dist > dist[static_cast<std::size_t>(current)] + kZeroTolerance) {
-            continue;
-        }
-        for (const int next : successors[static_cast<std::size_t>(current)]) {
-            double node_cost = 0.0;
-            if (next != scenario.ignition_index &&
-                next >= 0 &&
-                next < static_cast<int>(y_pos.size()) &&
-                y_pos[static_cast<std::size_t>(next)] >= 0) {
-                node_cost = y_values_by_compact_node[static_cast<std::size_t>(next)];
-            }
-            const double candidate_dist = current_dist + node_cost;
-            const auto next_pos = static_cast<std::size_t>(next);
-            if (candidate_dist + kZeroTolerance < dist[next_pos]) {
-                dist[next_pos] = candidate_dist;
-                pred[next_pos] = current;
-                queue.push({candidate_dist, next});
-            }
-        }
-    }
-
     std::unordered_map<int, double> coefficients;
     double rhs = 0.0;
     double rhs_at_ybar = 0.0;
-    for (const int node : relevant_nodes) {
-        const double distance = dist[static_cast<std::size_t>(node)];
-        if (!std::isfinite(distance) || distance >= 1.0 - options.violation_tolerance) {
+    for (const auto& node_record : scenario_record.nodes) {
+        if (node_record.paths.empty()) {
             continue;
         }
-        rhs += 1.0;
-        rhs_at_ybar += 1.0 - distance;
-        int current = node;
-        while (current != -1 && current != scenario.ignition_index) {
-            if (current >= 0 &&
-                current < static_cast<int>(y_pos.size()) &&
-                y_pos[static_cast<std::size_t>(current)] >= 0) {
-                add_negative_coeff(coefficients, current, 1.0);
+        double best_path_cost = std::numeric_limits<double>::infinity();
+        const FppPathLlbiPathRecord* best_path = nullptr;
+        for (const auto& path : node_record.paths) {
+            double path_cost = 0.0;
+            for (const int candidate : path.blocking_candidate_compact_nodes) {
+                if (candidate < 0 ||
+                    candidate >= static_cast<int>(y_values_by_compact_node.size())) {
+                    throw std::runtime_error(
+                        "Projected PathLLBI references an out-of-range candidate.");
+                }
+                path_cost += y_values_by_compact_node[static_cast<std::size_t>(candidate)];
             }
-            current = pred[static_cast<std::size_t>(current)];
+            if (!std::isfinite(path_cost)) {
+                throw std::runtime_error("Projected PathLLBI path cost is not finite.");
+            }
+            if (!best_path ||
+                path_cost < best_path_cost - kZeroTolerance) {
+                best_path_cost = path_cost;
+                best_path = &path;
+            }
+        }
+        if (!best_path ||
+            best_path_cost >= 1.0 - options.violation_tolerance) {
+            continue;
+        }
+        rhs += node_record.cell_weight;
+        rhs_at_ybar += node_record.cell_weight * (1.0 - best_path_cost);
+        for (const int candidate : best_path->blocking_candidate_compact_nodes) {
+            add_negative_coeff(coefficients, candidate, node_record.cell_weight);
         }
     }
 
     BendersCut cut;
-    cut.scenario_id = scenario.scenario_id;
+    cut.scenario_id = scenario_record.scenario_id;
     cut.rhs_constant = rhs;
     cut.coefficients_by_compact_index = sorted_coefficients(coefficients);
     cut.subproblem_objective = rhs_at_ybar;
-    cut.notes.push_back("ProjectedPathLLBI-exp separated shortest-path root cut.");
+    cut.notes.push_back("ProjectedPathLLBI-exp separated stored minimum-path root cut.");
 
     FppProjectedLlbiSeparatedCut separated;
     separated.cut = std::move(cut);
-    separated.scenario_index = static_cast<int>(scenario_index);
+    separated.scenario_index = scenario_record.scenario_index;
     separated.violation = rhs_at_ybar - eta_value;
     separated.nonzeros =
         static_cast<int>(separated.cut.coefficients_by_compact_index.size());
@@ -404,6 +371,11 @@ void validate_fpp_projected_llbi_options(const FppProjectedLlbiOptions& options)
     if (options.poly_max_cuts <= 0) {
         throw std::runtime_error("projected_poly_max_cuts must be positive.");
     }
+    if ((options.use_projected_path_llbi_exp ||
+         options.use_projected_path_llbi_poly) &&
+        options.path_max_paths_per_node <= 0) {
+        throw std::runtime_error("projected PathLLBI path_max_paths_per_node must be positive.");
+    }
 }
 
 std::vector<BendersCut> build_fpp_projected_llbi_poly_cuts(
@@ -443,7 +415,17 @@ std::vector<BendersCut> build_fpp_projected_llbi_poly_cuts(
             cuts.push_back(std::move(cut));
         }
     } else {
-        const auto data = build_fpp_path_llbi_data(opt, true, 1);
+        const auto data = build_fpp_path_llbi_data(
+            opt,
+            true,
+            options.use_projected_path_llbi_poly ? 1 : options.path_max_paths_per_node);
+        if (stats) {
+            populate_projected_path_stats_from_data(
+                *stats,
+                data,
+                "poly-first-stored-path",
+                "weighted-fixed-subset-of-directed-path-projection");
+        }
         for (const auto& scenario_record : data.scenarios) {
             if (static_cast<int>(cuts.size()) >= options.poly_max_cuts) {
                 if (stats) {
@@ -466,6 +448,12 @@ std::vector<BendersCut> build_fpp_projected_llbi_poly_cuts(
             stats->projected_coverage_llbi_cuts_generated =
                 static_cast<int>(cuts.size());
             stats->projected_coverage_llbi_cuts_added =
+                static_cast<int>(cuts.size());
+        }
+        if (family == FppProjectedLlbiFamily::Path) {
+            stats->projected_path_llbi_cuts_generated =
+                static_cast<int>(cuts.size());
+            stats->projected_path_llbi_cuts_added =
                 static_cast<int>(cuts.size());
         }
     }
@@ -517,13 +505,23 @@ FppProjectedLlbiSeparationResult separate_fpp_projected_llbi_cuts(
             }
         }
     } else {
-        for (std::size_t s = 0; s < opt.scenarios.size(); ++s) {
+        const auto data = build_fpp_path_llbi_data(
+            opt,
+            true,
+            options.path_max_paths_per_node);
+        populate_projected_path_result_from_data(
+            result,
+            data,
+            "exp-exact-stored-path-separation",
+            data.path_enumeration_complete
+                ? "exact-directed-path-projection"
+                : "truncated-stored-directed-path-projection");
+        for (const auto& scenario_record : data.scenarios) {
             ++result.scenarios_checked;
             auto separated = separate_path_scenario(
-                opt,
-                s,
+                scenario_record,
                 compact_y,
-                eta_values[s],
+                eta_values[static_cast<std::size_t>(scenario_record.scenario_index)],
                 options);
             const double violation = separated.violation;
             update_violation_stats(result, violation);

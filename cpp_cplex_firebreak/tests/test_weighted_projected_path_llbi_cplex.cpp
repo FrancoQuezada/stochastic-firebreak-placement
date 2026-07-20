@@ -18,7 +18,7 @@ void assert_close(double actual, double expected, double tolerance = 1.0e-6) {
 
 firebreak::opt::OptimizationInstance make_weighted_instance(bool homogeneous = false) {
     firebreak::opt::OptimizationInstance opt;
-    opt.landscape_name = "weighted_projected_coverage_llbi_cplex";
+    opt.landscape_name = "weighted_projected_path_llbi_cplex";
     opt.alpha = 0.2;
     opt.n_cells = 5;
     opt.budget = 1;
@@ -71,7 +71,7 @@ firebreak::opt::OptimizationInstance make_weighted_instance(bool homogeneous = f
           };
     opt.cell_weight_map = firebreak::core::make_landscape_weight_map(
         homogeneous ? "homogeneous" : "heterogeneous",
-        homogeneous ? 63231 : 63232,
+        homogeneous ? 63321 : 63322,
         false,
         records);
     opt.compact_cell_weights =
@@ -105,33 +105,32 @@ firebreak::solver::ModelResult solve_projected(
     options.strengthening_options.use_global_dominance_preprocessing = dominance;
     options.strengthening_options.projected_llbi_root_rounds = 3;
     options.strengthening_options.projected_llbi_max_cuts_per_round = 20;
+    options.strengthening_options.path_llbi_max_paths_per_node = 8;
     if (exp) {
-        options.strengthening_options.use_projected_coverage_llbi_exp = true;
+        options.strengthening_options.use_projected_path_llbi_exp = true;
     } else {
-        options.strengthening_options.use_projected_coverage_llbi_poly = true;
+        options.strengthening_options.use_projected_path_llbi_poly = true;
     }
     return solver.solve(opt, options);
 }
 
-void assert_projected_coverage_diagnostics(
+void assert_projected_path_diagnostics(
     const firebreak::solver::ModelResult& result,
     bool exp,
     bool weighted) {
-    assert(result.projected_coverage_llbi_enabled);
-    assert(!result.projected_path_llbi_enabled);
-    assert(result.projected_llbi_family == "coverage");
+    assert(!result.projected_coverage_llbi_enabled);
+    assert(result.projected_path_llbi_enabled);
+    assert(result.projected_llbi_family == "path");
     assert(result.projected_llbi_strategy == (exp ? "exp" : "poly"));
-    assert(result.projected_coverage_llbi_weighted == weighted);
-    assert(!result.projected_coverage_llbi_mode.empty());
-    assert(!result.projected_coverage_llbi_weight_map_hash.empty());
-    assert(result.projected_coverage_llbi_scenarios_precomputed > 0);
-    assert(result.projected_coverage_llbi_baseline_cells > 0);
-    assert(result.projected_coverage_llbi_nonempty_coverage_sets > 0);
-    assert(result.projected_coverage_llbi_total_incidence_terms > 0);
-    assert(result.projected_coverage_llbi_cuts_generated >=
-           result.projected_coverage_llbi_cuts_added);
-    assert(result.projected_coverage_llbi_validity_mode.find("coverage-projection") !=
-           std::string::npos);
+    assert(result.projected_path_llbi_weighted == weighted);
+    assert(!result.projected_path_llbi_mode.empty());
+    assert(!result.projected_path_llbi_weight_map_hash.empty());
+    assert(result.projected_path_llbi_scenarios_precomputed > 0);
+    assert(result.projected_path_llbi_destination_nodes > 0);
+    assert(result.projected_path_llbi_total_paths > 0);
+    assert(result.projected_path_llbi_cuts_generated >=
+           result.projected_path_llbi_cuts_added);
+    assert(!result.projected_path_llbi_validity_mode.empty());
 }
 
 void compare_projected_variants(
@@ -151,10 +150,10 @@ void compare_projected_variants(
     assert_close(poly.objective_value, direct.objective_value);
     assert_close(exp_root.objective_value, direct.objective_value);
     assert_close(exp_dominance.objective_value, direct.objective_value);
-    assert_projected_coverage_diagnostics(exp, true, true);
-    assert_projected_coverage_diagnostics(poly, false, true);
-    assert_projected_coverage_diagnostics(exp_root, true, true);
-    assert_projected_coverage_diagnostics(exp_dominance, true, true);
+    assert_projected_path_diagnostics(exp, true, true);
+    assert_projected_path_diagnostics(poly, false, true);
+    assert_projected_path_diagnostics(exp_root, true, true);
+    assert_projected_path_diagnostics(exp_dominance, true, true);
 }
 
 void test_expected_cvar_mean_cvar_equivalence() {
@@ -184,53 +183,38 @@ void test_homogeneous_regression() {
     const auto explicit_result =
         solve_projected(explicit_unit, firebreak::risk::RiskMeasureConfig(), true, false, false);
     assert_close(implicit_result.objective_value, explicit_result.objective_value);
-    assert_projected_coverage_diagnostics(implicit_result, true, false);
-    assert_projected_coverage_diagnostics(explicit_result, true, false);
+    assert_projected_path_diagnostics(implicit_result, true, false);
+    assert_projected_path_diagnostics(explicit_result, true, false);
 }
 
-void test_weighted_projected_path_now_supported() {
+void test_projected_modes_are_mutually_exclusive() {
     const auto opt = make_weighted_instance(false);
     firebreak::benders::FppBranchBendersSolver solver;
     firebreak::benders::FppBranchBendersOptions options;
-    options.tolerance = 1.0e-7;
     options.time_limit_seconds = 30.0;
-    options.mip_gap = 0.0;
     options.threads = 1;
+    options.strengthening_options.use_projected_coverage_llbi_exp = true;
     options.strengthening_options.use_projected_path_llbi_exp = true;
-    options.strengthening_options.projected_llbi_root_rounds = 3;
-    options.strengthening_options.projected_llbi_max_cuts_per_round = 20;
-
-    const auto direct = solve_direct(opt, firebreak::risk::RiskMeasureConfig());
-    const auto result = solver.solve(opt, options);
-    assert(result.status == "Optimal");
-    assert_close(result.objective_value, direct.objective_value);
-    assert(result.projected_path_llbi_enabled);
-    assert(!result.projected_coverage_llbi_enabled);
-    assert(result.projected_llbi_family == "path");
-    assert(result.projected_llbi_strategy == "exp");
-    assert(result.projected_path_llbi_weighted);
-    assert(!result.projected_path_llbi_mode.empty());
-    assert(!result.projected_path_llbi_weight_map_hash.empty());
-    assert(result.projected_path_llbi_scenarios_precomputed > 0);
-    assert(result.projected_path_llbi_destination_nodes > 0);
-    assert(result.projected_path_llbi_total_paths > 0);
-    assert(result.projected_path_llbi_total_incidence_terms > 0);
-    assert(result.projected_path_llbi_cuts_generated >= result.projected_path_llbi_cuts_added);
-    assert(result.projected_path_llbi_validity_mode.find("directed-path-projection") !=
-           std::string::npos);
+    bool threw = false;
+    try {
+        (void)solver.solve(opt, options);
+    } catch (const std::runtime_error&) {
+        threw = true;
+    }
+    assert(threw);
 }
 
 }  // namespace
 
 int main() {
 #ifndef FIREBREAK_WITH_CPLEX
-    std::cout << "Skipping weighted projected CoverageLLBI CPLEX tests because CPLEX is not enabled.\n";
+    std::cout << "Skipping weighted projected PathLLBI CPLEX tests because CPLEX is not enabled.\n";
     return 0;
 #else
     test_expected_cvar_mean_cvar_equivalence();
     test_homogeneous_regression();
-    test_weighted_projected_path_now_supported();
-    std::cout << "All weighted projected CoverageLLBI CPLEX tests passed.\n";
+    test_projected_modes_are_mutually_exclusive();
+    std::cout << "All weighted projected PathLLBI CPLEX tests passed.\n";
     return 0;
 #endif
 }

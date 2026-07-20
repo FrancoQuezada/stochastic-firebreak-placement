@@ -1124,6 +1124,42 @@ void write_experiment_result_json(
         << format_json_number(result.projected_coverage_llbi_separation_time_sec) << ",\n";
     out << "  \"projected_coverage_llbi_validity_mode\": \""
         << json_escape_local(result.projected_coverage_llbi_validity_mode) << "\",\n";
+    out << "  \"projected_path_llbi_weighted\": "
+        << (result.projected_path_llbi_weighted ? "true" : "false") << ",\n";
+    out << "  \"projected_path_llbi_mode\": \""
+        << json_escape_local(result.projected_path_llbi_mode) << "\",\n";
+    out << "  \"projected_path_llbi_weight_map_hash\": \""
+        << json_escape_local(result.projected_path_llbi_weight_map_hash) << "\",\n";
+    out << "  \"projected_path_llbi_scenarios_precomputed\": "
+        << result.projected_path_llbi_scenarios_precomputed << ",\n";
+    out << "  \"projected_path_llbi_destination_nodes\": "
+        << result.projected_path_llbi_destination_nodes << ",\n";
+    out << "  \"projected_path_llbi_total_paths\": "
+        << result.projected_path_llbi_total_paths << ",\n";
+    out << "  \"projected_path_llbi_total_incidence_terms\": "
+        << result.projected_path_llbi_total_incidence_terms << ",\n";
+    out << "  \"projected_path_llbi_nodes_without_paths\": "
+        << result.projected_path_llbi_nodes_without_paths << ",\n";
+    out << "  \"projected_path_llbi_enumeration_complete\": "
+        << (result.projected_path_llbi_enumeration_complete ? "true" : "false") << ",\n";
+    out << "  \"projected_path_llbi_paths_truncated\": "
+        << result.projected_path_llbi_paths_truncated << ",\n";
+    out << "  \"projected_path_llbi_separation_calls\": "
+        << result.projected_path_llbi_separation_calls << ",\n";
+    out << "  \"projected_path_llbi_cuts_generated\": "
+        << result.projected_path_llbi_cuts_generated << ",\n";
+    out << "  \"projected_path_llbi_cuts_added\": "
+        << result.projected_path_llbi_cuts_added << ",\n";
+    out << "  \"projected_path_llbi_duplicate_cuts\": "
+        << result.projected_path_llbi_duplicate_cuts << ",\n";
+    out << "  \"projected_path_llbi_max_violation\": "
+        << format_json_number(result.projected_path_llbi_max_violation) << ",\n";
+    out << "  \"projected_path_llbi_precompute_time_sec\": "
+        << format_json_number(result.projected_path_llbi_precompute_time_sec) << ",\n";
+    out << "  \"projected_path_llbi_separation_time_sec\": "
+        << format_json_number(result.projected_path_llbi_separation_time_sec) << ",\n";
+    out << "  \"projected_path_llbi_validity_mode\": \""
+        << json_escape_local(result.projected_path_llbi_validity_mode) << "\",\n";
     out << "  \"global_dominance_enabled\": " << (result.global_dominance_enabled ? "true" : "false") << ",\n";
     out << "  \"global_dominance_structural_weight_safe\": "
         << (result.global_dominance_structural_weight_safe ? "true" : "false") << ",\n";
@@ -1317,6 +1353,8 @@ void append_experiment_result_csv(
         write_header || existing_csv_has_column(output_path, "path_llbi_weighted");
     const bool include_projected_coverage_llbi_extended =
         write_header || existing_csv_has_column(output_path, "projected_coverage_llbi_weighted");
+    const bool include_projected_path_llbi_extended =
+        write_header || existing_csv_has_column(output_path, "projected_path_llbi_weighted");
     const bool include_branch_benders_root_user_cut_summary =
         write_header || existing_csv_has_column(output_path, "branch_benders_use_root_user_cuts");
     const bool include_restricted_candidate_summary =
@@ -1433,8 +1471,28 @@ void append_experiment_result_csv(
             << "projected_coverage_llbi_duplicate_cuts,"
             << "projected_coverage_llbi_max_violation,"
             << "projected_coverage_llbi_precompute_time_sec,"
-            << "projected_coverage_llbi_separation_time_sec,"
-            << "projected_coverage_llbi_validity_mode,";
+                << "projected_coverage_llbi_separation_time_sec,"
+                << "projected_coverage_llbi_validity_mode,";
+        }
+        if (include_projected_path_llbi_extended) {
+            out
+                << "projected_path_llbi_weighted,projected_path_llbi_mode,"
+                << "projected_path_llbi_weight_map_hash,"
+                << "projected_path_llbi_scenarios_precomputed,"
+                << "projected_path_llbi_destination_nodes,"
+                << "projected_path_llbi_total_paths,"
+                << "projected_path_llbi_total_incidence_terms,"
+                << "projected_path_llbi_nodes_without_paths,"
+                << "projected_path_llbi_enumeration_complete,"
+                << "projected_path_llbi_paths_truncated,"
+                << "projected_path_llbi_separation_calls,"
+                << "projected_path_llbi_cuts_generated,"
+                << "projected_path_llbi_cuts_added,"
+                << "projected_path_llbi_duplicate_cuts,"
+                << "projected_path_llbi_max_violation,"
+                << "projected_path_llbi_precompute_time_sec,"
+                << "projected_path_llbi_separation_time_sec,"
+                << "projected_path_llbi_validity_mode,";
         }
         if (include_fpp_strengthening_summary) {
             out
@@ -1681,6 +1739,27 @@ void append_experiment_result_csv(
             << format_csv_number(result.projected_coverage_llbi_precompute_time_sec) << ","
             << format_csv_number(result.projected_coverage_llbi_separation_time_sec) << ","
             << csv_escape(result.projected_coverage_llbi_validity_mode) << ",";
+    }
+    if (include_projected_path_llbi_extended) {
+        out
+            << (result.projected_path_llbi_weighted ? "true" : "false") << ","
+            << csv_escape(result.projected_path_llbi_mode) << ","
+            << csv_escape(result.projected_path_llbi_weight_map_hash) << ","
+            << result.projected_path_llbi_scenarios_precomputed << ","
+            << result.projected_path_llbi_destination_nodes << ","
+            << result.projected_path_llbi_total_paths << ","
+            << result.projected_path_llbi_total_incidence_terms << ","
+            << result.projected_path_llbi_nodes_without_paths << ","
+            << (result.projected_path_llbi_enumeration_complete ? "true" : "false") << ","
+            << result.projected_path_llbi_paths_truncated << ","
+            << result.projected_path_llbi_separation_calls << ","
+            << result.projected_path_llbi_cuts_generated << ","
+            << result.projected_path_llbi_cuts_added << ","
+            << result.projected_path_llbi_duplicate_cuts << ","
+            << format_csv_number(result.projected_path_llbi_max_violation) << ","
+            << format_csv_number(result.projected_path_llbi_precompute_time_sec) << ","
+            << format_csv_number(result.projected_path_llbi_separation_time_sec) << ","
+            << csv_escape(result.projected_path_llbi_validity_mode) << ",";
     }
     if (include_fpp_strengthening_summary) {
         out
