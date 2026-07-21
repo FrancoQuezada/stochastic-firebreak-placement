@@ -109,6 +109,12 @@ WeightedDpvIgnitionPolicy parse_weighted_dpv_ignition_policy(const std::string& 
 std::string weighted_dpv_structural_definition(const WeightedDpvScoringOptions& options);
 
 std::vector<double> canonical_compact_dpv_weights_or_unit(const OptimizationInstance& opt);
+std::string weighted_dpv_weight_profile(
+    const OptimizationInstance& opt,
+    const std::vector<double>& compact_weights);
+std::string weighted_dpv_weight_map_hash(
+    const OptimizationInstance& opt,
+    const std::vector<double>& compact_weights);
 
 WeightedDpvStructuralData build_weighted_dpv_structural_data(
     const OptimizationInstance& opt,

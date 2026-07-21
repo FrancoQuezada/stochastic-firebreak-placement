@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <unordered_map>
 
+#include "opt/WeightedDpvScoring.hpp"
 #include "solver/CplexEnvironment.hpp"
 
 #ifdef FIREBREAK_WITH_CPLEX
@@ -124,6 +125,7 @@ SubproblemResult solve_dpv_scenario_subproblem_impl(
     const auto& scenario = opt.scenarios[static_cast<std::size_t>(scenario_position)];
     const int node_count = opt.node_mapper.size();
     const auto y_position_by_node = build_y_position_by_node_index(opt);
+    const auto compact_weights = opt::canonical_compact_dpv_weights_or_unit(opt);
 
     SubproblemResult result;
     result.scenario_id = scenario.scenario_id;
@@ -168,7 +170,8 @@ SubproblemResult solve_dpv_scenario_subproblem_impl(
 
         IloExpr objective(env);
         for (IloInt p = 0; p < z.getSize(); ++p) {
-            objective += z[p];
+            const auto& pair = scenario.dpv.product_pairs[static_cast<std::size_t>(p)];
+            objective += compact_weights[static_cast<std::size_t>(pair.descendant_index)] * z[p];
         }
         model.add(IloMinimize(env, objective));
         objective.end();
@@ -247,6 +250,8 @@ SubproblemResult solve_dpv_scenario_subproblem_impl(
             "CPLEX getDual values from equality rows y_copy_i = ybar_i are used directly as Benders coefficients.");
         cut.notes.push_back(
             "The resulting cut is eta_s >= Q_s(ybar) + sum_i pi_i * (y_i - ybar_i).");
+        cut.notes.push_back(
+            "DPV subproblem objective uses weight(descendant) for each product pair; multiplicity is preserved.");
         result.benders_cut = cut;
         result.notes = cut.notes;
 

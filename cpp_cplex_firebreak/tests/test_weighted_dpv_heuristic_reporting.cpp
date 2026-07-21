@@ -69,8 +69,10 @@ int main() {
     const auto csv = read_text(csv_path);
     assert(json.find("\"dpv_weighted\": true") != std::string::npos);
     assert(json.find("\"dpv_ignition_policy\": \"fpp_ignition_no_protection\"") != std::string::npos);
-    assert(csv.find("dpv_weighted,dpv_variant") != std::string::npos);
-    assert(csv.find("true,greedy_dpv3_cumulative_inverse_frequency_distance") != std::string::npos);
+    assert(csv.find("dpv_weighted,dpv_model_weighted,dpv_model_type") != std::string::npos);
+    assert(csv.find("dpv_variant,dpv_structural_definition,dpv_ignition_policy") != std::string::npos);
+    assert(csv.find("greedy_dpv3_cumulative_inverse_frequency_distance") != std::string::npos);
+    assert(csv.find("fpp_ignition_no_protection") != std::string::npos);
 
     fs::remove(json_path);
     fs::remove(csv_path);

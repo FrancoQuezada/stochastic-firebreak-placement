@@ -20,6 +20,7 @@ struct MethodDispatchRequest {
     std::string landscape;
     std::filesystem::path forest_path;
     std::filesystem::path results_path;
+    std::filesystem::path weight_map_file;
     std::filesystem::path output_dir;
     std::filesystem::path output_csv;
     double alpha = 0.0;
@@ -30,6 +31,7 @@ struct MethodDispatchRequest {
     int threads = 0;
     std::string warm_start_policy = "none";
     bool verbose = false;
+    std::string dpv_ignition_policy = "fpp-safe";
 
     std::string fpp_mode;
     std::string fpp_formulation = "base";

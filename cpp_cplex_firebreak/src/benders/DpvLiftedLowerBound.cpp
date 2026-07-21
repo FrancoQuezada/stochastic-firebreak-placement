@@ -9,6 +9,8 @@
 #include <stdexcept>
 #include <vector>
 
+#include "opt/WeightedDpvScoring.hpp"
+
 namespace firebreak::benders {
 
 namespace {
@@ -117,9 +119,13 @@ std::vector<char> compute_burned_set_with_adjacency(
 double count_dpv_loss_from_burned_set(
     const opt::OptimizationScenario& scenario,
     const std::vector<char>& burned_by_compact_index,
-    int node_count) {
+    int node_count,
+    const std::vector<double>& compact_weights) {
     if (burned_by_compact_index.size() != static_cast<std::size_t>(node_count)) {
         throw std::runtime_error("DPV loss burned vector has wrong size.");
+    }
+    if (compact_weights.size() != static_cast<std::size_t>(node_count)) {
+        throw std::runtime_error("DPV loss compact weight vector has wrong size.");
     }
 
     double loss = 0.0;
@@ -130,7 +136,7 @@ double count_dpv_loss_from_burned_set(
         }
         if (burned_by_compact_index[static_cast<std::size_t>(pair.successor_index)] &&
             burned_by_compact_index[static_cast<std::size_t>(pair.descendant_index)]) {
-            loss += 1.0;
+            loss += compact_weights[static_cast<std::size_t>(pair.descendant_index)];
         }
     }
     return loss;
@@ -146,6 +152,8 @@ struct DpvLiftedScenarioStructure {
     std::vector<std::vector<int>> adjacency;
     std::vector<char> empty_burned_by_compact_index;
     std::vector<std::vector<int>> product_ids_touching_node;
+    std::vector<double> product_weight_by_id;
+    std::vector<double> compact_weights;
 };
 
 DpvLiftedScenarioStructure build_lifted_scenario_structure(
@@ -166,6 +174,7 @@ DpvLiftedScenarioStructure build_lifted_scenario_structure(
     structure.ignition_index = scenario.ignition_index;
     structure.eligible_indices = opt.eligible_indices;
     structure.adjacency = build_adjacency(scenario, node_count);
+    structure.compact_weights = opt::canonical_compact_dpv_weights_or_unit(opt);
 
     const std::vector<char> empty_selection(static_cast<std::size_t>(node_count), 0);
     structure.empty_burned_by_compact_index = compute_burned_set_with_adjacency(
@@ -175,6 +184,7 @@ DpvLiftedScenarioStructure build_lifted_scenario_structure(
         empty_selection);
 
     structure.product_ids_touching_node.assign(static_cast<std::size_t>(node_count), {});
+    structure.product_weight_by_id.assign(scenario.dpv.product_pairs.size(), 0.0);
     for (std::size_t product_id = 0; product_id < scenario.dpv.product_pairs.size(); ++product_id) {
         const auto& pair = scenario.dpv.product_pairs[product_id];
         if (pair.successor_index < 0 || pair.successor_index >= node_count ||
@@ -187,7 +197,10 @@ DpvLiftedScenarioStructure build_lifted_scenario_structure(
         }
 
         const int compact_product_id = static_cast<int>(product_id);
-        structure.f_empty += 1.0;
+        const double product_weight =
+            structure.compact_weights[static_cast<std::size_t>(pair.descendant_index)];
+        structure.product_weight_by_id[product_id] = product_weight;
+        structure.f_empty += product_weight;
         structure.product_ids_touching_node[static_cast<std::size_t>(pair.successor_index)]
             .push_back(compact_product_id);
         if (pair.descendant_index != pair.successor_index) {
@@ -199,7 +212,7 @@ DpvLiftedScenarioStructure build_lifted_scenario_structure(
     return structure;
 }
 
-int count_active_products_touching_nodes(
+double count_active_products_touching_nodes(
     const DpvLiftedScenarioStructure& structure,
     const std::vector<int>& compact_nodes,
     std::vector<int>& product_stamp,
@@ -214,7 +227,7 @@ int count_active_products_touching_nodes(
     }
     ++current_stamp;
 
-    int delta = 0;
+    double delta = 0.0;
     for (const int compact_node : compact_nodes) {
         if (compact_node < 0 || compact_node >= structure.node_count) {
             throw std::runtime_error("LLBI downstream node is out of range.");
@@ -225,7 +238,7 @@ int count_active_products_touching_nodes(
                 continue;
             }
             product_stamp[static_cast<std::size_t>(product_id)] = current_stamp;
-            ++delta;
+            delta += structure.product_weight_by_id[static_cast<std::size_t>(product_id)];
         }
     }
     return delta;
@@ -252,12 +265,12 @@ DpvLiftedLowerBoundInequality build_lifted_lower_bound_from_structure(
         if (compact_index != structure.ignition_index) {
             const auto downstream_nodes =
                 closed_downstream_nodes(compact_index, structure.adjacency);
-            const int delta = count_active_products_touching_nodes(
+            const double delta = count_active_products_touching_nodes(
                 structure,
                 downstream_nodes,
                 product_stamp,
                 current_stamp);
-            coefficient = -static_cast<double>(delta);
+            coefficient = -delta;
         }
 
         if (std::fabs(coefficient) > coefficient_threshold) {
@@ -387,7 +400,8 @@ FixedDpvLossResult evaluate_fixed_y_dpv_loss(
     result.loss = count_dpv_loss_from_burned_set(
         scenario,
         result.burned_by_compact_index,
-        node_count);
+        node_count,
+        opt::canonical_compact_dpv_weights_or_unit(opt));
     return result;
 }
 
@@ -413,7 +427,7 @@ FixedDpvLossResult evaluate_optimistic_singleton_dpv_loss(
         closed_downstream_nodes(firebreak_compact_index, structure.adjacency);
     std::vector<int> product_stamp(structure.scenario->dpv.product_pairs.size(), 0);
     int current_stamp = 0;
-    const int delta = count_active_products_touching_nodes(
+    const double delta = count_active_products_touching_nodes(
         structure,
         downstream_nodes,
         product_stamp,
@@ -422,7 +436,7 @@ FixedDpvLossResult evaluate_optimistic_singleton_dpv_loss(
         result.burned_by_compact_index[static_cast<std::size_t>(compact_index)] = 0;
     }
 
-    result.loss = structure.f_empty - static_cast<double>(delta);
+    result.loss = structure.f_empty - delta;
     return result;
 }
 
@@ -447,6 +461,14 @@ DpvLiftedLowerBoundPrecomputeResult build_dpv_lifted_lower_bounds(
     result.inequalities.reserve(opt.scenarios.size());
     result.min_rhs = std::numeric_limits<double>::infinity();
     result.max_rhs = -std::numeric_limits<double>::infinity();
+    result.no_firebreak_loss_min = std::numeric_limits<double>::infinity();
+    result.no_firebreak_loss_max = -std::numeric_limits<double>::infinity();
+    result.singleton_benefit_min = std::numeric_limits<double>::infinity();
+    result.singleton_benefit_max = -std::numeric_limits<double>::infinity();
+    const auto compact_weights = opt::canonical_compact_dpv_weights_or_unit(opt);
+    result.weighted = true;
+    result.weight_map_hash = opt::weighted_dpv_weight_map_hash(opt, compact_weights);
+    result.validity_mode = "weighted_exhaustive_valid_for_small_tests";
 
     for (std::size_t s = 0; s < opt.scenarios.size(); ++s) {
         auto inequality = build_dpv_lifted_lower_bound_for_scenario(
@@ -456,6 +478,22 @@ DpvLiftedLowerBoundPrecomputeResult build_dpv_lifted_lower_bounds(
         result.total_nonzero_coefficients += inequality.nonzero_coefficients;
         result.min_rhs = std::min(result.min_rhs, inequality.rhs_constant);
         result.max_rhs = std::max(result.max_rhs, inequality.rhs_constant);
+        result.no_firebreak_loss_min = std::min(result.no_firebreak_loss_min, inequality.f_empty);
+        result.no_firebreak_loss_max = std::max(result.no_firebreak_loss_max, inequality.f_empty);
+        for (const int compact_index : opt.eligible_indices) {
+            double coefficient = 0.0;
+            for (const auto& [candidate_compact_index, candidate_coefficient] :
+                 inequality.coefficients_by_compact_index) {
+                if (candidate_compact_index == compact_index) {
+                    coefficient = candidate_coefficient;
+                    break;
+                }
+            }
+            const double benefit = -coefficient;
+            result.singleton_benefit_min = std::min(result.singleton_benefit_min, benefit);
+            result.singleton_benefit_max = std::max(result.singleton_benefit_max, benefit);
+            ++result.singletons_evaluated;
+        }
         result.notes.insert(
             result.notes.end(),
             inequality.notes.begin(),
@@ -466,9 +504,20 @@ DpvLiftedLowerBoundPrecomputeResult build_dpv_lifted_lower_bounds(
     if (result.inequalities.empty()) {
         result.min_rhs = 0.0;
         result.max_rhs = 0.0;
+        result.no_firebreak_loss_min = 0.0;
+        result.no_firebreak_loss_max = 0.0;
+        result.singleton_benefit_min = 0.0;
+        result.singleton_benefit_max = 0.0;
     }
+    if (!std::isfinite(result.singleton_benefit_min)) {
+        result.singleton_benefit_min = 0.0;
+        result.singleton_benefit_max = 0.0;
+    }
+    result.scenarios_precomputed = static_cast<int>(result.inequalities.size());
     result.notes.push_back(
-        "Lifted lower-bound inequalities use optimistic downstream singleton losses; true singleton recourse values are not used for coefficients.");
+        "Weighted lifted lower-bound inequalities use optimistic downstream singleton losses; true singleton recourse values are not used for coefficients.");
+    result.notes.push_back(
+        "DPV LLBI product-pair multiplicity is preserved and each product value is weight(descendant).");
 
     const auto end = std::chrono::steady_clock::now();
     result.precompute_time_sec = std::chrono::duration<double>(end - start).count();

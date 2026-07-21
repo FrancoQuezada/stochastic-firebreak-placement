@@ -27,6 +27,8 @@ struct DpvBendersOutOfSampleOptions {
     double tolerance = 1.0e-6;
     bool verbose = false;
     bool use_lifted_lower_bounds = false;
+    std::filesystem::path weight_map_file;
+    std::string dpv_ignition_policy = "fpp-safe";
     std::string run_id;
 
     std::filesystem::path output_json_path;

@@ -14,6 +14,7 @@
 #include "benders/DpvBendersSolver.hpp"
 #include "core/FirebreakSolution.hpp"
 #include "eval/BurnedAreaEvaluator.hpp"
+#include "eval/FppRecourseEvaluator.hpp"
 #include "io/Cell2FireReader.hpp"
 #include "io/ExperimentResultWriter.hpp"
 #include "io/PathUtils.hpp"
@@ -21,7 +22,9 @@
 #include "io/ScenarioSplitUtils.hpp"
 #include "io/SolutionIO.hpp"
 #include "opt/OptimizationInstanceBuilder.hpp"
+#include "opt/WeightedDpvScoring.hpp"
 #include "solver/CplexEnvironment.hpp"
+#include "solver/FppWeightedLossUtils.hpp"
 #include "solver/WarmStart.hpp"
 
 namespace firebreak::experiments {
@@ -297,6 +300,7 @@ int DpvBendersOutOfSampleRunner::run(const DpvBendersOutOfSampleOptions& options
 
     opt::OptimizationInstanceBuilder builder;
     auto opt_instance = builder.build(train_instance, options.alpha, true);
+    solver::attach_weight_map_to_optimization_instance(opt_instance, options.weight_map_file);
 
     solver::WarmStart warm_start;
     const solver::WarmStart* warm_start_ptr = nullptr;
@@ -314,6 +318,8 @@ int DpvBendersOutOfSampleRunner::run(const DpvBendersOutOfSampleOptions& options
     solver_options.threads = options.threads;
     solver_options.verbose = options.verbose;
     solver_options.use_lifted_lower_bounds = options.use_lifted_lower_bounds;
+    solver_options.dpv_ignition_policy =
+        opt::parse_weighted_dpv_ignition_policy(options.dpv_ignition_policy);
     solver_options.warm_start = warm_start_ptr;
 
     benders::DpvBendersSolver solver;
@@ -355,13 +361,25 @@ int DpvBendersOutOfSampleRunner::run(const DpvBendersOutOfSampleOptions& options
     const auto test_load_end = std::chrono::steady_clock::now();
     const double test_loading_seconds = std::chrono::duration<double>(test_load_end - test_load_start).count();
     const auto test_eval = eval::evaluate_instance_burned_area(test_instance, firebreaks);
+    auto test_opt_instance = builder.build(test_instance, options.alpha, true);
+    solver::attach_weight_map_to_optimization_instance(test_opt_instance, options.weight_map_file);
+    const auto train_recourse =
+        eval::FppRecourseEvaluator(opt_instance).evaluate(solve_result.selected_firebreak_indices);
+    std::vector<int> test_selected_compact;
+    for (const int original_node : solve_result.selected_firebreak_original_nodes) {
+        if (test_opt_instance.node_mapper.contains_node(original_node)) {
+            test_selected_compact.push_back(test_opt_instance.node_mapper.to_index(original_node));
+        }
+    }
+    const auto test_recourse =
+        eval::FppRecourseEvaluator(test_opt_instance).evaluate(test_selected_compact);
 
     io::StandardExperimentResult result;
     result.run_id = options.run_id;
     result.timestamp = io::current_timestamp_utc();
     result.landscape = options.landscape;
     result.method = "DPV-SAA-Benders";
-    result.objective_metric = "solution_dependent_DPV_unit_weights_benders_lp_subproblems";
+    result.objective_metric = "weighted_solution_dependent_DPV_product_pair_loss_benders";
     result.alpha = options.alpha;
     result.budget = opt_instance.budget;
     result.train_scenario_count = static_cast<int>(split.train_ids.size());
@@ -401,6 +419,25 @@ int DpvBendersOutOfSampleRunner::run(const DpvBendersOutOfSampleOptions& options
         solve_result.benders_lifted_lower_bound_nonzero_coefficients;
     result.benders_lifted_lower_bound_min_rhs = solve_result.benders_lifted_lower_bound_min_rhs;
     result.benders_lifted_lower_bound_max_rhs = solve_result.benders_lifted_lower_bound_max_rhs;
+    result.benders_lifted_lower_bound_weighted = solve_result.benders_lifted_lower_bound_weighted;
+    result.benders_lifted_lower_bound_weight_map_hash =
+        solve_result.benders_lifted_lower_bound_weight_map_hash;
+    result.benders_lifted_lower_bound_scenarios_precomputed =
+        solve_result.benders_lifted_lower_bound_scenarios_precomputed;
+    result.benders_lifted_lower_bound_singletons_evaluated =
+        solve_result.benders_lifted_lower_bound_singletons_evaluated;
+    result.benders_lifted_lower_bound_no_firebreak_loss_min =
+        solve_result.benders_lifted_lower_bound_no_firebreak_loss_min;
+    result.benders_lifted_lower_bound_no_firebreak_loss_max =
+        solve_result.benders_lifted_lower_bound_no_firebreak_loss_max;
+    result.benders_lifted_lower_bound_singleton_benefit_min =
+        solve_result.benders_lifted_lower_bound_singleton_benefit_min;
+    result.benders_lifted_lower_bound_singleton_benefit_max =
+        solve_result.benders_lifted_lower_bound_singleton_benefit_max;
+    result.benders_lifted_lower_bound_constraints_added =
+        solve_result.benders_lifted_lower_bound_constraints_added;
+    result.benders_lifted_lower_bound_validity_mode =
+        solve_result.benders_lifted_lower_bound_validity_mode;
     result.benders_lifted_lower_bound_notes = solve_result.benders_lifted_lower_bound_notes;
     result.selected_firebreaks = solve_result.selected_firebreak_original_nodes;
     result.warm_start_used = solve_result.warm_start_used;
@@ -408,6 +445,47 @@ int DpvBendersOutOfSampleRunner::run(const DpvBendersOutOfSampleOptions& options
     result.warm_start_valid_nodes = solve_result.warm_start_valid_nodes;
     result.warm_start_ignored_nodes = solve_result.warm_start_ignored_nodes;
     result.warm_start_notes = solve_result.warm_start_notes;
+    result.weight_profile = train_recourse.weight_profile;
+    result.weight_map_file = options.weight_map_file.empty() ? "" : options.weight_map_file.string();
+    result.weight_map_hash = train_recourse.weight_map_hash;
+    result.weight_total = train_recourse.total_landscape_weight;
+    result.solver_weighted_objective = solve_result.solver_weighted_objective;
+    result.evaluator_weighted_objective = train_recourse.expected_weighted_burn_loss;
+    result.train_expected_weighted_burn_loss = train_recourse.expected_weighted_burn_loss;
+    result.test_expected_weighted_burn_loss = test_recourse.expected_weighted_burn_loss;
+    result.train_weighted_var = train_recourse.weighted_loss_statistics.var;
+    result.test_weighted_var = test_recourse.weighted_loss_statistics.var;
+    result.train_weighted_cvar = train_recourse.weighted_loss_statistics.cvar;
+    result.test_weighted_cvar = test_recourse.weighted_loss_statistics.cvar;
+    result.dpv_weighted = solve_result.dpv_model_weighted;
+    result.dpv_model_weighted = solve_result.dpv_model_weighted;
+    result.dpv_model_type = solve_result.dpv_model_type;
+    result.dpv_variant = solve_result.dpv_variant;
+    result.dpv_structural_definition = solve_result.dpv_structural_definition;
+    result.dpv_ignition_policy = solve_result.dpv_ignition_policy;
+    result.dpv_weight_profile = solve_result.dpv_weight_profile;
+    result.dpv_weight_map_hash = solve_result.dpv_weight_map_hash;
+    result.dpv_scenario_aggregation = solve_result.dpv_scenario_aggregation;
+    result.dpv_normalization = solve_result.dpv_normalization;
+    result.dpv_risk_measure = solve_result.dpv_risk_measure;
+    result.dpv_surrogate_objective = solve_result.dpv_surrogate_objective;
+    result.dpv_surrogate_best_bound = solve_result.dpv_surrogate_best_bound;
+    result.dpv_surrogate_gap = solve_result.dpv_surrogate_gap;
+    result.dpv_benders_iterations = solve_result.dpv_benders_iterations;
+    result.dpv_benders_subproblems_solved = solve_result.dpv_benders_subproblems_solved;
+    result.dpv_benders_cuts_generated = solve_result.dpv_benders_cuts_generated;
+    result.dpv_benders_cuts_added = solve_result.dpv_benders_cuts_added;
+    result.dpv_benders_duplicate_cuts = solve_result.dpv_benders_duplicate_cuts;
+    result.dpv_benders_max_cut_violation = solve_result.dpv_benders_max_cut_violation;
+    result.dpv_benders_max_tightness_error = solve_result.dpv_benders_max_tightness_error;
+    result.dpv_benders_subproblem_time_sec = solve_result.dpv_benders_subproblem_time_sec;
+    result.dpv_benders_cut_time_sec = solve_result.dpv_benders_cut_time_sec;
+    result.dpv_llbi_enabled = solve_result.dpv_llbi_enabled;
+    result.dpv_llbi_weighted = solve_result.dpv_llbi_weighted;
+    result.dpv_llbi_type = solve_result.dpv_llbi_type;
+    result.dpv_llbi_constraints_added = solve_result.dpv_llbi_constraints_added;
+    result.dpv_llbi_precompute_time_sec = solve_result.dpv_llbi_precompute_time_sec;
+    result.dpv_llbi_validity_mode = solve_result.dpv_llbi_validity_mode;
     result.train_expected_burned_area = train_eval.expected_burned_area;
     result.train_worst_10pct_burned_area = train_eval.worst_10pct_burned_area;
     result.test_expected_burned_area = test_eval.expected_burned_area;

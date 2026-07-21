@@ -4,6 +4,7 @@
 #include <limits>
 
 #include "opt/OptimizationInstance.hpp"
+#include "opt/WeightedDpvScoring.hpp"
 #include "solver/ModelResult.hpp"
 #include "solver/WarmStart.hpp"
 
@@ -19,6 +20,8 @@ struct DpvBranchBendersOptions {
     bool use_root_user_cuts = false;
     int root_user_cut_max_rounds = 1;
     double root_user_cut_tolerance = std::numeric_limits<double>::quiet_NaN();
+    opt::WeightedDpvIgnitionPolicy dpv_ignition_policy =
+        opt::WeightedDpvIgnitionPolicy::FppIgnitionNoProtection;
     const solver::WarmStart* warm_start = nullptr;
 };
 

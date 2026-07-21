@@ -27,10 +27,12 @@
 #include "io/PathUtils.hpp"
 #include "io/SolutionIO.hpp"
 #include "opt/OptimizationInstanceBuilder.hpp"
+#include "opt/WeightedDpvScoring.hpp"
 #include "solver/CplexEnvironment.hpp"
 #include "solver/DpvSaaCplexModel.hpp"
 #include "solver/FppCutReachabilityCplexModel.hpp"
 #include "solver/FppSaaCplexModel.hpp"
+#include "solver/FppWeightedLossUtils.hpp"
 #include "solver/WarmStart.hpp"
 
 namespace firebreak::experiments {
@@ -213,6 +215,25 @@ int total_observed_scenario_nodes(const opt::OptimizationInstance& opt) {
         total += static_cast<int>(scenario.observed_node_indices.size());
     }
     return total;
+}
+
+std::vector<int> compact_indices_for_original_nodes(
+    const opt::OptimizationInstance& opt,
+    const std::vector<int>& original_nodes,
+    std::vector<std::string>& warnings,
+    const std::string& context) {
+    std::vector<int> compact_indices;
+    compact_indices.reserve(original_nodes.size());
+    for (const int original_node : original_nodes) {
+        if (!opt.node_mapper.contains_node(original_node)) {
+            warnings.push_back(
+                context + " selected original node is absent from evaluation node universe: " +
+                std::to_string(original_node) + ".");
+            continue;
+        }
+        compact_indices.push_back(opt.node_mapper.to_index(original_node));
+    }
+    return compact_indices;
 }
 
 void attach_fpp_recourse_validation(
@@ -648,6 +669,9 @@ io::StandardExperimentResult MethodDispatcher::run_method(const MethodDispatchRe
     opt::OptimizationInstanceBuilder builder;
     const bool build_dpv_indices = method_needs_dpv_indices(method, warm_start_policy);
     auto opt_instance = builder.build(train_instance, request.alpha, build_dpv_indices);
+    solver::attach_weight_map_to_optimization_instance(opt_instance, request.weight_map_file);
+    auto test_opt_instance = builder.build(test_instance, request.alpha, build_dpv_indices);
+    solver::attach_weight_map_to_optimization_instance(test_opt_instance, request.weight_map_file);
     benders::FppStrengtheningOptions fpp_strengthening_options;
     if (fpp_variant.is_fpp_solver) {
         fpp_strengthening_options.use_coverage_llbi =
@@ -935,10 +959,11 @@ io::StandardExperimentResult MethodDispatcher::run_method(const MethodDispatchRe
             request.mip_gap,
             request.threads,
             request.verbose,
-            warm_start_ptr);
+            warm_start_ptr,
+            opt::parse_weighted_dpv_ignition_policy(request.dpv_ignition_policy));
         solver_result.method = "DPV-SAA";
         solver_result.formulation = "base";
-        objective_metric = "solution_dependent_DPV_unit_weights";
+        objective_metric = "weighted_solution_dependent_DPV_product_pair_loss";
     } else if (method == "DPV-Benders") {
         solver::WarmStart warm_start = build_policy_warm_start("DPV-SAA", warm_start_policy, opt_instance);
         const solver::WarmStart* warm_start_ptr = warm_start.enabled ? &warm_start : nullptr;
@@ -950,6 +975,8 @@ io::StandardExperimentResult MethodDispatcher::run_method(const MethodDispatchRe
         options.threads = request.threads;
         options.verbose = request.verbose;
         options.use_lifted_lower_bounds = false;
+        options.dpv_ignition_policy =
+            opt::parse_weighted_dpv_ignition_policy(request.dpv_ignition_policy);
         options.warm_start = warm_start_ptr;
 
         benders::DpvBendersSolver solver;
@@ -958,7 +985,7 @@ io::StandardExperimentResult MethodDispatcher::run_method(const MethodDispatchRe
         solver_result.formulation = "benders";
         solver_result.notes.push_back(
             "Batch method label DPV-Benders maps to explicit-loop DPV-SAA Benders with LLBI disabled.");
-        objective_metric = "solution_dependent_DPV_unit_weights_benders";
+        objective_metric = "weighted_solution_dependent_DPV_product_pair_loss_benders";
     } else if (is_dpv_branch_benders_method(method)) {
         const auto variant = dpv_branch_benders_variant_settings(method);
         solver::WarmStart warm_start = build_policy_warm_start("DPV-SAA", warm_start_policy, opt_instance);
@@ -973,6 +1000,8 @@ io::StandardExperimentResult MethodDispatcher::run_method(const MethodDispatchRe
         options.use_root_user_cuts = variant.use_root_user_cuts;
         options.root_user_cut_max_rounds = request.root_user_cut_max_rounds;
         options.root_user_cut_tolerance = request.root_user_cut_tolerance;
+        options.dpv_ignition_policy =
+            opt::parse_weighted_dpv_ignition_policy(request.dpv_ignition_policy);
         options.warm_start = warm_start_ptr;
 
         benders::DpvBranchBendersSolver solver;
@@ -985,7 +1014,7 @@ io::StandardExperimentResult MethodDispatcher::run_method(const MethodDispatchRe
             std::string(options.use_lifted_lower_bounds ? "true" : "false") +
             " and root_user_cuts=" +
             std::string(options.use_root_user_cuts ? "true" : "false") + ".");
-        objective_metric = "solution_dependent_DPV_unit_weights_branch_benders";
+        objective_metric = "weighted_solution_dependent_DPV_product_pair_loss_branch_benders";
     } else if (method == "Static-DPV") {
         benchmarks::StaticDpvBenchmark benchmark;
         const auto static_result = benchmark.run(opt_instance, opt_instance.budget);
@@ -1084,6 +1113,22 @@ io::StandardExperimentResult MethodDispatcher::run_method(const MethodDispatchRe
     const core::FirebreakSolution firebreaks(solver_result.selected_firebreak_original_nodes);
     const auto train_eval = eval::evaluate_instance_burned_area(train_instance, firebreaks);
     const auto test_eval = eval::evaluate_instance_burned_area(test_instance, firebreaks);
+    std::vector<std::string> weighted_eval_warnings;
+    eval::FppRecourseEvaluator train_recourse_evaluator(opt_instance);
+    const auto train_recourse = train_recourse_evaluator.evaluate(
+        solver_result.selected_firebreak_indices,
+        false,
+        request.risk_config.cvarBeta);
+    eval::FppRecourseEvaluator test_recourse_evaluator(test_opt_instance);
+    const auto selected_test_compact_indices = compact_indices_for_original_nodes(
+        test_opt_instance,
+        solver_result.selected_firebreak_original_nodes,
+        weighted_eval_warnings,
+        "Test recourse");
+    const auto test_recourse = test_recourse_evaluator.evaluate(
+        selected_test_compact_indices,
+        false,
+        request.risk_config.cvarBeta);
 
     io::StandardExperimentResult result;
     result.experiment_id = request.experiment_id;
@@ -1655,6 +1700,80 @@ io::StandardExperimentResult MethodDispatcher::run_method(const MethodDispatchRe
     result.evaluator_objective = solver_result.evaluator_objective;
     result.evaluator_abs_diff = solver_result.evaluator_abs_diff;
     result.evaluator_rel_diff = solver_result.evaluator_rel_diff;
+    result.weight_profile = train_recourse.weight_profile;
+    result.weight_map_file = request.weight_map_file.empty() ? "" : request.weight_map_file.string();
+    result.weight_map_hash = train_recourse.weight_map_hash;
+    result.weight_normalized =
+        !opt_instance.cell_weight_map.weight_by_original_cell_id.empty() &&
+        opt_instance.cell_weight_map.normalized;
+    result.weight_mean =
+        !opt_instance.cell_weight_map.weight_by_original_cell_id.empty()
+            ? opt_instance.cell_weight_map.normalized_mean
+            : 1.0;
+    result.weight_min =
+        !opt_instance.cell_weight_map.weight_by_original_cell_id.empty()
+            ? opt_instance.cell_weight_map.minimum_weight
+            : 1.0;
+    result.weight_max =
+        !opt_instance.cell_weight_map.weight_by_original_cell_id.empty()
+            ? opt_instance.cell_weight_map.maximum_weight
+            : 1.0;
+    result.weight_total = train_recourse.total_landscape_weight;
+    result.solver_weighted_objective = solver_result.solver_weighted_objective;
+    result.evaluator_weighted_objective = train_recourse.expected_weighted_burn_loss;
+    result.objective_validation_abs_difference =
+        solver_result.objective_validation_abs_difference;
+    result.objective_validation_rel_difference =
+        solver_result.objective_validation_rel_difference;
+    result.objective_validation_passed = solver_result.objective_validation_passed;
+    result.train_expected_weighted_burn_loss = train_recourse.expected_weighted_burn_loss;
+    result.test_expected_weighted_burn_loss = test_recourse.expected_weighted_burn_loss;
+    result.train_weighted_var = train_recourse.weighted_loss_statistics.var;
+    result.test_weighted_var = test_recourse.weighted_loss_statistics.var;
+    result.train_weighted_cvar = train_recourse.weighted_loss_statistics.cvar;
+    result.test_weighted_cvar = test_recourse.weighted_loss_statistics.cvar;
+    result.train_percentage_landscape_value_burned =
+        train_recourse.expected_percentage_landscape_value_burned;
+    result.test_percentage_landscape_value_burned =
+        test_recourse.expected_percentage_landscape_value_burned;
+    result.train_percentage_high_value_weight_burned =
+        train_recourse.expected_percentage_high_value_weight_burned;
+    result.test_percentage_high_value_weight_burned =
+        test_recourse.expected_percentage_high_value_weight_burned;
+    result.dpv_weighted = solver_result.dpv_model_weighted;
+    result.dpv_model_weighted = solver_result.dpv_model_weighted;
+    result.dpv_model_type = solver_result.dpv_model_type;
+    result.dpv_variant = solver_result.dpv_variant;
+    result.dpv_structural_definition = solver_result.dpv_structural_definition;
+    result.dpv_ignition_policy = solver_result.dpv_ignition_policy;
+    result.dpv_weight_profile = solver_result.dpv_weight_profile;
+    result.dpv_weight_map_hash = solver_result.dpv_weight_map_hash;
+    result.dpv_scenario_aggregation = solver_result.dpv_scenario_aggregation;
+    result.dpv_normalization = solver_result.dpv_normalization;
+    result.dpv_risk_measure = solver_result.dpv_risk_measure;
+    result.dpv_surrogate_objective = solver_result.dpv_surrogate_objective;
+    result.dpv_surrogate_best_bound = solver_result.dpv_surrogate_best_bound;
+    result.dpv_surrogate_gap = solver_result.dpv_surrogate_gap;
+    result.dpv_benders_iterations = solver_result.dpv_benders_iterations;
+    result.dpv_benders_subproblems_solved =
+        solver_result.dpv_benders_subproblems_solved;
+    result.dpv_benders_cuts_generated = solver_result.dpv_benders_cuts_generated;
+    result.dpv_benders_cuts_added = solver_result.dpv_benders_cuts_added;
+    result.dpv_benders_duplicate_cuts = solver_result.dpv_benders_duplicate_cuts;
+    result.dpv_benders_max_cut_violation =
+        solver_result.dpv_benders_max_cut_violation;
+    result.dpv_benders_max_tightness_error =
+        solver_result.dpv_benders_max_tightness_error;
+    result.dpv_benders_subproblem_time_sec =
+        solver_result.dpv_benders_subproblem_time_sec;
+    result.dpv_benders_cut_time_sec = solver_result.dpv_benders_cut_time_sec;
+    result.dpv_llbi_enabled = solver_result.dpv_llbi_enabled;
+    result.dpv_llbi_weighted = solver_result.dpv_llbi_weighted;
+    result.dpv_llbi_type = solver_result.dpv_llbi_type;
+    result.dpv_llbi_constraints_added = solver_result.dpv_llbi_constraints_added;
+    result.dpv_llbi_precompute_time_sec =
+        solver_result.dpv_llbi_precompute_time_sec;
+    result.dpv_llbi_validity_mode = solver_result.dpv_llbi_validity_mode;
     result.risk_measure = solver_result.risk_measure;
     result.cvar_beta = solver_result.cvar_beta;
     result.cvar_lambda = solver_result.cvar_lambda;
@@ -1691,6 +1810,15 @@ io::StandardExperimentResult MethodDispatcher::run_method(const MethodDispatchRe
     }
     for (const auto& warning : test_warnings) {
         result.notes.push_back("Test reader warning: " + warning);
+    }
+    for (const auto& warning : train_recourse.warnings) {
+        result.notes.push_back("Train weighted recourse warning: " + warning);
+    }
+    for (const auto& warning : test_recourse.warnings) {
+        result.notes.push_back("Test weighted recourse warning: " + warning);
+    }
+    for (const auto& warning : weighted_eval_warnings) {
+        result.notes.push_back("Weighted recourse warning: " + warning);
     }
     result.notes.push_back("Test scenarios were used only for out-of-sample evaluation.");
 

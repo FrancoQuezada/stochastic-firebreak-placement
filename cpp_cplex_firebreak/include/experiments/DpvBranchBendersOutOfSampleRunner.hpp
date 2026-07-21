@@ -30,6 +30,8 @@ struct DpvBranchBendersOutOfSampleOptions {
     bool use_root_user_cuts = false;
     int root_user_cut_max_rounds = 1;
     double root_user_cut_tolerance = std::numeric_limits<double>::quiet_NaN();
+    std::filesystem::path weight_map_file;
+    std::string dpv_ignition_policy = "fpp-safe";
     std::string run_id;
 
     std::filesystem::path output_json_path;

@@ -1436,6 +1436,9 @@ void write_experiment_result_json(
     out << "  \"objective_validation_passed\": "
         << (result.objective_validation_passed ? "true" : "false") << ",\n";
     out << "  \"dpv_weighted\": " << (result.dpv_weighted ? "true" : "false") << ",\n";
+    out << "  \"dpv_model_weighted\": "
+        << (result.dpv_model_weighted ? "true" : "false") << ",\n";
+    out << "  \"dpv_model_type\": \"" << json_escape_local(result.dpv_model_type) << "\",\n";
     out << "  \"dpv_variant\": \"" << json_escape_local(result.dpv_variant) << "\",\n";
     out << "  \"dpv_structural_definition\": \""
         << json_escape_local(result.dpv_structural_definition) << "\",\n";
@@ -1445,6 +1448,7 @@ void write_experiment_result_json(
     out << "  \"dpv_scenario_aggregation\": \""
         << json_escape_local(result.dpv_scenario_aggregation) << "\",\n";
     out << "  \"dpv_normalization\": \"" << json_escape_local(result.dpv_normalization) << "\",\n";
+    out << "  \"dpv_risk_measure\": \"" << json_escape_local(result.dpv_risk_measure) << "\",\n";
     out << "  \"dpv_candidates_scored\": " << result.dpv_candidates_scored << ",\n";
     out << "  \"dpv_candidates_selected\": " << result.dpv_candidates_selected << ",\n";
     out << "  \"dpv_score_min\": " << format_json_number(result.dpv_score_min) << ",\n";
@@ -1462,6 +1466,32 @@ void write_experiment_result_json(
         << format_json_number(result.dpv_selection_time_sec) << ",\n";
     out << "  \"dpv_surrogate_objective\": "
         << format_json_number(result.dpv_surrogate_objective) << ",\n";
+    out << "  \"dpv_surrogate_best_bound\": "
+        << format_json_number(result.dpv_surrogate_best_bound) << ",\n";
+    out << "  \"dpv_surrogate_gap\": "
+        << format_json_number(result.dpv_surrogate_gap) << ",\n";
+    out << "  \"dpv_benders_iterations\": " << result.dpv_benders_iterations << ",\n";
+    out << "  \"dpv_benders_subproblems_solved\": "
+        << result.dpv_benders_subproblems_solved << ",\n";
+    out << "  \"dpv_benders_cuts_generated\": " << result.dpv_benders_cuts_generated << ",\n";
+    out << "  \"dpv_benders_cuts_added\": " << result.dpv_benders_cuts_added << ",\n";
+    out << "  \"dpv_benders_duplicate_cuts\": " << result.dpv_benders_duplicate_cuts << ",\n";
+    out << "  \"dpv_benders_max_cut_violation\": "
+        << format_json_number(result.dpv_benders_max_cut_violation) << ",\n";
+    out << "  \"dpv_benders_max_tightness_error\": "
+        << format_json_number(result.dpv_benders_max_tightness_error) << ",\n";
+    out << "  \"dpv_benders_subproblem_time_sec\": "
+        << format_json_number(result.dpv_benders_subproblem_time_sec) << ",\n";
+    out << "  \"dpv_benders_cut_time_sec\": "
+        << format_json_number(result.dpv_benders_cut_time_sec) << ",\n";
+    out << "  \"dpv_llbi_enabled\": " << (result.dpv_llbi_enabled ? "true" : "false") << ",\n";
+    out << "  \"dpv_llbi_weighted\": " << (result.dpv_llbi_weighted ? "true" : "false") << ",\n";
+    out << "  \"dpv_llbi_type\": \"" << json_escape_local(result.dpv_llbi_type) << "\",\n";
+    out << "  \"dpv_llbi_constraints_added\": " << result.dpv_llbi_constraints_added << ",\n";
+    out << "  \"dpv_llbi_precompute_time_sec\": "
+        << format_json_number(result.dpv_llbi_precompute_time_sec) << ",\n";
+    out << "  \"dpv_llbi_validity_mode\": \""
+        << json_escape_local(result.dpv_llbi_validity_mode) << "\",\n";
     out << "  \"dpv_greedy_iterations\": " << result.dpv_greedy_iterations << ",\n";
     out << "  \"dpv_score_recomputations\": " << result.dpv_score_recomputations << ",\n";
     out << "  \"dpv_marginal_scores_evaluated\": "
@@ -1590,6 +1620,8 @@ void append_experiment_result_csv(
         write_header || existing_csv_has_column(output_path, "weight_profile");
     const bool include_dpv_reporting =
         write_header || existing_csv_has_column(output_path, "dpv_weighted");
+    const bool include_dpv_model_reporting =
+        write_header || existing_csv_has_column(output_path, "dpv_model_weighted");
     const bool include_graph_ratios =
         write_header || existing_csv_has_column(output_path, "train_graph_classification_ratios");
     ensure_parent_directory(output_path);
@@ -1832,12 +1864,21 @@ void append_experiment_result_csv(
             << "solver_weighted_objective,evaluator_weighted_objective,"
             << "objective_validation_abs_difference,objective_validation_rel_difference,"
             << "objective_validation_passed,"
-            << "dpv_weighted,dpv_variant,dpv_structural_definition,dpv_ignition_policy,"
+            << "dpv_weighted,dpv_model_weighted,dpv_model_type,"
+            << "dpv_variant,dpv_structural_definition,dpv_ignition_policy,"
             << "dpv_weight_profile,dpv_weight_map_hash,dpv_scenario_aggregation,dpv_normalization,"
+            << "dpv_risk_measure,"
             << "dpv_candidates_scored,dpv_candidates_selected,"
             << "dpv_score_min,dpv_score_max,dpv_score_mean,dpv_selected_score_sum,"
             << "dpv_structural_cache_hit,dpv_weighted_cache_hit,"
             << "dpv_score_precompute_time_sec,dpv_selection_time_sec,dpv_surrogate_objective,"
+            << "dpv_surrogate_best_bound,dpv_surrogate_gap,"
+            << "dpv_benders_iterations,dpv_benders_subproblems_solved,"
+            << "dpv_benders_cuts_generated,dpv_benders_cuts_added,dpv_benders_duplicate_cuts,"
+            << "dpv_benders_max_cut_violation,dpv_benders_max_tightness_error,"
+            << "dpv_benders_subproblem_time_sec,dpv_benders_cut_time_sec,"
+            << "dpv_llbi_enabled,dpv_llbi_weighted,dpv_llbi_type,"
+            << "dpv_llbi_constraints_added,dpv_llbi_precompute_time_sec,dpv_llbi_validity_mode,"
             << "dpv_greedy_iterations,dpv_score_recomputations,dpv_marginal_scores_evaluated,"
             << "dpv_overlap_value_removed,"
             << "validation_status,"
@@ -2270,14 +2311,22 @@ void append_experiment_result_csv(
             << (result.objective_validation_passed ? "true" : "false") << ",";
     }
     if (include_dpv_reporting) {
-        out << (result.dpv_weighted ? "true" : "false") << ","
-            << csv_escape(result.dpv_variant) << ","
+        out << (result.dpv_weighted ? "true" : "false") << ",";
+        if (include_dpv_model_reporting) {
+            out << (result.dpv_model_weighted ? "true" : "false") << ","
+                << csv_escape(result.dpv_model_type) << ",";
+        }
+        out << csv_escape(result.dpv_variant) << ","
             << csv_escape(result.dpv_structural_definition) << ","
             << csv_escape(result.dpv_ignition_policy) << ","
             << csv_escape(result.dpv_weight_profile) << ","
             << csv_escape(result.dpv_weight_map_hash) << ","
             << csv_escape(result.dpv_scenario_aggregation) << ","
-            << csv_escape(result.dpv_normalization) << ","
+            << csv_escape(result.dpv_normalization) << ",";
+        if (include_dpv_model_reporting) {
+            out << csv_escape(result.dpv_risk_measure) << ",";
+        }
+        out
             << result.dpv_candidates_scored << ","
             << result.dpv_candidates_selected << ","
             << format_csv_number(result.dpv_score_min) << ","
@@ -2288,8 +2337,27 @@ void append_experiment_result_csv(
             << (result.dpv_weighted_cache_hit ? "true" : "false") << ","
             << format_csv_number(result.dpv_score_precompute_time_sec) << ","
             << format_csv_number(result.dpv_selection_time_sec) << ","
-            << format_csv_number(result.dpv_surrogate_objective) << ","
-            << result.dpv_greedy_iterations << ","
+            << format_csv_number(result.dpv_surrogate_objective) << ",";
+        if (include_dpv_model_reporting) {
+            out << format_csv_number(result.dpv_surrogate_best_bound) << ","
+                << format_csv_number(result.dpv_surrogate_gap) << ","
+                << result.dpv_benders_iterations << ","
+                << result.dpv_benders_subproblems_solved << ","
+                << result.dpv_benders_cuts_generated << ","
+                << result.dpv_benders_cuts_added << ","
+                << result.dpv_benders_duplicate_cuts << ","
+                << format_csv_number(result.dpv_benders_max_cut_violation) << ","
+                << format_csv_number(result.dpv_benders_max_tightness_error) << ","
+                << format_csv_number(result.dpv_benders_subproblem_time_sec) << ","
+                << format_csv_number(result.dpv_benders_cut_time_sec) << ","
+                << (result.dpv_llbi_enabled ? "true" : "false") << ","
+                << (result.dpv_llbi_weighted ? "true" : "false") << ","
+                << csv_escape(result.dpv_llbi_type) << ","
+                << result.dpv_llbi_constraints_added << ","
+                << format_csv_number(result.dpv_llbi_precompute_time_sec) << ","
+                << csv_escape(result.dpv_llbi_validity_mode) << ",";
+        }
+        out << result.dpv_greedy_iterations << ","
             << result.dpv_score_recomputations << ","
             << result.dpv_marginal_scores_evaluated << ","
             << format_csv_number(result.dpv_overlap_value_removed) << ",";

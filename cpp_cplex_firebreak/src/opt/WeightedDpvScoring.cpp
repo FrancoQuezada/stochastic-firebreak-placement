@@ -295,6 +295,18 @@ std::vector<double> canonical_compact_dpv_weights_or_unit(const OptimizationInst
     return weights;
 }
 
+std::string weighted_dpv_weight_profile(
+    const OptimizationInstance& opt,
+    const std::vector<double>& compact_weights) {
+    return weight_profile_for_compact_weights(opt, compact_weights);
+}
+
+std::string weighted_dpv_weight_map_hash(
+    const OptimizationInstance& opt,
+    const std::vector<double>& compact_weights) {
+    return weight_hash_for_compact_weights(opt, compact_weights);
+}
+
 WeightedDpvStructuralData build_weighted_dpv_structural_data(
     const OptimizationInstance& opt,
     const std::vector<int>& candidate_compact_indices,

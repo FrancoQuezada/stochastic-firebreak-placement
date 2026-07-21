@@ -9,6 +9,7 @@
 #include "analysis/GraphDiagnostics.hpp"
 #include "core/FirebreakSolution.hpp"
 #include "eval/BurnedAreaEvaluator.hpp"
+#include "eval/FppRecourseEvaluator.hpp"
 #include "io/Cell2FireReader.hpp"
 #include "io/ExperimentResultWriter.hpp"
 #include "io/PathUtils.hpp"
@@ -16,8 +17,10 @@
 #include "io/ScenarioSplitUtils.hpp"
 #include "io/SolutionIO.hpp"
 #include "opt/OptimizationInstanceBuilder.hpp"
+#include "opt/WeightedDpvScoring.hpp"
 #include "solver/CplexEnvironment.hpp"
 #include "solver/DpvSaaCplexModel.hpp"
+#include "solver/FppWeightedLossUtils.hpp"
 #include "solver/WarmStart.hpp"
 
 namespace firebreak::experiments {
@@ -177,6 +180,7 @@ int DpvSaaOutOfSampleRunner::run(const DpvSaaOutOfSampleOptions& options) const 
 
     opt::OptimizationInstanceBuilder builder;
     auto opt_instance = builder.build(train_instance, options.alpha, true);
+    solver::attach_weight_map_to_optimization_instance(opt_instance, options.weight_map_file);
 
     solver::WarmStart warm_start;
     const solver::WarmStart* warm_start_ptr = nullptr;
@@ -193,7 +197,8 @@ int DpvSaaOutOfSampleRunner::run(const DpvSaaOutOfSampleOptions& options) const 
         options.mip_gap,
         options.threads,
         options.verbose,
-        warm_start_ptr);
+        warm_start_ptr,
+        opt::parse_weighted_dpv_ignition_policy(options.dpv_ignition_policy));
 
     io::FirebreakSolutionRecord solution_record;
     solution_record.method = "DPV-SAA";
@@ -219,13 +224,25 @@ int DpvSaaOutOfSampleRunner::run(const DpvSaaOutOfSampleOptions& options) const 
     const auto test_load_end = std::chrono::steady_clock::now();
     const double test_loading_seconds = std::chrono::duration<double>(test_load_end - test_load_start).count();
     const auto test_eval = eval::evaluate_instance_burned_area(test_instance, firebreaks);
+    auto test_opt_instance = builder.build(test_instance, options.alpha, true);
+    solver::attach_weight_map_to_optimization_instance(test_opt_instance, options.weight_map_file);
+    const auto train_recourse =
+        eval::FppRecourseEvaluator(opt_instance).evaluate(solve_result.selected_firebreak_indices);
+    std::vector<int> test_selected_compact;
+    for (const int original_node : solve_result.selected_firebreak_original_nodes) {
+        if (test_opt_instance.node_mapper.contains_node(original_node)) {
+            test_selected_compact.push_back(test_opt_instance.node_mapper.to_index(original_node));
+        }
+    }
+    const auto test_recourse =
+        eval::FppRecourseEvaluator(test_opt_instance).evaluate(test_selected_compact);
 
     io::StandardExperimentResult result;
     result.run_id = options.run_id;
     result.timestamp = io::current_timestamp_utc();
     result.landscape = options.landscape;
     result.method = "DPV-SAA";
-    result.objective_metric = "solution_dependent_DPV_unit_weights";
+    result.objective_metric = "weighted_solution_dependent_DPV_product_pair_loss";
     result.alpha = options.alpha;
     result.budget = opt_instance.budget;
     result.train_scenario_count = static_cast<int>(split.train_ids.size());
@@ -246,6 +263,32 @@ int DpvSaaOutOfSampleRunner::run(const DpvSaaOutOfSampleOptions& options) const 
     result.warm_start_valid_nodes = solve_result.warm_start_valid_nodes;
     result.warm_start_ignored_nodes = solve_result.warm_start_ignored_nodes;
     result.warm_start_notes = solve_result.warm_start_notes;
+    result.weight_profile = train_recourse.weight_profile;
+    result.weight_map_file = options.weight_map_file.empty() ? "" : options.weight_map_file.string();
+    result.weight_map_hash = train_recourse.weight_map_hash;
+    result.weight_total = train_recourse.total_landscape_weight;
+    result.solver_weighted_objective = solve_result.solver_weighted_objective;
+    result.evaluator_weighted_objective = train_recourse.expected_weighted_burn_loss;
+    result.train_expected_weighted_burn_loss = train_recourse.expected_weighted_burn_loss;
+    result.test_expected_weighted_burn_loss = test_recourse.expected_weighted_burn_loss;
+    result.train_weighted_var = train_recourse.weighted_loss_statistics.var;
+    result.test_weighted_var = test_recourse.weighted_loss_statistics.var;
+    result.train_weighted_cvar = train_recourse.weighted_loss_statistics.cvar;
+    result.test_weighted_cvar = test_recourse.weighted_loss_statistics.cvar;
+    result.dpv_weighted = solve_result.dpv_model_weighted;
+    result.dpv_model_weighted = solve_result.dpv_model_weighted;
+    result.dpv_model_type = solve_result.dpv_model_type;
+    result.dpv_variant = solve_result.dpv_variant;
+    result.dpv_structural_definition = solve_result.dpv_structural_definition;
+    result.dpv_ignition_policy = solve_result.dpv_ignition_policy;
+    result.dpv_weight_profile = solve_result.dpv_weight_profile;
+    result.dpv_weight_map_hash = solve_result.dpv_weight_map_hash;
+    result.dpv_scenario_aggregation = solve_result.dpv_scenario_aggregation;
+    result.dpv_normalization = solve_result.dpv_normalization;
+    result.dpv_risk_measure = solve_result.dpv_risk_measure;
+    result.dpv_surrogate_objective = solve_result.dpv_surrogate_objective;
+    result.dpv_surrogate_best_bound = solve_result.dpv_surrogate_best_bound;
+    result.dpv_surrogate_gap = solve_result.dpv_surrogate_gap;
     result.train_expected_burned_area = train_eval.expected_burned_area;
     result.train_worst_10pct_burned_area = train_eval.worst_10pct_burned_area;
     result.test_expected_burned_area = test_eval.expected_burned_area;
