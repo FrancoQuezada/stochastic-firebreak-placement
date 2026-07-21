@@ -31,6 +31,7 @@
 #include "experiments/SmokeRunner.hpp"
 #include "experiments/StaticDpvOutOfSampleRunner.hpp"
 #include "experiments/WeightMapGenerationRunner.hpp"
+#include "experiments/WeightMapRegistryRunner.hpp"
 #include "io/PathUtils.hpp"
 #include "io/ScenarioFileUtils.hpp"
 #include "risk/RiskMeasure.hpp"
@@ -48,6 +49,10 @@ void print_usage(std::ostream& out) {
         << "--output-csv results/weights/map.csv --output-json results/weights/map.json "
         << "[--forest-path PATH] [--results-path PATH] [--weight-seed 123] "
         << "[--weight-normalize true|false]\n"
+        << "  firebreak_cpp ensure-weight-map --instance-id new20x20 "
+        << "--forest-path new_instances/20x20 --results-path new_instances/20x20 "
+        << "--weight-registry weight_maps --weight-profile homogeneous|heterogeneous|clustered "
+        << "[--weight-replicate 0] [--weight-seed-base 12345]\n"
         << "  firebreak_cpp evaluate --landscape Sub20 --scenario-ids 1-5 "
         << "--firebreaks 10,20,30 [--forest-path PATH] [--results-path PATH] "
         << "[--weight-map-file weights.csv] [--cvar-beta 0.9] [--output results/out.json]\n"
@@ -163,13 +168,15 @@ void print_usage(std::ostream& out) {
         << "[--train-ids 1-5 --test-ids 6:30 | --seed 123 --train-count 2 --test-count 3] "
         << "--alpha 0.01 --run-id RUN_ID [--time-limit 60] [--mip-gap 0.001] "
         << "[--threads 1] [--forest-path PATH] [--results-path PATH] "
-        << "[--warm-start-solution solution.csv] "
+        << "[--warm-start-solution solution.csv] [--weight-map-file weights.csv] "
+        << "[--dpv-ignition-policy fpp-safe|legacy] "
         << "[--output-json results/out.json] [--output-csv results/out.csv]\n"
         << "  firebreak_cpp run-dpv-benders-oos --landscape Sub20 "
         << "[--train-ids 1-5 --test-ids 6:30 | --seed 123 --train-count 2 --test-count 3] "
         << "--alpha 0.01 --run-id RUN_ID [--time-limit 60] [--mip-gap 0.001] "
         << "[--threads 1] [--max-iterations 20] [--tolerance 1e-6] "
         << "[--forest-path PATH] [--results-path PATH] [--warm-start-solution solution.csv] "
+        << "[--weight-map-file weights.csv] [--dpv-ignition-policy fpp-safe|legacy] "
         << "[--output-json results/out.json] [--output-csv results/out.csv] "
         << "[--export-benders-cuts results/cuts.csv] [--use-lifted-lower-bounds] "
         << "[--export-lifted-lower-bounds results/llbi.csv]\n"
@@ -178,6 +185,7 @@ void print_usage(std::ostream& out) {
         << "--alpha 0.01 --run-id RUN_ID [--time-limit 60] [--mip-gap 0.001] "
         << "[--threads 1] [--tolerance 1e-6] "
         << "[--forest-path PATH] [--results-path PATH] [--warm-start-solution solution.csv] "
+        << "[--weight-map-file weights.csv] [--dpv-ignition-policy fpp-safe|legacy] "
         << "[--output-json results/out.json] [--output-csv results/out.csv] "
         << "[--use-lifted-lower-bounds] [--use-root-user-cuts] "
         << "[--root-user-cut-max-rounds 1] [--root-user-cut-tolerance 1e-6]\n"
@@ -585,6 +593,7 @@ int main(int argc, char** argv) {
         if (command != "smoke" &&
             command != "smoke-new-instances" &&
             command != "generate-weight-map" &&
+            command != "ensure-weight-map" &&
             command != "evaluate" &&
             command != "build-opt-instance" &&
             command != "solve-fpp-saa" &&
@@ -713,6 +722,68 @@ int main(int argc, char** argv) {
             }
 
             firebreak::experiments::WeightMapGenerationRunner runner;
+            return runner.run(options);
+        }
+
+        if (command == "ensure-weight-map") {
+            firebreak::experiments::WeightMapRegistryRunnerOptions options;
+            for (int i = 2; i < argc; ++i) {
+                const std::string arg = argv[i];
+                if (arg == "--instance-id" || arg == "--landscape") {
+                    options.instance_id = require_value(i, argc, argv, arg);
+                } else if (arg == "--forest-path") {
+                    options.forest_path = require_value(i, argc, argv, arg);
+                } else if (arg == "--results-path") {
+                    options.results_path = require_value(i, argc, argv, arg);
+                } else if (arg == "--weight-registry") {
+                    options.registry_root = require_value(i, argc, argv, arg);
+                } else if (arg == "--weight-profile") {
+                    options.weight_profile = require_value(i, argc, argv, arg);
+                    options.config.profile = options.weight_profile;
+                } else if (arg == "--weight-replicate") {
+                    options.weight_replicate =
+                        parse_int_strict(require_value(i, argc, argv, arg), arg);
+                } else if (arg == "--weight-seed-base" || arg == "--global-weight-seed") {
+                    options.global_weight_seed =
+                        parse_uint64_strict(require_value(i, argc, argv, arg), arg);
+                } else if (arg == "--weight-normalize") {
+                    options.config.normalize = parse_bool_arg(require_value(i, argc, argv, arg), arg);
+                } else if (arg == "--weight-min") {
+                    options.config.heterogeneous_min =
+                        parse_double_strict(require_value(i, argc, argv, arg), arg);
+                } else if (arg == "--weight-max") {
+                    options.config.heterogeneous_max =
+                        parse_double_strict(require_value(i, argc, argv, arg), arg);
+                } else if (arg == "--weight-cluster-count") {
+                    options.config.cluster_count =
+                        parse_int_strict(require_value(i, argc, argv, arg), arg);
+                } else if (arg == "--weight-cluster-fraction") {
+                    options.config.cluster_fraction =
+                        parse_double_strict(require_value(i, argc, argv, arg), arg);
+                } else if (arg == "--weight-background-min") {
+                    options.config.background_min =
+                        parse_double_strict(require_value(i, argc, argv, arg), arg);
+                } else if (arg == "--weight-background-max") {
+                    options.config.background_max =
+                        parse_double_strict(require_value(i, argc, argv, arg), arg);
+                } else if (arg == "--weight-cluster-min") {
+                    options.config.cluster_min =
+                        parse_double_strict(require_value(i, argc, argv, arg), arg);
+                } else if (arg == "--weight-cluster-max") {
+                    options.config.cluster_max =
+                        parse_double_strict(require_value(i, argc, argv, arg), arg);
+                } else if (arg == "--weight-cluster-min-separation") {
+                    options.config.cluster_min_separation =
+                        parse_int_strict(require_value(i, argc, argv, arg), arg);
+                } else if (arg == "--help" || arg == "-h") {
+                    print_usage(std::cout);
+                    return 0;
+                } else {
+                    throw std::runtime_error("Unknown argument: " + arg);
+                }
+            }
+
+            firebreak::experiments::WeightMapRegistryRunner runner;
             return runner.run(options);
         }
 
@@ -1022,6 +1093,8 @@ int main(int argc, char** argv) {
                     options.forest_path = require_value(i, argc, argv, arg);
                 } else if (arg == "--results-path") {
                     options.results_path = require_value(i, argc, argv, arg);
+                } else if (arg == "--weight-map-file") {
+                    options.weight_map_file = require_value(i, argc, argv, arg);
                 } else if (arg == "--train-ids") {
                     if (has_generated_arg) {
                         throw std::runtime_error("Use either explicit train/test IDs or generated split parameters, not both.");
@@ -1150,6 +1223,8 @@ int main(int argc, char** argv) {
                     options.forest_path = require_value(i, argc, argv, arg);
                 } else if (arg == "--results-path") {
                     options.results_path = require_value(i, argc, argv, arg);
+                } else if (arg == "--weight-map-file") {
+                    options.weight_map_file = require_value(i, argc, argv, arg);
                 } else if (arg == "--train-ids") {
                     if (has_generated_arg) {
                         throw std::runtime_error("Use either explicit train/test IDs or generated split parameters, not both.");
@@ -1513,6 +1588,10 @@ int main(int argc, char** argv) {
                     options.forest_path = require_value(i, argc, argv, arg);
                 } else if (arg == "--results-path") {
                     options.results_path = require_value(i, argc, argv, arg);
+                } else if (arg == "--weight-map-file") {
+                    options.weight_map_file = require_value(i, argc, argv, arg);
+                } else if (arg == "--dpv-ignition-policy") {
+                    options.dpv_ignition_policy = require_value(i, argc, argv, arg);
                 } else if (arg == "--train-ids") {
                     if (has_generated_arg) {
                         throw std::runtime_error("Use either explicit train/test IDs or generated split parameters, not both.");
@@ -1605,6 +1684,10 @@ int main(int argc, char** argv) {
                     options.forest_path = require_value(i, argc, argv, arg);
                 } else if (arg == "--results-path") {
                     options.results_path = require_value(i, argc, argv, arg);
+                } else if (arg == "--weight-map-file") {
+                    options.weight_map_file = require_value(i, argc, argv, arg);
+                } else if (arg == "--dpv-ignition-policy") {
+                    options.dpv_ignition_policy = require_value(i, argc, argv, arg);
                 } else if (arg == "--train-ids") {
                     if (has_generated_arg) {
                         throw std::runtime_error("Use either explicit train/test IDs or generated split parameters, not both.");
@@ -1707,6 +1790,10 @@ int main(int argc, char** argv) {
                     options.forest_path = require_value(i, argc, argv, arg);
                 } else if (arg == "--results-path") {
                     options.results_path = require_value(i, argc, argv, arg);
+                } else if (arg == "--weight-map-file") {
+                    options.weight_map_file = require_value(i, argc, argv, arg);
+                } else if (arg == "--dpv-ignition-policy") {
+                    options.dpv_ignition_policy = require_value(i, argc, argv, arg);
                 } else if (arg == "--train-ids") {
                     if (has_generated_arg) {
                         throw std::runtime_error("Use either explicit train/test IDs or generated split parameters, not both.");

@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "core/LandscapeWeightMap.hpp"
+#include "experiments/LandscapeUniverseBuilder.hpp"
 #include "io/Cell2FireReader.hpp"
 #include "io/PathUtils.hpp"
 
@@ -19,41 +20,6 @@ std::filesystem::path default_forest_path(const std::string& landscape) {
 
 std::filesystem::path default_results_path(const std::string& landscape) {
     return firebreak::io::repo_root() / "sample_test" / landscape;
-}
-
-core::LandscapeCellUniverse build_generation_universe(
-    const firebreak::io::Cell2FireReader::ForestInfo& forest_info) {
-    if (!forest_info.has_size || forest_info.n_cells <= 0) {
-        throw std::runtime_error("Could not determine a nonempty landscape cell universe.");
-    }
-
-    std::vector<int> ids;
-    std::string source;
-    if (forest_info.available_known && !forest_info.available_nodes.empty()) {
-        ids = forest_info.available_nodes;
-        source = "forest.available_nodes from fuels.asc and fbp_lookup_table.csv";
-    } else {
-        ids.reserve(static_cast<std::size_t>(forest_info.n_cells));
-        for (int cell_id = 1; cell_id <= forest_info.n_cells; ++cell_id) {
-            ids.push_back(cell_id);
-        }
-        source = "fallback all Cell2Fire IDs 1..NCells from forest metadata";
-    }
-
-    const int cols = forest_info.cols > 0 ? forest_info.cols : forest_info.n_cells;
-    core::LandscapeCellUniverse universe;
-    universe.source = source;
-    universe.rows = forest_info.rows;
-    universe.cols = forest_info.cols;
-    universe.cells.reserve(ids.size());
-    for (const int cell_id : ids) {
-        const int zero_based = cell_id - 1;
-        universe.cells.push_back(core::WeightedLandscapeCell{
-            cell_id,
-            zero_based / cols + 1,
-            zero_based % cols + 1});
-    }
-    return universe;
 }
 
 int count_clusters(const core::LandscapeWeightMap& weight_map) {
@@ -96,7 +62,7 @@ int WeightMapGenerationRunner::run(const WeightMapGenerationOptions& options) co
         warnings.push_back(std::string("Could not detect Cell2Fire result layout for metadata checks: ") + exc.what());
     }
     const auto forest_info = reader.read_forest_info(forest_path, results_path, layout, warnings);
-    const auto universe = build_generation_universe(forest_info);
+    const auto universe = build_landscape_cell_universe(forest_info);
 
     core::LandscapeWeightGenerationMetadata metadata;
     const auto config = core::validate_landscape_weight_generation_config(options.config);

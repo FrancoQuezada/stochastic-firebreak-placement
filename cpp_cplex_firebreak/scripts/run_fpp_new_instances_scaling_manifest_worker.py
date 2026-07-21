@@ -300,6 +300,21 @@ def write_worker_csv(path: Path, rows: list[dict[str, str]], manifest_fields: li
         writer.writerows(rows)
 
 
+def weight_map_file(row: dict[str, str]) -> str:
+    """The canonical weight-map CSV path for this row, or "" for legacy homogeneous rows.
+
+    The worker NEVER generates a map: it requires a pre-generated file to exist and fails
+    clearly otherwise."""
+    path = (row.get("weight_map_path") or "").strip()
+    if not path:
+        return ""
+    if not Path(path).exists():
+        raise RuntimeError(
+            f"Weight map {path} referenced by task {row.get('task_id', '')} does not exist. "
+            f"Pre-generate the registry (ensure-weight-map); the worker never regenerates maps.")
+    return path
+
+
 def base_solver_args(
     binary: Path,
     row: dict[str, str],
@@ -309,7 +324,7 @@ def base_solver_args(
     solution_json: Path,
     solution_csv: Path,
 ) -> list[str]:
-    return [
+    args = [
         str(binary),
         row["solver_command"],
         "--landscape", row["landscape"],
@@ -330,6 +345,10 @@ def base_solver_args(
         "--solution-json", str(solution_json),
         "--solution-csv", str(solution_csv),
     ]
+    wmap = weight_map_file(row)
+    if wmap:
+        args.extend(["--weight-map-file", wmap])
+    return args
 
 
 def build_command(
@@ -390,8 +409,9 @@ def build_paired_reburn_evaluation_command(
     train_ids: list[int],
     firebreaks_csv: Path,
     output_json: Path,
+    weight_map: str = "",
 ) -> list[str]:
-    return [
+    command = [
         str(binary),
         "evaluate",
         "--landscape", reburn_row["landscape"],
@@ -401,6 +421,11 @@ def build_paired_reburn_evaluation_command(
         "--firebreaks", str(firebreaks_csv),
         "--output", str(output_json),
     ]
+    # The same canonical map (keyed by original Cell2Fire ID over the full physical
+    # universe) is used for the reburn evaluation as for the reduced solve.
+    if weight_map:
+        command.extend(["--weight-map-file", weight_map])
+    return command
 
 
 def parse_paired_reburn_evaluation_json(path: Path) -> dict[str, str]:
@@ -567,6 +592,15 @@ def main() -> int:
 
         patch_result_json_metadata(row)
         solver_row = read_single_solver_row(temp_csv)
+
+        # Verify the solver loaded exactly the canonical map named in the manifest.
+        expected_hash = (row.get("weight_map_hash") or "").strip()
+        actual_hash = (solver_row.get("weight_map_hash") or "").strip()
+        if expected_hash and actual_hash and expected_hash != actual_hash:
+            raise RuntimeError(
+                f"Weight-map hash mismatch for {task_id}: manifest {expected_hash} != "
+                f"result {actual_hash}.")
+
         completed_row = merged_result(
             row, solver_row, train_ids=train_ids, test_ids=test_ids, command=command,
             log_path=log_path, return_code=0, started=started, finished=finished)
@@ -578,7 +612,8 @@ def main() -> int:
             reburn_row = instance_config[paired_reburn_id]
             reburn_eval_json = output_dir / "json" / f"{task_id}_paired_reburn_eval.json"
             reburn_command = build_paired_reburn_evaluation_command(
-                binary, reburn_row, train_ids, Path(row["solution_dir"]) / f"{row['task_id']}.csv", reburn_eval_json)
+                binary, reburn_row, train_ids, Path(row["solution_dir"]) / f"{row['task_id']}.csv",
+                reburn_eval_json, weight_map=weight_map_file(row))
             completed_row["paired_reburn_eval_command"] = " ".join(shlex.quote(part) for part in reburn_command)
             reburn_started = time.time()
             with log_path.open("a", encoding="utf-8") as log:

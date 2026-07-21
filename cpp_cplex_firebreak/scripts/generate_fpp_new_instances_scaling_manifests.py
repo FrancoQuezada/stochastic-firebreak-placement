@@ -5,8 +5,10 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import random
 import re
+import subprocess
 from pathlib import Path
 
 
@@ -76,6 +78,20 @@ FIELDS = [
     "solution_dir",
     "run_id",
     "solver_command",
+    # Phase 8A canonical weight-map / paired-reburn reproducibility metadata (additive).
+    "canonical_landscape_id",
+    "paired_landscape_id",
+    "paired_reburn_instance_id",
+    "weight_profile",
+    "weight_replicate",
+    "weight_generation_seed",
+    "weight_generator_version",
+    "weight_map_path",
+    "weight_map_hash",
+    "weight_source_universe_hash",
+    "weight_normalization_mode",
+    "weight_mapping_method",
+    "paired_evaluation_enabled",
 ]
 
 
@@ -107,6 +123,23 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--projected-llbi-cut-density-limit", default="0")
     parser.add_argument("--projected-poly-max-cuts", default="100000")
     parser.add_argument("--verify-only", action="store_true")
+    # Phase 8A canonical weight-map / paired-reburn options (additive; defaults preserve
+    # legacy homogeneous behavior).
+    parser.add_argument("--weight-profiles", default="homogeneous",
+                        help="Comma-separated weight profiles: homogeneous,heterogeneous,clustered.")
+    parser.add_argument("--weight-replicates", default="0",
+                        help="Comma-separated weight replicate indices.")
+    parser.add_argument("--weight-seed-base", type=int, default=12345)
+    parser.add_argument("--weight-registry", type=Path, default=None,
+                        help="Registry root. When unset, rows resolve to legacy homogeneous mode.")
+    parser.add_argument("--generate-missing-weight-maps", action="store_true",
+                        help="Invoke the binary's ensure-weight-map for any missing registry entry.")
+    parser.add_argument("--binary", type=Path, default=Path("build_gpp/firebreak_cpp"),
+                        help="firebreak_cpp binary used only for --generate-missing-weight-maps.")
+    parser.add_argument("--paired-reburn-evaluation", action="store_true",
+                        help="Mark reduced rows whose reburn pair exists for paired evaluation.")
+    parser.add_argument("--no-capability-filter", action="store_true",
+                        help="Do not drop unsupported (method, profile, objective) combinations.")
     return parser.parse_args()
 
 
@@ -399,6 +432,114 @@ def method_flags(method: str) -> dict[str, str]:
     }
 
 
+def normalize_profile(profile: str) -> str:
+    value = profile.strip().lower()
+    if value not in {"homogeneous", "heterogeneous", "clustered"}:
+        raise RuntimeError(f"Unknown weight profile: {profile!r}")
+    return value
+
+
+def landscape_family(instance_id: str) -> str:
+    return instance_id[:-len("_reburn")] if instance_id.endswith("_reburn") else instance_id
+
+
+def is_reburn(instance_id: str) -> bool:
+    return instance_id.endswith("_reburn")
+
+
+def weighted_method_supported(method: str, profile: str, risk_measure: str) -> tuple[bool, str]:
+    """Mirror experiments::weighted_method_capability. The C++ dispatcher guards remain
+    authoritative at execution; this filters unsupported rows out of manifests."""
+    lower = method.lower()
+    profile = normalize_profile(profile)
+    combinatorial = "combinatorial" in lower
+    restricted = "restricted" in lower
+    coverage_llbi = "coveragellbi" in lower
+    path_llbi = "pathllbi" in lower
+    projected_llbi = "projected" in lower
+    standard_llbi = "llbi" in lower and not (coverage_llbi or path_llbi or projected_llbi)
+    dominance = "dominance" in lower
+    any_llbi = standard_llbi or coverage_llbi or path_llbi or projected_llbi
+    non_homogeneous = profile != "homogeneous"
+
+    if restricted and combinatorial:
+        return False, "Restricted-candidate combinatorial Benders is not supported."
+    if combinatorial and non_homogeneous and any_llbi:
+        return False, "Non-homogeneous weighted combinatorial Benders does not combine with LLBI."
+    if combinatorial and non_homogeneous and dominance:
+        return False, "Non-homogeneous weighted combinatorial Benders keeps global dominance disabled."
+    return True, ""
+
+
+def resolve_weight_entry(
+    args: argparse.Namespace,
+    instance: dict[str, str],
+    profile: str,
+    replicate: int,
+) -> dict[str, str] | None:
+    """Resolve the canonical registry entry for (instance family, profile, replicate).
+
+    Returns None when no registry is configured (legacy homogeneous mode). Never
+    regenerates silently: generation only happens under --generate-missing-weight-maps.
+    """
+    if args.weight_registry is None:
+        return None
+    profile = normalize_profile(profile)
+    family = landscape_family(instance["instance_id"])
+
+    def load_by_family() -> dict[str, str] | None:
+        pattern = f"*/{profile}/replicate_{replicate}/metadata.json"
+        matches = []
+        for meta_path in sorted(args.weight_registry.glob(pattern)):
+            with meta_path.open(encoding="utf-8") as handle:
+                meta = json.load(handle)
+            if meta.get("landscape_family") == family:
+                matches.append(meta)
+        if not matches:
+            return None
+        if len(matches) > 1:
+            raise RuntimeError(
+                f"Ambiguous registry entries for family {family} profile {profile} "
+                f"replicate {replicate}.")
+        return matches[0]
+
+    meta = load_by_family()
+    if meta is None and args.generate_missing_weight_maps:
+        extra = []
+        if profile == "clustered":
+            extra = ["--weight-cluster-count", "3", "--weight-cluster-fraction", "0.15"]
+        subprocess.run(
+            [str(args.binary), "ensure-weight-map",
+             "--instance-id", instance["instance_id"],
+             "--forest-path", instance["forest_path"],
+             "--results-path", instance["results_path"],
+             "--weight-registry", str(args.weight_registry),
+             "--weight-profile", profile,
+             "--weight-replicate", str(replicate),
+             "--weight-seed-base", str(args.weight_seed_base), *extra],
+            check=True, capture_output=True, text=True)
+        meta = load_by_family()
+    if meta is None:
+        raise RuntimeError(
+            f"Missing weight-map registry entry for family {family} profile {profile} "
+            f"replicate {replicate}; pre-generate it or pass --generate-missing-weight-maps.")
+    # A path the worker can pass directly to --weight-map-file (registry-relative path is
+    # resolved against the configured registry root). No method/objective in the path.
+    meta["resolved_weight_map_path"] = str(args.weight_registry / meta["weight_map_path"])
+    return meta
+
+
+def weighted_run_id(base_run_id: str, entry: dict[str, str] | None,
+                    profile: str, replicate: int) -> str:
+    """Append a deterministic weight suffix so different maps never collide and weighted
+    rows never collide with legacy (suffix-free) run IDs. Legacy homogeneous mode (no
+    registry entry) keeps the base run id unchanged for backward compatibility."""
+    if entry is None:
+        return base_run_id
+    hash_hex = str(entry.get("weight_map_hash", "")).split(":")[-1][:8]
+    return f"{base_run_id}_wp{normalize_profile(profile)}_wr{replicate}_wh{hash_hex}"
+
+
 def row_for_method(
     *,
     task_index: int,
@@ -429,18 +570,25 @@ def row_for_method(
     training_pool_max: int,
     test_pool_min: int,
     test_pool_max: int,
+    weight_profile: str = "homogeneous",
+    weight_replicate: int = 0,
+    weight_entry: dict[str, str] | None = None,
+    paired_reburn_instance_id: str = "",
+    paired_evaluation_enabled: bool = False,
 ) -> dict[str, str]:
     case_id = f"case{case_index:02d}"
     objective_family, risk_measure, beta, cvar_lambda = objective_settings(
         method, cvar_beta, mean_cvar_lambda)
     flags = method_flags(method)
     worker_dir = output_dir / "workers" / worker_id
-    run_id = (
+    base_run_id = (
         f"{instance['instance_id']}_{case_id}_train{train_count}_test{test_count}_"
         f"alpha{alpha_slug(alpha)}_{slug(method)}"
     )
+    run_id = weighted_run_id(base_run_id, weight_entry, weight_profile, weight_replicate)
     task_id = f"{worker_id}_task_{task_index:03d}"
-    return {
+    entry = weight_entry or {}
+    row = {
         "task_id": task_id,
         "worker_id": worker_id,
         "case_id": case_id,
@@ -506,7 +654,21 @@ def row_for_method(
         "solution_dir": str(worker_dir / "solutions"),
         "run_id": run_id,
         "solver_command": flags["solver_command"],
+        "canonical_landscape_id": entry.get("canonical_landscape_id", ""),
+        "paired_landscape_id": entry.get("paired_landscape_id", ""),
+        "paired_reburn_instance_id": paired_reburn_instance_id,
+        "weight_profile": normalize_profile(weight_profile),
+        "weight_replicate": str(weight_replicate),
+        "weight_generation_seed": str(entry.get("weight_generation_seed", "")),
+        "weight_generator_version": str(entry.get("weight_generator_version", "")),
+        "weight_map_path": entry.get("resolved_weight_map_path", entry.get("weight_map_path", "")),
+        "weight_map_hash": entry.get("weight_map_hash", ""),
+        "weight_source_universe_hash": entry.get("source_universe_hash", ""),
+        "weight_normalization_mode": entry.get("normalization_mode", ""),
+        "weight_mapping_method": "original_cell_id",
+        "paired_evaluation_enabled": bool_text(paired_evaluation_enabled),
     }
+    return row
 
 
 def build_rows(
@@ -515,51 +677,86 @@ def build_rows(
     instances: list[dict[str, str]],
     split_dir: Path,
     split_index: dict[tuple[str, int, int], tuple[Path, Path, int, list[int], list[int]]],
-) -> list[dict[str, str]]:
+) -> tuple[list[dict[str, str]], int]:
     train_counts = [int(value) for value in split_csv(args.train_counts)]
     alphas = split_csv(args.alphas)
+    profiles = [normalize_profile(value) for value in split_csv(args.weight_profiles)]
+    replicates = [int(value) for value in split_csv(args.weight_replicates)]
+    instance_ids = {instance["instance_id"] for instance in instances}
     rows: list[dict[str, str]] = []
     worker_index = 0
+    filtered = 0
+    entry_cache: dict[tuple[str, str, int], dict[str, str] | None] = {}
     for instance in instances:
+        family = landscape_family(instance["instance_id"])
+        reburn_id = f"{family}_reburn"
+        paired_reburn = (
+            reburn_id if (args.paired_reburn_evaluation and not is_reburn(instance["instance_id"])
+                          and reburn_id in instance_ids) else "")
         for train_count in train_counts:
             for alpha in alphas:
                 for case_index in range(args.num_cases):
-                    worker_id = f"worker_{worker_index:03d}"
-                    train_path, test_path, seed, _train_ids, _test_ids = split_index[
-                        (instance["instance_id"], train_count, case_index)]
-                    for task_index, method in enumerate(methods):
-                        rows.append(row_for_method(
-                            task_index=task_index,
-                            worker_id=worker_id,
-                            case_index=case_index,
-                            seed_base=args.seed_base,
-                            instance=instance,
-                            alpha=alpha,
-                            train_count=train_count,
-                            test_count=args.test_count,
-                            method=method,
-                            output_dir=args.output_dir,
-                            split_dir=split_dir,
-                            train_path=train_path,
-                            test_path=test_path,
-                            seed=seed,
-                            time_limit=args.time_limit,
-                            mip_gap=args.mip_gap,
-                            threads=args.threads,
-                            cvar_beta=args.cvar_beta,
-                            mean_cvar_lambda=args.mean_cvar_lambda,
-                            projected_llbi_root_rounds=args.projected_llbi_root_rounds,
-                            projected_llbi_max_cuts_per_round=args.projected_llbi_max_cuts_per_round,
-                            projected_llbi_violation_tolerance=args.projected_llbi_violation_tolerance,
-                            projected_llbi_cut_density_limit=args.projected_llbi_cut_density_limit,
-                            projected_poly_max_cuts=args.projected_poly_max_cuts,
-                            training_pool_min=args.training_pool_min,
-                            training_pool_max=args.training_pool_max,
-                            test_pool_min=args.test_pool_min,
-                            test_pool_max=args.test_pool_max,
-                        ))
-                    worker_index += 1
-    return rows
+                    for profile in profiles:
+                        for replicate in replicates:
+                            cache_key = (instance["instance_id"], profile, replicate)
+                            if cache_key not in entry_cache:
+                                entry_cache[cache_key] = resolve_weight_entry(
+                                    args, instance, profile, replicate)
+                            weight_entry = entry_cache[cache_key]
+
+                            train_path, test_path, seed, _t, _te = split_index[
+                                (instance["instance_id"], train_count, case_index)]
+                            surviving = []
+                            for method in methods:
+                                _fam, risk_measure, _b, _l = objective_settings(
+                                    method, args.cvar_beta, args.mean_cvar_lambda)
+                                ok, _reason = weighted_method_supported(
+                                    method, profile, risk_measure)
+                                if not ok and not args.no_capability_filter:
+                                    filtered += 1
+                                    continue
+                                surviving.append(method)
+                            if not surviving:
+                                continue
+                            worker_id = f"worker_{worker_index:03d}"
+                            for task_index, method in enumerate(surviving):
+                                rows.append(row_for_method(
+                                    task_index=task_index,
+                                    worker_id=worker_id,
+                                    case_index=case_index,
+                                    seed_base=args.seed_base,
+                                    instance=instance,
+                                    alpha=alpha,
+                                    train_count=train_count,
+                                    test_count=args.test_count,
+                                    method=method,
+                                    output_dir=args.output_dir,
+                                    split_dir=split_dir,
+                                    train_path=train_path,
+                                    test_path=test_path,
+                                    seed=seed,
+                                    time_limit=args.time_limit,
+                                    mip_gap=args.mip_gap,
+                                    threads=args.threads,
+                                    cvar_beta=args.cvar_beta,
+                                    mean_cvar_lambda=args.mean_cvar_lambda,
+                                    projected_llbi_root_rounds=args.projected_llbi_root_rounds,
+                                    projected_llbi_max_cuts_per_round=args.projected_llbi_max_cuts_per_round,
+                                    projected_llbi_violation_tolerance=args.projected_llbi_violation_tolerance,
+                                    projected_llbi_cut_density_limit=args.projected_llbi_cut_density_limit,
+                                    projected_poly_max_cuts=args.projected_poly_max_cuts,
+                                    training_pool_min=args.training_pool_min,
+                                    training_pool_max=args.training_pool_max,
+                                    test_pool_min=args.test_pool_min,
+                                    test_pool_max=args.test_pool_max,
+                                    weight_profile=profile,
+                                    weight_replicate=replicate,
+                                    weight_entry=weight_entry,
+                                    paired_reburn_instance_id=paired_reburn,
+                                    paired_evaluation_enabled=bool(paired_reburn),
+                                ))
+                            worker_index += 1
+    return rows, filtered
 
 
 def write_csv(path: Path, rows: list[dict[str, str]], fieldnames: list[str] = FIELDS) -> None:
@@ -570,38 +767,36 @@ def write_csv(path: Path, rows: list[dict[str, str]], fieldnames: list[str] = FI
         writer.writerows(rows)
 
 
-def verify_manifests(
-    *,
-    manifest_dir: Path,
-    expected_rows: int,
-    expected_workers: int,
-    rows_per_worker: int,
-) -> None:
+def verify_manifests(*, manifest_dir: Path) -> None:
     full = manifest_dir / "full_task_manifest.csv"
     if not full.exists():
         raise RuntimeError(f"Missing manifest: {full}")
     with full.open(newline="", encoding="utf-8") as inp:
         rows = list(csv.DictReader(inp))
-    if len(rows) != expected_rows:
-        raise RuntimeError(f"{full} has {len(rows)} rows; expected {expected_rows}.")
-    seen_workers = sorted({row.get("worker_id", "") for row in rows})
-    if len(seen_workers) != expected_workers:
-        raise RuntimeError(f"{full} has {len(seen_workers)} workers; expected {expected_workers}.")
-    for worker_index in range(expected_workers):
-        worker_id = f"worker_{worker_index:03d}"
+    if not rows:
+        raise RuntimeError(f"{full} is empty.")
+
+    # Run IDs must be unique (weighted rows never collide, including with legacy rows).
+    run_ids = [row.get("run_id", "") for row in rows]
+    if len(set(run_ids)) != len(run_ids):
+        raise RuntimeError(f"{full} contains duplicate run_id values.")
+
+    by_worker: dict[str, list[dict[str, str]]] = {}
+    for row in rows:
+        by_worker.setdefault(row.get("worker_id", ""), []).append(row)
+    for worker_id, worker_rows in sorted(by_worker.items()):
         path = manifest_dir / f"{worker_id}_manifest.csv"
         if not path.exists():
             raise RuntimeError(f"Missing worker manifest: {path}")
         with path.open(newline="", encoding="utf-8") as inp:
-            worker_rows = list(csv.DictReader(inp))
-        if len(worker_rows) != rows_per_worker:
-            raise RuntimeError(f"{path} has {len(worker_rows)} rows; expected {rows_per_worker}.")
+            file_rows = list(csv.DictReader(inp))
+        if len(file_rows) != len(worker_rows):
+            raise RuntimeError(
+                f"{path} has {len(file_rows)} rows; expected {len(worker_rows)}.")
         methods = {row.get("method", "") for row in worker_rows}
-        if len(methods) != rows_per_worker:
+        if len(methods) != len(worker_rows):
             raise RuntimeError(f"{path} has duplicate method rows.")
-    print(
-        f"Verified {expected_rows} manifest rows "
-        f"({expected_workers} workers x {rows_per_worker} rows).")
+    print(f"Verified {len(rows)} manifest rows across {len(by_worker)} workers.")
 
 
 def main() -> int:
@@ -615,19 +810,11 @@ def main() -> int:
     if not alphas:
         raise RuntimeError("No alpha values configured.")
 
-    expected_workers = len(instances) * len(train_counts) * len(alphas) * args.num_cases
-    rows_per_worker = len(methods)
-    expected_rows = expected_workers * rows_per_worker
     split_dir = args.output_dir / "splits"
     manifest_dir = args.output_dir / "manifests"
 
     if args.verify_only:
-        verify_manifests(
-            manifest_dir=manifest_dir,
-            expected_rows=expected_rows,
-            expected_workers=expected_workers,
-            rows_per_worker=rows_per_worker,
-        )
+        verify_manifests(manifest_dir=manifest_dir)
         return 0
 
     split_index = prepare_splits(
@@ -636,25 +823,25 @@ def main() -> int:
         train_counts=train_counts,
         split_dir=split_dir,
     )
-    rows = build_rows(args, methods, instances, split_dir, split_index)
-    if len(rows) != expected_rows:
-        raise RuntimeError(f"Generated {len(rows)} rows; expected {expected_rows}.")
+    rows, filtered = build_rows(args, methods, instances, split_dir, split_index)
+    if not rows:
+        raise RuntimeError("No manifest rows generated (all combinations filtered?).")
 
+    worker_ids = sorted({row["worker_id"] for row in rows})
     write_csv(manifest_dir / "full_task_manifest.csv", rows)
-    for worker_index in range(expected_workers):
-        worker_id = f"worker_{worker_index:03d}"
+    for worker_id in worker_ids:
         worker_rows = [row for row in rows if row["worker_id"] == worker_id]
-        if len(worker_rows) != rows_per_worker:
-            raise RuntimeError(
-                f"{worker_id} has {len(worker_rows)} rows; expected {rows_per_worker}.")
         write_csv(manifest_dir / f"{worker_id}_manifest.csv", worker_rows)
 
     selected_ids = ",".join(instance["instance_id"] for instance in instances)
+    profiles = split_csv(args.weight_profiles)
+    replicates = split_csv(args.weight_replicates)
     print(f"Selected instances: {selected_ids}")
-    print(f"Methods: {rows_per_worker}")
-    print(
-        f"Wrote {expected_rows} manifest rows "
-        f"({expected_workers} workers x {rows_per_worker} rows) under {manifest_dir}.")
+    print(f"Methods: {len(methods)}")
+    print(f"Weight profiles: {','.join(profiles)}; replicates: {','.join(replicates)}")
+    if filtered:
+        print(f"Filtered {filtered} unsupported (method, profile, objective) combinations.")
+    print(f"Wrote {len(rows)} manifest rows across {len(worker_ids)} workers under {manifest_dir}.")
     print(f"Prepared controlled fixed-OOS splits under {split_dir}.")
     return 0
 

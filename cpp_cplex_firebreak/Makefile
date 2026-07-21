@@ -92,6 +92,7 @@ MAIN_SOURCES := \
 	src/core/Instance.cpp \
 	src/core/LandscapeWeightMap.cpp \
 	src/core/LandscapeWeightGenerator.cpp \
+	src/core/CanonicalLandscape.cpp \
 	src/cuts/DominatorCuts.cpp \
 	src/cuts/NodeSeparatorMinCut.cpp \
 	src/cuts/SeparatorCutSeparator.cpp \
@@ -125,6 +126,11 @@ MAIN_SOURCES := \
 	src/experiments/SmokeRunner.cpp \
 	src/experiments/NewInstancesSmokeRunner.cpp \
 	src/experiments/WeightMapGenerationRunner.cpp \
+	src/experiments/LandscapeUniverseBuilder.cpp \
+	src/experiments/WeightMapRegistry.cpp \
+	src/experiments/WeightMapRegistryRunner.cpp \
+	src/experiments/PairedInstanceWeightMapping.cpp \
+	src/experiments/WeightedMethodCapability.cpp \
 	src/experiments/BatchExperimentConfig.cpp \
 	src/experiments/SharedSplitUtils.cpp \
 	src/experiments/BatchExperimentRunner.cpp \
@@ -210,6 +216,31 @@ TEST_LANDSCAPE_WEIGHT_GENERATOR_SOURCES := \
 	src/core/LandscapeWeightGenerator.cpp \
 	src/opt/IndexMapper.cpp \
 	tests/test_landscape_weight_generator.cpp
+
+TEST_WEIGHT_CANONICAL_LANDSCAPE_SOURCES := \
+	src/core/LandscapeWeightMap.cpp \
+	src/core/LandscapeWeightGenerator.cpp \
+	src/core/CanonicalLandscape.cpp \
+	src/opt/IndexMapper.cpp \
+	tests/test_weight_canonical_landscape.cpp
+
+TEST_WEIGHT_MAP_REGISTRY_SOURCES := \
+	src/core/LandscapeWeightMap.cpp \
+	src/core/LandscapeWeightGenerator.cpp \
+	src/core/CanonicalLandscape.cpp \
+	src/opt/IndexMapper.cpp \
+	src/experiments/WeightMapRegistry.cpp \
+	tests/test_weight_map_registry.cpp
+
+TEST_WEIGHT_PAIRED_INSTANCE_MAPPING_SOURCES := \
+	src/core/LandscapeWeightMap.cpp \
+	src/opt/IndexMapper.cpp \
+	src/experiments/PairedInstanceWeightMapping.cpp \
+	tests/test_weight_paired_instance_mapping.cpp
+
+TEST_WEIGHT_CAPABILITY_MATRIX_SOURCES := \
+	src/experiments/WeightedMethodCapability.cpp \
+	tests/test_weight_capability_matrix.cpp
 
 TEST_DPV_INDEX_SOURCES := \
 	src/opt/IndexMapper.cpp \
@@ -491,6 +522,7 @@ TEST_DPV_STRUCTURE_SOURCES := \
 	src/opt/IndexMapper.cpp \
 	src/opt/OptimizationInstance.cpp \
 	src/opt/DpvIndexBuilder.cpp \
+	src/opt/WeightedDpvScoring.cpp \
 	src/solver/CplexEnvironment.cpp \
 	src/solver/DpvSaaCplexModel.cpp \
 	tests/test_dpv_saa_model_structure.cpp
@@ -870,6 +902,7 @@ TEST_DPV_SUBPROBLEM_SOURCES := \
 	src/opt/IndexMapper.cpp \
 	src/opt/OptimizationInstance.cpp \
 	src/opt/DpvIndexBuilder.cpp \
+	src/opt/WeightedDpvScoring.cpp \
 	src/solver/CplexEnvironment.cpp \
 	tests/test_dpv_subproblem_structure.cpp
 
@@ -882,6 +915,7 @@ TEST_DPV_BENDERS_SMALL_SOURCES := \
 	src/opt/IndexMapper.cpp \
 	src/opt/OptimizationInstance.cpp \
 	src/opt/DpvIndexBuilder.cpp \
+	src/opt/WeightedDpvScoring.cpp \
 	src/solver/CplexEnvironment.cpp \
 	src/solver/DpvSaaCplexModel.cpp \
 	tests/test_dpv_benders_small.cpp
@@ -897,9 +931,27 @@ TEST_DPV_BRANCH_BENDERS_SMALL_SOURCES := \
 	src/opt/IndexMapper.cpp \
 	src/opt/OptimizationInstance.cpp \
 	src/opt/DpvIndexBuilder.cpp \
+	src/opt/WeightedDpvScoring.cpp \
 	src/solver/CplexEnvironment.cpp \
 	src/solver/DpvSaaCplexModel.cpp \
 	tests/test_dpv_branch_benders_small.cpp
+
+TEST_WEIGHTED_DPV_OPTIMIZATION_SOURCES := \
+	src/benders/BendersCut.cpp \
+	src/benders/DpvLiftedLowerBound.cpp \
+	src/benders/DpvScenarioSubproblem.cpp \
+	src/benders/DpvPersistentScenarioSubproblemManager.cpp \
+	src/benders/DpvBendersMaster.cpp \
+	src/benders/DpvBendersSolver.cpp \
+	src/benders/DpvBranchBendersSolver.cpp \
+	src/core/LandscapeWeightMap.cpp \
+	src/opt/IndexMapper.cpp \
+	src/opt/OptimizationInstance.cpp \
+	src/opt/DpvIndexBuilder.cpp \
+	src/opt/WeightedDpvScoring.cpp \
+	src/solver/CplexEnvironment.cpp \
+	src/solver/DpvSaaCplexModel.cpp \
+	tests/test_weighted_dpv_optimization.cpp
 
 test_obj = $(patsubst %.cpp,$(TEST_OBJ_DIR)/%.o,$(1))
 
@@ -909,6 +961,10 @@ TEST_EXES := \
 	$(BUILD_DIR)/test_index_mapper \
 	$(BUILD_DIR)/test_landscape_weight_map \
 	$(BUILD_DIR)/test_landscape_weight_generator \
+	$(BUILD_DIR)/test_weight_canonical_landscape \
+	$(BUILD_DIR)/test_weight_map_registry \
+	$(BUILD_DIR)/test_weight_paired_instance_mapping \
+	$(BUILD_DIR)/test_weight_capability_matrix \
 	$(BUILD_DIR)/test_dpv_index_builder \
 	$(BUILD_DIR)/test_weighted_fpp_dpv \
 	$(BUILD_DIR)/test_weighted_fpp_dpv_variants \
@@ -946,6 +1002,13 @@ TEST_EXES := \
 	$(BUILD_DIR)/test_weighted_fpp_combinatorial_sampling_exactness \
 	$(BUILD_DIR)/test_weighted_path_llbi \
 	$(BUILD_DIR)/test_weighted_path_llbi_validity \
+	$(BUILD_DIR)/test_weighted_dpv_saa \
+	$(BUILD_DIR)/test_weighted_dpv_benders_subproblem \
+	$(BUILD_DIR)/test_weighted_dpv_benders_cut \
+	$(BUILD_DIR)/test_weighted_dpv_benders_cut_validity \
+	$(BUILD_DIR)/test_weighted_dpv_llbi \
+	$(BUILD_DIR)/test_weighted_dpv_llbi_validity \
+	$(BUILD_DIR)/test_weighted_dpv_reporting \
 	$(BUILD_DIR)/test_dpv_saa_model_structure \
 	$(BUILD_DIR)/test_graph_diagnostics \
 	$(BUILD_DIR)/test_cell2fire_reader_new_instances \
@@ -1082,6 +1145,18 @@ $(BUILD_DIR)/test_landscape_weight_map: $(call test_obj,$(TEST_LANDSCAPE_WEIGHT_
 $(BUILD_DIR)/test_landscape_weight_generator: $(call test_obj,$(TEST_LANDSCAPE_WEIGHT_GENERATOR_SOURCES))
 	$(CXX) $^ -o $@
 
+$(BUILD_DIR)/test_weight_canonical_landscape: $(call test_obj,$(TEST_WEIGHT_CANONICAL_LANDSCAPE_SOURCES))
+	$(CXX) $^ -o $@
+
+$(BUILD_DIR)/test_weight_map_registry: $(call test_obj,$(TEST_WEIGHT_MAP_REGISTRY_SOURCES))
+	$(CXX) $^ -o $@
+
+$(BUILD_DIR)/test_weight_paired_instance_mapping: $(call test_obj,$(TEST_WEIGHT_PAIRED_INSTANCE_MAPPING_SOURCES))
+	$(CXX) $^ -o $@
+
+$(BUILD_DIR)/test_weight_capability_matrix: $(call test_obj,$(TEST_WEIGHT_CAPABILITY_MATRIX_SOURCES))
+	$(CXX) $^ -o $@
+
 $(BUILD_DIR)/test_dpv_index_builder: $(call test_obj,$(TEST_DPV_INDEX_SOURCES))
 	$(CXX) $^ -o $@
 
@@ -1187,7 +1262,36 @@ $(BUILD_DIR)/test_weighted_path_llbi: $(call test_obj,$(TEST_WEIGHTED_PATH_LLBI_
 $(BUILD_DIR)/test_weighted_path_llbi_validity: $(call test_obj,$(TEST_WEIGHTED_PATH_LLBI_VALIDITY_SOURCES))
 	$(CXX) $^ -o $@
 
+$(BUILD_DIR)/test_weighted_dpv_saa: $(call test_obj,$(TEST_WEIGHTED_DPV_OPTIMIZATION_SOURCES))
+	$(CXX) $^ -o $@
+
+$(BUILD_DIR)/test_weighted_dpv_benders_subproblem: $(call test_obj,$(TEST_WEIGHTED_DPV_OPTIMIZATION_SOURCES))
+	$(CXX) $^ -o $@
+
+$(BUILD_DIR)/test_weighted_dpv_benders_cut: $(call test_obj,$(TEST_WEIGHTED_DPV_OPTIMIZATION_SOURCES))
+	$(CXX) $^ -o $@
+
+$(BUILD_DIR)/test_weighted_dpv_benders_cut_validity: $(call test_obj,$(TEST_WEIGHTED_DPV_OPTIMIZATION_SOURCES))
+	$(CXX) $^ -o $@
+
+$(BUILD_DIR)/test_weighted_dpv_llbi: $(call test_obj,$(TEST_WEIGHTED_DPV_OPTIMIZATION_SOURCES))
+	$(CXX) $^ -o $@
+
+$(BUILD_DIR)/test_weighted_dpv_llbi_validity: $(call test_obj,$(TEST_WEIGHTED_DPV_OPTIMIZATION_SOURCES))
+	$(CXX) $^ -o $@
+
+$(BUILD_DIR)/test_weighted_dpv_reporting: $(call test_obj,$(TEST_WEIGHTED_DPV_OPTIMIZATION_SOURCES))
+	$(CXX) $^ -o $@
+
 $(BUILD_DIR)/test_weighted_fpp_saa_cplex: $(TEST_WEIGHTED_FPP_SAA_MODEL_SOURCES)
+	@mkdir -p $(dir $@)
+	$(CXX) $(COMMON_CPPFLAGS) $(CPLEX_CPPFLAGS) $(COMMON_CXXFLAGS) $^ $(CPLEX_LDFLAGS) -o $@
+
+$(BUILD_DIR)/test_weighted_dpv_benders_cplex: $(TEST_WEIGHTED_DPV_OPTIMIZATION_SOURCES)
+	@mkdir -p $(dir $@)
+	$(CXX) $(COMMON_CPPFLAGS) $(CPLEX_CPPFLAGS) $(COMMON_CXXFLAGS) $^ $(CPLEX_LDFLAGS) -o $@
+
+$(BUILD_DIR)/test_weighted_dpv_branch_benders_cplex: $(TEST_WEIGHTED_DPV_OPTIMIZATION_SOURCES)
 	@mkdir -p $(dir $@)
 	$(CXX) $(COMMON_CPPFLAGS) $(CPLEX_CPPFLAGS) $(COMMON_CXXFLAGS) $^ $(CPLEX_LDFLAGS) -o $@
 
@@ -1418,6 +1522,10 @@ test: $(TEST_EXES)
 	./build_gpp/test_index_mapper
 	./build_gpp/test_landscape_weight_map
 	./build_gpp/test_landscape_weight_generator
+	./build_gpp/test_weight_canonical_landscape
+	./build_gpp/test_weight_map_registry
+	./build_gpp/test_weight_paired_instance_mapping
+	./build_gpp/test_weight_capability_matrix
 	./build_gpp/test_dpv_index_builder
 	./build_gpp/test_weighted_fpp_dpv
 	./build_gpp/test_weighted_fpp_dpv_variants
