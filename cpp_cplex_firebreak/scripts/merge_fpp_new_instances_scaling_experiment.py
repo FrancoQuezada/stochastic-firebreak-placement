@@ -174,6 +174,9 @@ def sort_key(row: dict[str, str]) -> tuple:
 
 
 def logical_key(row: dict[str, str]) -> tuple[str, ...]:
+    # Phase 8B: the weight dimension (profile/replicate/map hash) is part of a row's
+    # logical identity. Without it, the same base row solved under multiple weight
+    # profiles/replicates would collide and appear as duplicate logical rows.
     return (
         row.get("instance_id", ""),
         row.get("landscape", ""),
@@ -184,6 +187,9 @@ def logical_key(row: dict[str, str]) -> tuple[str, ...]:
         row.get("objective_family", ""),
         row.get("method", ""),
         row.get("fpp_mode", ""),
+        row.get("weight_profile", ""),
+        row.get("weight_replicate", ""),
+        row.get("weight_map_hash", ""),
     )
 
 
@@ -213,9 +219,12 @@ def main() -> int:
             raise SystemExit(f"Missing worker CSV: {worker_csv}")
         rows = read_csv(worker_csv)
         expected = expected_by_worker[worker_id]
-        if expected != expected_methods:
-            raise SystemExit(
-                f"{worker_id} has {expected} expected rows; expected one full method panel of {expected_methods}.")
+        # Note: workers are no longer required to match the GLOBAL distinct-method count
+        # (`expected_methods`). Under Phase 8B capability filtering, different weight
+        # profiles can legitimately surface different surviving-method counts for the
+        # same instance/train/alpha/case group (e.g. a combinatorial+LLBI combination
+        # filtered out only for non-homogeneous profiles), so per-worker row counts are
+        # validated against the manifest's own per-worker count below instead.
         complete_rows = [row for row in rows if row.get("worker_return_code") == "0"]
         complete = len(complete_rows)
         failed_rows += len(rows) - complete

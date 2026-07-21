@@ -452,6 +452,42 @@ ExperimentManifest load_experiment_manifest(const std::filesystem::path& manifes
         config.risk_config.cvarLambda = parse_double_value(values["cvar_lambda"], "cvar_lambda");
         config.cvar_lambda_specified = true;
     }
+    if (has_key(values, "weight_map_file")) {
+        config.weight_map_file = values["weight_map_file"];
+    }
+    if (has_key(values, "weight_profile")) {
+        config.weight_profile = values["weight_profile"];
+    }
+    if (has_key(values, "weight_replicate")) {
+        config.weight_replicate = parse_nonnegative_int(values["weight_replicate"], "weight_replicate");
+    }
+    if (has_key(values, "weight_generation_seed")) {
+        config.weight_generation_seed = static_cast<std::uint64_t>(
+            std::stoull(values["weight_generation_seed"]));
+    }
+    if (has_key(values, "weight_generator_version")) {
+        config.weight_generator_version =
+            parse_nonnegative_int(values["weight_generator_version"], "weight_generator_version");
+    }
+    if (has_key(values, "canonical_landscape_id")) {
+        config.canonical_landscape_id = values["canonical_landscape_id"];
+    }
+    if (has_key(values, "paired_landscape_id")) {
+        config.paired_landscape_id = values["paired_landscape_id"];
+    }
+    if (has_key(values, "weight_map_hash")) {
+        config.weight_map_hash = values["weight_map_hash"];
+    }
+    if (has_key(values, "weight_source_universe_hash")) {
+        config.weight_source_universe_hash = values["weight_source_universe_hash"];
+    }
+    if (has_key(values, "paired_reburn_instance_id")) {
+        config.paired_reburn_instance_id = values["paired_reburn_instance_id"];
+    }
+    if (has_key(values, "paired_evaluation_enabled")) {
+        config.paired_evaluation_enabled =
+            parse_bool_value(values["paired_evaluation_enabled"], "paired_evaluation_enabled");
+    }
 
     validate_batch_experiment_config(config);
     return manifest;
@@ -498,6 +534,10 @@ std::string describe_manifest_config(const ExperimentManifest& manifest) {
         << "Resume existing: " << (c.resume_existing ? "true" : "false") << "\n"
         << "Shared splits: " << (c.shared_splits ? "true" : "false") << "\n"
         << "Split dir: " << c.split_dir.string() << "\n"
+        << "Weight profile: " << (c.weight_profile.empty() ? "(legacy homogeneous)" : c.weight_profile) << "\n"
+        << "Weight map file: " << c.weight_map_file.string() << "\n"
+        << "Canonical landscape id: " << c.canonical_landscape_id << "\n"
+        << "Paired reburn instance id: " << c.paired_reburn_instance_id << "\n"
         << fpp_enhancement_config_summary(c);
     return out.str();
 }

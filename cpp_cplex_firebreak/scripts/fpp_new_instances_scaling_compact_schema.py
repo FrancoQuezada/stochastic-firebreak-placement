@@ -97,6 +97,25 @@ COMPACT_CSV_FIELDS = [
     "paired_reburn_train_cvar_burned_area",
     "paired_reburn_train_worst10_burned_area",
     "paired_reburn_train_eval_runtime_sec",
+    "canonical_landscape_id",
+    "paired_landscape_id",
+    "weight_profile",
+    "weight_replicate",
+    "weight_map_hash",
+    "execution_status",
+    "attempt",
+    "resume_action",
+    "optimization_weight_map_hash",
+    "out_of_sample_weight_map_hash",
+    "paired_reburn_weight_map_hash",
+    "paired_reburn_instance_requested",
+    "paired_reburn_instance_resolved",
+    "paired_reburn_resolution_status",
+    "paired_reburn_status",
+    "paired_selected_firebreak_count",
+    "paired_selected_firebreaks_mapped",
+    "paired_selected_firebreaks_missing",
+    "paired_selected_mapping_status",
 ]
 
 
@@ -455,6 +474,34 @@ def compact_row(row: dict[str, str], *, default_experiment_id: str = "") -> dict
             row, "train_eval_runtime_sec", "train_evaluation_runtime_seconds")),
         "test_eval_runtime_sec": numeric_or_blank(first_value(
             row, "test_eval_runtime_sec", "test_evaluation_runtime_seconds")),
+        "paired_reburn_train_expected_burned_area": numeric_or_blank(
+            first_value(row, "paired_reburn_train_expected_burned_area")),
+        "paired_reburn_train_cvar_burned_area": numeric_or_blank(
+            first_value(row, "paired_reburn_train_empirical_cvar_90pct_burned_area")),
+        "paired_reburn_train_worst10_burned_area": numeric_or_blank(
+            first_value(row, "paired_reburn_train_worst_10pct_burned_area")),
+        "paired_reburn_train_eval_runtime_sec": numeric_or_blank(
+            first_value(row, "paired_reburn_train_eval_runtime_sec")),
+        # Phase 8B canonical weight-map / paired-reburn reproducibility metadata.
+        "canonical_landscape_id": first_value(row, "canonical_landscape_id"),
+        "paired_landscape_id": first_value(row, "paired_landscape_id"),
+        "weight_profile": first_value(row, "weight_profile"),
+        "weight_replicate": first_value(row, "weight_replicate"),
+        "weight_map_hash": first_value(row, "weight_map_hash"),
+        "execution_status": first_value(row, "execution_status"),
+        "attempt": first_value(row, "attempt"),
+        "resume_action": first_value(row, "resume_action"),
+        "optimization_weight_map_hash": first_value(row, "optimization_weight_map_hash"),
+        "out_of_sample_weight_map_hash": first_value(row, "out_of_sample_weight_map_hash"),
+        "paired_reburn_weight_map_hash": first_value(row, "paired_reburn_weight_map_hash"),
+        "paired_reburn_instance_requested": first_value(row, "paired_reburn_instance_requested"),
+        "paired_reburn_instance_resolved": first_value(row, "paired_reburn_instance_resolved"),
+        "paired_reburn_resolution_status": first_value(row, "paired_reburn_resolution_status"),
+        "paired_reburn_status": first_value(row, "paired_reburn_status"),
+        "paired_selected_firebreak_count": first_value(row, "paired_selected_firebreak_count"),
+        "paired_selected_firebreaks_mapped": first_value(row, "paired_selected_firebreaks_mapped"),
+        "paired_selected_firebreaks_missing": first_value(row, "paired_selected_firebreaks_missing"),
+        "paired_selected_mapping_status": first_value(row, "paired_selected_mapping_status"),
     }
     out.update(graph_ratio_columns("train", train_graph_ratios))
     out.update(graph_ratio_columns("test", test_graph_ratios))

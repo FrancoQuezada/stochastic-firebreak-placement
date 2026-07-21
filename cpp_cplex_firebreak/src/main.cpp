@@ -55,7 +55,8 @@ void print_usage(std::ostream& out) {
         << "[--weight-replicate 0] [--weight-seed-base 12345]\n"
         << "  firebreak_cpp evaluate --landscape Sub20 --scenario-ids 1-5 "
         << "--firebreaks 10,20,30 [--forest-path PATH] [--results-path PATH] "
-        << "[--weight-map-file weights.csv] [--cvar-beta 0.9] [--output results/out.json]\n"
+        << "[--weight-map-file weights.csv] [--cvar-beta 0.9] [--output results/out.json] "
+        << "[--require-full-firebreak-coverage]\n"
         << "  firebreak_cpp build-opt-instance --landscape Sub20 --scenario-ids 1,2 "
         << "--alpha 0.01 [--forest-path PATH] [--results-path PATH] "
         << "[--output results/out.json]\n"
@@ -192,6 +193,8 @@ void print_usage(std::ostream& out) {
         << "  firebreak_cpp run-batch-oos --landscape Sub20 --alphas 0.01,0.02 "
         << "--train-counts 2,5 --test-count 10 --num-cases 2 --seed-base 123 "
         << "--methods FPP-SAA,DPV-SAA,Static-DPV,Greedy-DPV3 "
+        << "[--weight-map-file weights.csv] [--weight-profile homogeneous|heterogeneous|clustered] "
+        << "[--weight-replicate 0] [--canonical-landscape-id ID] [--weight-map-hash HASH] "
         << "[--time-limit 60] [--mip-gap 0.001] [--threads 1] "
         << "[--warm-start-policy none] [--forest-path PATH] [--results-path PATH] "
         << "[--fpp-modes fpp_base,fpp_cut] "
@@ -807,6 +810,8 @@ int main(int argc, char** argv) {
                     options.cvar_beta = parse_double_strict(require_value(i, argc, argv, arg), arg);
                 } else if (arg == "--output") {
                     options.output_path = require_value(i, argc, argv, arg);
+                } else if (arg == "--require-full-firebreak-coverage") {
+                    options.require_full_firebreak_coverage = true;
                 } else if (arg == "--help" || arg == "-h") {
                     print_usage(std::cout);
                     return 0;
@@ -2022,6 +2027,30 @@ int main(int argc, char** argv) {
                     config.output_dir = require_value(i, argc, argv, arg);
                 } else if (arg == "--output-csv") {
                     config.output_csv = require_value(i, argc, argv, arg);
+                } else if (arg == "--weight-map-file") {
+                    config.weight_map_file = require_value(i, argc, argv, arg);
+                } else if (arg == "--weight-profile") {
+                    config.weight_profile = require_value(i, argc, argv, arg);
+                } else if (arg == "--weight-replicate") {
+                    config.weight_replicate = parse_int_strict(require_value(i, argc, argv, arg), arg);
+                } else if (arg == "--weight-generation-seed") {
+                    config.weight_generation_seed =
+                        parse_uint64_strict(require_value(i, argc, argv, arg), arg);
+                } else if (arg == "--weight-generator-version") {
+                    config.weight_generator_version =
+                        parse_int_strict(require_value(i, argc, argv, arg), arg);
+                } else if (arg == "--canonical-landscape-id") {
+                    config.canonical_landscape_id = require_value(i, argc, argv, arg);
+                } else if (arg == "--paired-landscape-id") {
+                    config.paired_landscape_id = require_value(i, argc, argv, arg);
+                } else if (arg == "--weight-map-hash") {
+                    config.weight_map_hash = require_value(i, argc, argv, arg);
+                } else if (arg == "--weight-source-universe-hash") {
+                    config.weight_source_universe_hash = require_value(i, argc, argv, arg);
+                } else if (arg == "--paired-reburn-instance-id") {
+                    config.paired_reburn_instance_id = require_value(i, argc, argv, arg);
+                } else if (arg == "--paired-evaluation-enabled") {
+                    config.paired_evaluation_enabled = true;
                 } else if (arg == "--help" || arg == "-h") {
                     print_usage(std::cout);
                     return 0;

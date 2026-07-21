@@ -27,6 +27,25 @@ WORKER_FIELDS = [
     "solver_method",
     "configured_mip_gap",
     "solver_mip_gap",
+    "execution_status",
+    "attempt",
+    "resume_action",
+    "failure_stage",
+    "failure_type",
+    "failure_message",
+    "worker_exit_code",
+    "optimization_weight_map_hash",
+    "out_of_sample_weight_map_hash",
+    "paired_reburn_weight_map_hash",
+    "paired_reburn_instance_requested",
+    "paired_reburn_instance_resolved",
+    "paired_reburn_resolution_method",
+    "paired_reburn_resolution_status",
+    "paired_selected_firebreak_count",
+    "paired_selected_firebreaks_mapped",
+    "paired_selected_firebreaks_missing",
+    "paired_selected_mapping_status",
+    "selected_firebreak_original_ids",
     "paired_reburn_status",
     "paired_reburn_return_code",
     "paired_reburn_eval_command",
@@ -62,12 +81,7 @@ OMIT_FIELDS = {
     "split_dir",
     "output_dir",
     "output_csv",
-    "output_json",
-    "solution_dir",
-    "run_id",
     "solver_command",
-    "worker_status",
-    "worker_return_code",
     "worker_started_at_epoch",
     "worker_finished_at_epoch",
     "worker_command",
@@ -143,9 +157,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--worker-id", required=True)
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--binary", type=Path, default=None)
-    parser.add_argument("--rerun-existing", action="store_true")
+    parser.add_argument("--rerun-existing", action="store_true",
+                        help="Discard ALL existing rows for this worker and resolve everything "
+                             "from scratch (including previously-successful rows).")
+    parser.add_argument("--retry-failed", action="store_true",
+                        help="Rerun rows whose existing result is a clean recorded failure, "
+                             "preserving the logical run_id/train_ids/weight map and incrementing "
+                             "the attempt counter. Rows with a malformed/incomplete result are "
+                             "always rerun regardless of this flag. Completed valid rows are "
+                             "never rerun by this flag.")
     parser.add_argument("--dry-run", action="store_true")
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.rerun_existing and args.retry_failed:
+        raise SystemExit("--rerun-existing and --retry-failed are contradictory; choose one.")
+    return args
 
 
 def require_project_root() -> None:
@@ -241,6 +266,29 @@ def paired_reburn_instance_id(instance_id: str) -> str | None:
     return f"{instance_id}_reburn"
 
 
+def resolve_paired_reburn_instance(
+    instance_config: dict[str, dict[str, str]], instance_id: str
+) -> tuple[str | None, str, str]:
+    """Resolve instance_id's paired reburn instance (Phase 8B section 11).
+
+    Returns (resolved_reburn_id_or_None, resolution_method, resolution_status). Pairing
+    is derived from the instance config (folder-suffix convention), then cross-checked
+    against declared_cells so a corrupted/mismatched pairing (e.g. the documented
+    100x100 folder mismatch) is rejected rather than silently used.
+    """
+    requested_id = paired_reburn_instance_id(instance_id)
+    method = "instance_config_suffix_and_cell_count_match"
+    if requested_id is None:
+        return None, method, "not_applicable"
+    if requested_id not in instance_config:
+        return None, method, "unavailable"
+    reduced_cells = str(instance_config.get(instance_id, {}).get("declared_cells", "")).strip()
+    reburn_cells = str(instance_config[requested_id].get("declared_cells", "")).strip()
+    if reduced_cells and reburn_cells and reduced_cells != reburn_cells:
+        return None, method, "cell_count_mismatch"
+    return requested_id, method, "resolved"
+
+
 def read_csv(path: Path) -> list[dict[str, str]]:
     with path.open(newline="", encoding="utf-8") as inp:
         return list(csv.DictReader(inp))
@@ -263,24 +311,59 @@ def load_existing(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(inp))
 
 
-def pair_to_reburn_matrix(config: dict[str, dict[str, str]]) -> dict[str, str]:
-    pairs: dict[str, str] = {}
-    for instance_id in config:
-        reburn_id = paired_reburn_instance_id(instance_id)
-        if reburn_id and reburn_id in config:
-            pairs[instance_id] = reburn_id
-    return pairs
+def read_result_json(row: dict[str, str]) -> dict | None:
+    path_str = row.get("output_json", "")
+    if not path_str:
+        return None
+    path = Path(path_str)
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
 
 
-def row_complete(row: dict[str, str]) -> bool:
-    if row.get("worker_return_code") == "0":
-        return bool(row.get("solver_status") or row.get("status"))
-    if row.get("worker_status", "").lower() == "ok":
-        return bool(row.get("solver_status") or row.get("status"))
-    return bool(row.get("solver_status") or row.get("status"))
+def row_complete_and_valid(row: dict[str, str]) -> bool:
+    """Real completion validation (Phase 8B section 21). File existence alone is never
+    sufficient: the result JSON must exist, parse, name the expected run_id and weight
+    map hash, carry a final status, and (when paired evaluation was required) report a
+    successful paired reburn evaluation."""
+    if row.get("worker_return_code") != "0":
+        return False
+    payload = read_result_json(row)
+    if payload is None:
+        return False
+    if payload.get("run_id", "") != row.get("run_id", ""):
+        return False
+    expected_hash = (row.get("weight_map_hash") or "").strip()
+    if expected_hash and str(payload.get("weight_map_hash", "")) != expected_hash:
+        return False
+    status = payload.get("solver_status") or payload.get("status") or ""
+    if not str(status).strip():
+        return False
+    if "objective_validation_passed" not in payload:
+        return False
+    solution_path = Path(row.get("solution_dir", "")) / f"{row.get('task_id', '')}.csv"
+    if not solution_path.exists():
+        return False
+    if bool_value(row.get("paired_evaluation_enabled")) and row.get("paired_reburn_status") != "ok":
+        return False
+    return True
+
+
+def is_recorded_failure(row: dict[str, str]) -> bool:
+    """A CLEAN failure: the worker ran, exited nonzero, and left a coherent failure
+    record (as opposed to a malformed/interrupted row, which is always rerun)."""
+    return (
+        row.get("worker_return_code", "") not in ("", "0")
+        and row.get("worker_status", "").lower() == "failed"
+    )
 
 
 def write_worker_csv(path: Path, rows: list[dict[str, str]], manifest_fields: list[str]) -> None:
+    """Write the worker CSV atomically: a partially written file left by an interrupted
+    worker is never mistaken for a complete one (Phase 8B section 20)."""
     path.parent.mkdir(parents=True, exist_ok=True)
     fields: list[str] = []
     for field in manifest_fields + WORKER_FIELDS:
@@ -294,10 +377,14 @@ def write_worker_csv(path: Path, rows: list[dict[str, str]], manifest_fields: li
                 continue
             if field not in fields:
                 fields.append(field)
-    with path.open("w", newline="", encoding="utf-8") as out:
+    tmp_path = path.with_suffix(path.suffix + f".tmp{os.getpid()}")
+    with tmp_path.open("w", newline="", encoding="utf-8") as out:
         writer = csv.DictWriter(out, fieldnames=fields, extrasaction="ignore")
         writer.writeheader()
         writer.writerows(rows)
+        out.flush()
+        os.fsync(out.fileno())
+    os.replace(tmp_path, path)
 
 
 def weight_map_file(row: dict[str, str]) -> str:
@@ -351,6 +438,53 @@ def base_solver_args(
     return args
 
 
+DPV_HEURISTIC_COMMANDS = {"run-static-dpv-oos", "run-static-dpv-mip-oos", "run-greedy-oos"}
+DPV_OPTIMIZATION_COMMANDS = {"run-dpv-saa-oos", "run-dpv-benders-oos", "run-dpv-branch-benders-oos"}
+
+
+def build_dpv_family_command(
+    binary: Path,
+    row: dict[str, str],
+    train_ids: list[int],
+    test_ids: list[int],
+    temp_csv: Path,
+    solution_json: Path,
+    solution_csv: Path,
+) -> list[str]:
+    """DPV / Static-DPV / Greedy-DPV commands share a minimal arg set: none of them
+    accept --risk-measure/--cvar-beta/--cvar-lambda (DPV-CVaR is out of scope), and the
+    pure-heuristic commands additionally have no --time-limit/--mip-gap/--threads."""
+    solver_command = row["solver_command"]
+    args = [
+        str(binary),
+        solver_command,
+        "--landscape", row["landscape"],
+        "--forest-path", row["forest_path"],
+        "--results-path", row["results_path"],
+        "--train-ids", ids_arg(train_ids),
+        "--test-ids", ids_arg(test_ids),
+        "--alpha", row["alpha"],
+        "--run-id", row["run_id"],
+        "--output-json", row["output_json"],
+        "--output-csv", str(temp_csv),
+        "--solution-json", str(solution_json),
+        "--solution-csv", str(solution_csv),
+        "--dpv-ignition-policy", "fpp-safe",
+    ]
+    wmap = weight_map_file(row)
+    if wmap:
+        args.extend(["--weight-map-file", wmap])
+    if solver_command in DPV_OPTIMIZATION_COMMANDS:
+        args.extend([
+            "--time-limit", row["time_limit"],
+            "--mip-gap", row["mip_gap"],
+            "--threads", row["threads"],
+        ])
+    if solver_command == "run-greedy-oos":
+        args.extend(["--metric", row.get("greedy_metric") or "DPV3"])
+    return args
+
+
 def build_command(
     binary: Path,
     row: dict[str, str],
@@ -361,6 +495,11 @@ def build_command(
     solution_dir = Path(row["solution_dir"])
     solution_json = solution_dir / f"{row['task_id']}.json"
     solution_csv = solution_dir / f"{row['task_id']}.csv"
+
+    if row["solver_command"] in DPV_HEURISTIC_COMMANDS or row["solver_command"] in DPV_OPTIMIZATION_COMMANDS:
+        return build_dpv_family_command(
+            binary, row, train_ids, test_ids, temp_csv, solution_json, solution_csv)
+
     args = base_solver_args(binary, row, train_ids, test_ids, temp_csv, solution_json, solution_csv)
 
     if row["solver_command"] == "run-fpp-saa-oos":
@@ -403,11 +542,25 @@ def build_command(
     return args
 
 
+def read_selected_firebreak_ids(solution_csv: Path) -> list[int]:
+    """The solver writes selected original Cell2Fire firebreak IDs as a single
+    comma-separated line (io::save_firebreak_solution_csv); never compact indices."""
+    if not solution_csv.exists():
+        raise RuntimeError(f"Solution CSV missing: {solution_csv}")
+    text = solution_csv.read_text(encoding="utf-8").strip()
+    if not text:
+        return []
+    ids = [int(token) for token in text.split(",")]
+    if len(set(ids)) != len(ids):
+        raise RuntimeError(f"Solution CSV {solution_csv} contains duplicate selected firebreak IDs.")
+    return ids
+
+
 def build_paired_reburn_evaluation_command(
     binary: Path,
     reburn_row: dict[str, str],
     train_ids: list[int],
-    firebreaks_csv: Path,
+    selected_firebreak_ids: list[int],
     output_json: Path,
     weight_map: str = "",
 ) -> list[str]:
@@ -418,8 +571,14 @@ def build_paired_reburn_evaluation_command(
         "--forest-path", reburn_row["forest_path"],
         "--results-path", reburn_row["results_path"],
         "--scenario-ids", ids_arg(train_ids),
-        "--firebreaks", str(firebreaks_csv),
+        # The selected original Cell2Fire firebreak IDs from the reduced-instance
+        # solution, transferred by original ID (never compact indices) to the reburn
+        # instance's evaluation.
+        "--firebreaks", ids_arg(selected_firebreak_ids),
         "--output", str(output_json),
+        # A selected firebreak missing from the reburn instance is a hard failure, never
+        # a silently dropped cell (Phase 8B section 12).
+        "--require-full-firebreak-coverage",
     ]
     # The same canonical map (keyed by original Cell2Fire ID over the full physical
     # universe) is used for the reburn evaluation as for the reduced solve.
@@ -439,6 +598,11 @@ def parse_paired_reburn_evaluation_json(path: Path) -> dict[str, str]:
         "paired_reburn_train_empirical_cvar_90pct_burned_area": str(payload.get("empirical_cvar_90pct_burned_area", "")),
         "paired_reburn_train_evaluation_runtime_seconds": str(payload.get("total_runtime_seconds", "")),
         "paired_reburn_train_scenario_count": str(len(payload.get("scenarios", []))),
+        "paired_reburn_weight_map_hash": str(payload.get("weight_map_hash", "")),
+        "paired_selected_firebreak_count": str(payload.get("paired_selected_firebreak_count", "")),
+        "paired_selected_firebreaks_mapped": str(payload.get("paired_selected_firebreaks_mapped", "")),
+        "paired_selected_firebreaks_missing": str(payload.get("paired_selected_firebreaks_missing", "")),
+        "paired_selected_mapping_status": str(payload.get("paired_selected_mapping_status", "")),
     }
 
 
@@ -532,6 +696,35 @@ def merged_result(
     return out
 
 
+def classify_failure(log_path: Path) -> tuple[str, str]:
+    """Best-effort failure_stage/failure_type classification from the solver log tail
+    (Phase 8B section 25). The C++ binary reports weight-map/mapping/solver failures
+    within a single subprocess call; this keeps failures from collapsing into a single
+    generic nonzero-exit-code bucket."""
+    try:
+        text = log_path.read_text(encoding="utf-8", errors="replace").lower()
+    except OSError:
+        text = ""
+    if "weight map hash mismatch" in text or "weight-map hash mismatch" in text:
+        return "weight_map_loading", "weight_map_hash_mismatch"
+    if "weight map" in text and ("missing" in text or "does not exist" in text):
+        return "weight_map_loading", "weight_map_missing_or_invalid"
+    if "requires full firebreak coverage" in text:
+        return "paired_firebreak_mapping", "missing_selected_firebreak"
+    if "outside the compact evaluation universe" in text or "instance universe" in text:
+        return "instance_mapping", "node_mapping_error"
+    return "solver_execution", "nonzero_exit"
+
+
+def failure_message_from_log(log_path: Path, limit: int = 500) -> str:
+    try:
+        text = log_path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
+    lines = [line for line in text.splitlines() if line.strip()]
+    return " | ".join(lines[-5:])[-limit:]
+
+
 def main() -> int:
     args = parse_args()
     require_project_root()
@@ -551,25 +744,75 @@ def main() -> int:
     by_task = {row.get("task_id", ""): row for row in existing if row.get("task_id")}
     final_rows = [row for row in existing if row.get("task_id")]
 
+    instance_config = load_instance_config(Path("config/fpp_new_instances_scaling_instances.csv"))
+
+    def record_failure(row, failure_stage, failure_type, failure_message, return_code,
+                       train_ids, test_ids, command, log_path, started, finished, attempt,
+                       resume_action):
+        failed_row = merged_result(
+            row, {}, train_ids=train_ids, test_ids=test_ids, command=command,
+            log_path=log_path, return_code=return_code, started=started, finished=finished)
+        failed_row["failure_stage"] = failure_stage
+        failed_row["failure_type"] = failure_type
+        failed_row["failure_message"] = failure_message[:500]
+        failed_row["worker_exit_code"] = str(return_code)
+        failed_row["attempt"] = str(attempt)
+        failed_row["resume_action"] = resume_action
+        by_task[row["task_id"]] = failed_row
+        nonlocal final_rows
+        final_rows = [r for r in final_rows if r.get("task_id") != row["task_id"]] + [failed_row]
+        write_worker_csv(output_csv, final_rows, manifest_fields)
+
     for row in manifest_rows:
         task_id = row["task_id"]
-        if task_id in by_task and row_complete(by_task[task_id]):
-            print(f"SKIP complete {task_id}: {row['method']}")
-            continue
+        existing_row = by_task.get(task_id)
+        attempt = 1
+        resume_action = "run_missing"
 
-        train_path, test_path = split_pair(row)
-        if not train_path.exists() or not test_path.exists():
-            raise RuntimeError(f"Missing split pair for {task_id}: {train_path}, {test_path}")
-        train_ids = read_ids(train_path)
-        test_ids = read_ids(test_path)
-        validate_split(row, train_ids, test_ids)
+        if existing_row is not None:
+            if row_complete_and_valid(existing_row):
+                print(f"SKIP complete {task_id}: {row['method']}")
+                continue
+            if is_recorded_failure(existing_row) and not args.retry_failed:
+                print(f"SKIP failed (rerun with --retry-failed) {task_id}: {row['method']}")
+                continue
+            attempt = int(existing_row.get("attempt") or "0") + 1
+            resume_action = "retry_failed" if is_recorded_failure(existing_row) else "rerun_invalid"
+
+        log_path = log_dir / f"{task_id}.log"
+
+        try:
+            train_path, test_path = split_pair(row)
+            if not train_path.exists() or not test_path.exists():
+                raise RuntimeError(f"Missing split pair for {task_id}: {train_path}, {test_path}")
+            train_ids = read_ids(train_path)
+            test_ids = read_ids(test_path)
+            validate_split(row, train_ids, test_ids)
+        except Exception as exc:  # noqa: BLE001 - recorded as a row failure, not raised
+            log_path.write_text(f"MANIFEST VALIDATION FAILURE: {exc}\n", encoding="utf-8")
+            record_failure(
+                row, "manifest_validation", type(exc).__name__, str(exc), 1,
+                [], [], [], log_path, time.time(), time.time(), attempt, resume_action)
+            print(f"FAILED {task_id} (manifest_validation): {exc}", file=sys.stderr)
+            continue
 
         temp_csv = temp_dir / f"{task_id}.csv"
         if temp_csv.exists():
             temp_csv.unlink()
-        log_path = log_dir / f"{task_id}.log"
-        command = build_command(binary, row, train_ids, test_ids, temp_csv)
-        print(f"START {task_id}: {row['method']}")
+        try:
+            command = build_command(binary, row, train_ids, test_ids, temp_csv)
+        except Exception as exc:  # noqa: BLE001 - recorded as a row failure, not raised
+            # Covers the worker no-regeneration contract: a missing/invalid weight map
+            # referenced by the manifest fails this row cleanly before any solver
+            # subprocess is launched, and the worker continues with the remaining rows.
+            log_path.write_text(f"COMMAND CONSTRUCTION FAILURE: {exc}\n", encoding="utf-8")
+            record_failure(
+                row, "weight_map_loading", type(exc).__name__, str(exc), 1,
+                train_ids, test_ids, [], log_path, time.time(), time.time(), attempt,
+                resume_action)
+            print(f"FAILED {task_id} (weight_map_loading): {exc}", file=sys.stderr)
+            continue
+        print(f"START {task_id} (attempt {attempt}): {row['method']}")
         print("  " + " ".join(shlex.quote(part) for part in command))
         if args.dry_run:
             continue
@@ -581,38 +824,63 @@ def main() -> int:
             completed = subprocess.run(command, stdout=log, stderr=subprocess.STDOUT)
         finished = time.time()
         if completed.returncode != 0:
-            failed_row = merged_result(
-                row, {}, train_ids=train_ids, test_ids=test_ids, command=command,
-                log_path=log_path, return_code=completed.returncode, started=started, finished=finished)
-            by_task[task_id] = failed_row
-            final_rows = [r for r in final_rows if r.get("task_id") != task_id] + [failed_row]
-            write_worker_csv(output_csv, final_rows, manifest_fields)
+            failure_stage, failure_type = classify_failure(log_path)
+            record_failure(
+                row, failure_stage, failure_type, failure_message_from_log(log_path),
+                completed.returncode, train_ids, test_ids, command, log_path, started,
+                finished, attempt, resume_action)
             print(f"FAILED {task_id}; see {log_path}", file=sys.stderr)
-            return completed.returncode
+            continue
 
         patch_result_json_metadata(row)
-        solver_row = read_single_solver_row(temp_csv)
-
-        # Verify the solver loaded exactly the canonical map named in the manifest.
-        expected_hash = (row.get("weight_map_hash") or "").strip()
-        actual_hash = (solver_row.get("weight_map_hash") or "").strip()
-        if expected_hash and actual_hash and expected_hash != actual_hash:
-            raise RuntimeError(
-                f"Weight-map hash mismatch for {task_id}: manifest {expected_hash} != "
-                f"result {actual_hash}.")
+        try:
+            solver_row = read_single_solver_row(temp_csv)
+            # Verify the solver loaded exactly the canonical map named in the manifest.
+            expected_hash = (row.get("weight_map_hash") or "").strip()
+            actual_hash = (solver_row.get("weight_map_hash") or "").strip()
+            if expected_hash and actual_hash and expected_hash != actual_hash:
+                raise RuntimeError(
+                    f"Weight-map hash mismatch for {task_id}: manifest {expected_hash} != "
+                    f"result {actual_hash}.")
+        except Exception as exc:  # noqa: BLE001 - recorded as a row failure, not raised
+            record_failure(
+                row, "result_validation", type(exc).__name__, str(exc), 1,
+                train_ids, test_ids, command, log_path, started, finished, attempt,
+                resume_action)
+            print(f"FAILED {task_id} (result_validation): {exc}", file=sys.stderr)
+            continue
 
         completed_row = merged_result(
             row, solver_row, train_ids=train_ids, test_ids=test_ids, command=command,
             log_path=log_path, return_code=0, started=started, finished=finished)
+        completed_row["attempt"] = str(attempt)
+        completed_row["resume_action"] = resume_action
+        completed_row["optimization_weight_map_hash"] = actual_hash
+        # The same --weight-map-file is attached for both the train and test
+        # OptimizationInstance within one solver invocation (see MethodDispatcher),
+        # so the out-of-sample stage necessarily loaded the identical canonical hash.
+        completed_row["out_of_sample_weight_map_hash"] = actual_hash
+        raw_status = str(solver_row.get("solver_status", "")).strip()
+        completed_row["execution_status"] = (
+            "heuristic_completed" if raw_status.lower() in {"notapplicable", "not_applicable", ""}
+            else raw_status)
 
-        instance_config = load_instance_config(Path("config/fpp_new_instances_scaling_instances.csv"))
-        reburn_pairs = pair_to_reburn_matrix(instance_config)
-        paired_reburn_id = reburn_pairs.get(row["instance_id"])
-        if paired_reburn_id is not None:
-            reburn_row = instance_config[paired_reburn_id]
+        selected_firebreak_ids = read_selected_firebreak_ids(
+            Path(row["solution_dir"]) / f"{row['task_id']}.csv")
+        completed_row["selected_firebreak_original_ids"] = ids_arg(selected_firebreak_ids)
+
+        reburn_id, resolution_method, resolution_status = resolve_paired_reburn_instance(
+            instance_config, row["instance_id"])
+        completed_row["paired_reburn_instance_requested"] = paired_reburn_instance_id(row["instance_id"]) or ""
+        completed_row["paired_reburn_instance_resolved"] = reburn_id or ""
+        completed_row["paired_reburn_resolution_method"] = resolution_method
+        completed_row["paired_reburn_resolution_status"] = resolution_status
+
+        if reburn_id is not None:
+            reburn_row = instance_config[reburn_id]
             reburn_eval_json = output_dir / "json" / f"{task_id}_paired_reburn_eval.json"
             reburn_command = build_paired_reburn_evaluation_command(
-                binary, reburn_row, train_ids, Path(row["solution_dir"]) / f"{row['task_id']}.csv",
+                binary, reburn_row, train_ids, selected_firebreak_ids,
                 reburn_eval_json, weight_map=weight_map_file(row))
             completed_row["paired_reburn_eval_command"] = " ".join(shlex.quote(part) for part in reburn_command)
             reburn_started = time.time()
@@ -624,11 +892,24 @@ def main() -> int:
             if paired_completed.returncode != 0:
                 completed_row["paired_reburn_status"] = "failed"
                 completed_row["paired_reburn_return_code"] = str(paired_completed.returncode)
+                completed_row["failure_stage"] = "paired_evaluation"
+                completed_row["failure_type"] = "nonzero_exit"
+                completed_row["failure_message"] = failure_message_from_log(log_path)
             else:
                 completed_row["paired_reburn_status"] = "ok"
                 completed_row["paired_reburn_return_code"] = "0"
                 completed_row.update(parse_paired_reburn_evaluation_json(reburn_eval_json))
                 completed_row["paired_reburn_train_eval_runtime_sec"] = str(reburn_finished - reburn_started)
+        elif bool_value(row.get("paired_evaluation_enabled")):
+            # The manifest expected paired evaluation but resolution was rejected
+            # (unavailable / ambiguous / cell-count mismatch): fail clearly, never
+            # silently proceed as if pairing were not required.
+            completed_row["paired_reburn_status"] = "unavailable"
+            completed_row["failure_stage"] = "paired_instance_resolution"
+            completed_row["failure_type"] = resolution_status
+            completed_row["failure_message"] = (
+                f"Could not resolve paired reburn instance for {row['instance_id']}: "
+                f"{resolution_status}.")
         else:
             completed_row["paired_reburn_status"] = "n/a"
 
@@ -641,7 +922,7 @@ def main() -> int:
     if args.dry_run:
         print("Dry run complete; no solver commands were executed.")
         return 0
-    completed_count = sum(1 for row in final_rows if row_complete(row))
+    completed_count = sum(1 for row in final_rows if row_complete_and_valid(row))
     expected_count = len(manifest_rows)
     if completed_count != expected_count:
         print(f"{args.worker_id} has {completed_count} complete rows; expected {expected_count}.", file=sys.stderr)

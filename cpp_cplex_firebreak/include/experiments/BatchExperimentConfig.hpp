@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <limits>
 #include <string>
@@ -71,6 +72,23 @@ struct BatchExperimentConfig {
     bool risk_measure_specified = false;
     bool cvar_beta_specified = false;
     bool cvar_lambda_specified = false;
+
+    // Phase 8B: canonical weight-map registry metadata. `weight_map_file` is the only
+    // field that changes solver behavior; the rest are reproducibility metadata that
+    // propagate additively into MethodDispatchRequest/StandardExperimentResult and into
+    // the resume-key so a weighted row can never collide with a legacy homogeneous one.
+    // Missing/empty fields (the default) resolve to legacy homogeneous behavior.
+    std::filesystem::path weight_map_file;
+    std::string weight_profile;
+    int weight_replicate = 0;
+    std::uint64_t weight_generation_seed = 0;
+    int weight_generator_version = 0;
+    std::string canonical_landscape_id;
+    std::string paired_landscape_id;
+    std::string weight_map_hash;
+    std::string weight_source_universe_hash;
+    std::string paired_reburn_instance_id;
+    bool paired_evaluation_enabled = false;
 };
 
 struct FppModeSettings {

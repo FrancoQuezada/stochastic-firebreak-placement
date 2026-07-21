@@ -3,6 +3,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <sstream>
 #include <stdexcept>
 
 #include "core/FirebreakSolution.hpp"
@@ -73,12 +74,21 @@ void write_int_array(std::ostream& out, const std::vector<int>& values) {
     out << "]";
 }
 
+struct FirebreakMappingSummary {
+    int selected_firebreak_count = 0;
+    int selected_firebreaks_mapped = 0;
+    int selected_firebreaks_missing = 0;
+    std::vector<int> missing_original_ids;
+    std::string mapping_status = "ok";
+};
+
 void write_evaluation_json(
     const std::filesystem::path& output_path,
     const core::Instance& instance,
     const core::FirebreakSolution& firebreaks,
     const eval::InstanceBurnedAreaResult& result,
     const eval::FppRecourseResult& weighted_result,
+    const FirebreakMappingSummary& mapping_summary,
     const std::vector<std::string>& warnings) {
     firebreak::io::ensure_parent_directory(output_path);
     std::ofstream out(output_path);
@@ -119,6 +129,14 @@ void write_evaluation_json(
     out << "  \"expected_percentage_high_value_weight_burned\": "
         << weighted_result.expected_percentage_high_value_weight_burned << ",\n";
     out << "  \"total_runtime_seconds\": " << result.total_runtime_seconds << ",\n";
+    out << "  \"paired_selected_firebreak_count\": " << mapping_summary.selected_firebreak_count << ",\n";
+    out << "  \"paired_selected_firebreaks_mapped\": " << mapping_summary.selected_firebreaks_mapped << ",\n";
+    out << "  \"paired_selected_firebreaks_missing\": " << mapping_summary.selected_firebreaks_missing << ",\n";
+    out << "  \"paired_selected_missing_original_ids\": ";
+    write_int_array(out, mapping_summary.missing_original_ids);
+    out << ",\n";
+    out << "  \"paired_selected_mapping_status\": \""
+        << firebreak::io::json_escape(mapping_summary.mapping_status) << "\",\n";
     out << "  \"scenarios\": [\n";
     for (std::size_t i = 0; i < result.per_scenario_results.size(); ++i) {
         const auto& scenario_result = result.per_scenario_results[i];
@@ -164,17 +182,37 @@ void write_evaluation_json(
 std::vector<int> compact_firebreaks_for_recourse(
     const opt::OptimizationInstance& opt,
     const core::FirebreakSolution& firebreaks,
+    bool require_full_firebreak_coverage,
+    FirebreakMappingSummary& summary,
     std::vector<std::string>& warnings) {
     std::vector<int> compact;
     compact.reserve(firebreaks.selected_nodes().size());
+    summary.selected_firebreak_count = static_cast<int>(firebreaks.selected_nodes().size());
     for (const int original_node : firebreaks.selected_nodes()) {
         if (!opt.node_mapper.contains_node(original_node)) {
+            summary.missing_original_ids.push_back(original_node);
             warnings.push_back(
                 "Firebreak node " + std::to_string(original_node) +
                 " is outside the compact evaluation universe and is ignored by weighted recourse.");
             continue;
         }
         compact.push_back(opt.node_mapper.to_index(original_node));
+    }
+    summary.selected_firebreaks_mapped = static_cast<int>(compact.size());
+    summary.selected_firebreaks_missing = static_cast<int>(summary.missing_original_ids.size());
+    if (summary.selected_firebreaks_missing > 0) {
+        if (require_full_firebreak_coverage) {
+            std::ostringstream missing_ids;
+            for (std::size_t i = 0; i < summary.missing_original_ids.size(); ++i) {
+                missing_ids << (i > 0 ? "," : "") << summary.missing_original_ids[i];
+            }
+            throw std::runtime_error(
+                "Paired evaluation requires full firebreak coverage but " +
+                std::to_string(summary.selected_firebreaks_missing) +
+                " selected original cell ID(s) are absent from the reburn evaluation "
+                "universe: " + missing_ids.str() + ".");
+        }
+        summary.mapping_status = "missing_cells";
     }
     return compact;
 }
@@ -217,9 +255,12 @@ int EvaluationRunner::run(const EvaluationOptions& options) const {
     auto opt_instance = builder.build(instance, 0.0, false);
 
     eval::FppRecourseResult weighted_result;
+    FirebreakMappingSummary mapping_summary;
     const auto compact_firebreaks = compact_firebreaks_for_recourse(
         opt_instance,
         firebreaks,
+        options.require_full_firebreak_coverage,
+        mapping_summary,
         warnings);
     if (options.weight_map_file.empty()) {
         eval::FppRecourseEvaluator evaluator(opt_instance);
@@ -232,7 +273,8 @@ int EvaluationRunner::run(const EvaluationOptions& options) const {
     }
 
     print_evaluation_summary(std::cout, instance, result, weighted_result, warnings);
-    write_evaluation_json(output_path, instance, firebreaks, result, weighted_result, warnings);
+    write_evaluation_json(
+        output_path, instance, firebreaks, result, weighted_result, mapping_summary, warnings);
     std::cout << "Wrote summary: " << firebreak::io::path_to_string(output_path) << "\n";
     return 0;
 }

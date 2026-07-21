@@ -44,6 +44,20 @@ PROJECTED_LLBI_MAX_CUTS_PER_ROUND="${PROJECTED_LLBI_MAX_CUTS_PER_ROUND:-100}"
 PROJECTED_LLBI_VIOLATION_TOLERANCE="${PROJECTED_LLBI_VIOLATION_TOLERANCE:-1e-3}"
 PROJECTED_LLBI_CUT_DENSITY_LIMIT="${PROJECTED_LLBI_CUT_DENSITY_LIMIT:-0}"
 PROJECTED_POLY_MAX_CUTS="${PROJECTED_POLY_MAX_CUTS:-100000}"
+# Phase 8B: canonical weight-map registry options. WEIGHT_REGISTRY unset (the default)
+# preserves legacy homogeneous behavior with no weight flags passed to the generator.
+WEIGHT_PROFILES="${WEIGHT_PROFILES:-homogeneous}"
+WEIGHT_REPLICATES="${WEIGHT_REPLICATES:-0}"
+WEIGHT_SEED_BASE="${WEIGHT_SEED_BASE:-12345}"
+WEIGHT_REGISTRY="${WEIGHT_REGISTRY:-}"
+GENERATE_MISSING_WEIGHT_MAPS="${GENERATE_MISSING_WEIGHT_MAPS:-0}"
+PAIRED_REBURN_EVALUATION="${PAIRED_REBURN_EVALUATION:-0}"
+RETRY_FAILED="${RETRY_FAILED:-0}"
+
+if [[ "$RERUN_EXISTING" == "1" && "$RETRY_FAILED" == "1" ]]; then
+  echo "RERUN_EXISTING=1 and RETRY_FAILED=1 are contradictory; set only one." >&2
+  exit 1
+fi
 
 if [[ ! -f "$INSTANCE_CONFIG" ]]; then
   echo "Missing instance config: $INSTANCE_CONFIG" >&2
@@ -226,6 +240,22 @@ manifest_args=(
   --projected-poly-max-cuts "$PROJECTED_POLY_MAX_CUTS"
 )
 
+if [[ -n "$WEIGHT_REGISTRY" ]]; then
+  manifest_args+=(
+    --weight-profiles "$WEIGHT_PROFILES"
+    --weight-replicates "$WEIGHT_REPLICATES"
+    --weight-seed-base "$WEIGHT_SEED_BASE"
+    --weight-registry "$WEIGHT_REGISTRY"
+    --binary "$BIN"
+  )
+  if [[ "$GENERATE_MISSING_WEIGHT_MAPS" == "1" ]]; then
+    manifest_args+=(--generate-missing-weight-maps)
+  fi
+  if [[ "$PAIRED_REBURN_EVALUATION" == "1" ]]; then
+    manifest_args+=(--paired-reburn-evaluation)
+  fi
+fi
+
 python3 scripts/generate_fpp_new_instances_scaling_manifests.py "${manifest_args[@]}"
 python3 scripts/generate_fpp_new_instances_scaling_manifests.py "${manifest_args[@]}" --verify-only
 
@@ -241,15 +271,33 @@ if [[ "${#MANIFESTS[@]}" -eq 0 ]]; then
   exit 1
 fi
 
+if [[ -n "$WEIGHT_REGISTRY" ]]; then
+  weight_summary="$WEIGHT_PROFILES (registry: $WEIGHT_REGISTRY)"
+else
+  weight_summary="legacy homogeneous"
+fi
+if [[ "$RERUN_EXISTING" == "1" ]]; then
+  resume_summary="rerun-existing (discard all)"
+elif [[ "$RETRY_FAILED" == "1" ]]; then
+  resume_summary="retry-failed"
+else
+  resume_summary="default (skip complete, rerun invalid, skip failed)"
+fi
+
 echo "FPP new_instances scaling experiment:"
 echo "  worker manifests: ${#MANIFESTS[@]}"
 echo "  parallel jobs: $([[ "$PARALLEL" == "1" ]] && echo "$MAX_PARALLEL_JOBS" || echo "1")"
 echo "  CPLEX threads per solve: $THREADS"
 echo "  output: $OUTPUT_DIR"
+echo "  weight profiles: $weight_summary"
+echo "  resume mode: $resume_summary"
 
 worker_args=()
 if [[ "$RERUN_EXISTING" == "1" ]]; then
   worker_args+=(--rerun-existing)
+fi
+if [[ "$RETRY_FAILED" == "1" ]]; then
+  worker_args+=(--retry-failed)
 fi
 
 run_worker() {

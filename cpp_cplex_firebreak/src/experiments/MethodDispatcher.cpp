@@ -669,9 +669,13 @@ io::StandardExperimentResult MethodDispatcher::run_method(const MethodDispatchRe
     opt::OptimizationInstanceBuilder builder;
     const bool build_dpv_indices = method_needs_dpv_indices(method, warm_start_policy);
     auto opt_instance = builder.build(train_instance, request.alpha, build_dpv_indices);
-    solver::attach_weight_map_to_optimization_instance(opt_instance, request.weight_map_file);
+    solver::WeightMapAttachmentDiagnostics weight_attachment_diagnostics;
+    solver::attach_weight_map_to_optimization_instance(
+        opt_instance, request.weight_map_file, request.weight_map_hash,
+        &weight_attachment_diagnostics);
     auto test_opt_instance = builder.build(test_instance, request.alpha, build_dpv_indices);
-    solver::attach_weight_map_to_optimization_instance(test_opt_instance, request.weight_map_file);
+    solver::attach_weight_map_to_optimization_instance(
+        test_opt_instance, request.weight_map_file, request.weight_map_hash);
     benders::FppStrengtheningOptions fpp_strengthening_options;
     if (fpp_variant.is_fpp_solver) {
         fpp_strengthening_options.use_coverage_llbi =
@@ -1821,6 +1825,22 @@ io::StandardExperimentResult MethodDispatcher::run_method(const MethodDispatchRe
         result.notes.push_back("Weighted recourse warning: " + warning);
     }
     result.notes.push_back("Test scenarios were used only for out-of-sample evaluation.");
+
+    // Phase 8B: canonical weight-map registry metadata survives from the manifest row to
+    // the final result unchanged. These are provenance fields, not computed outputs.
+    result.weight_replicate = request.weight_replicate;
+    result.weight_generation_seed = request.weight_generation_seed;
+    result.weight_generator_version = request.weight_generator_version;
+    result.canonical_landscape_id = request.canonical_landscape_id;
+    result.paired_landscape_id = request.paired_landscape_id;
+    result.weight_source_universe_hash = request.weight_source_universe_hash;
+    result.paired_reburn_instance_id = request.paired_reburn_instance_id;
+    result.paired_evaluation_enabled = request.paired_evaluation_enabled;
+    if (!request.weight_map_file.empty()) {
+        result.weight_mapping_method = weight_attachment_diagnostics.mapping_method;
+        result.weight_mapped_cell_count = weight_attachment_diagnostics.mapped_instance_cell_count;
+        result.weight_missing_cell_count = weight_attachment_diagnostics.missing_instance_cell_count;
+    }
 
     io::write_experiment_result_json(result_json_path(request.output_dir, request.run_id), result);
     io::append_experiment_result_csv(request.output_csv, result);

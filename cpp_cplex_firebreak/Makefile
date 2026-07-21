@@ -242,6 +242,37 @@ TEST_WEIGHT_CAPABILITY_MATRIX_SOURCES := \
 	src/experiments/WeightedMethodCapability.cpp \
 	tests/test_weight_capability_matrix.cpp
 
+TEST_WEIGHTED_BATCH_CONFIG_SOURCES := \
+	src/benders/BendersCut.cpp \
+	src/benders/FppCombinatorialBenders.cpp \
+	src/benders/FppProjectedLlbi.cpp \
+	src/experiments/BatchExperimentConfig.cpp \
+	src/experiments/ExperimentManifest.cpp \
+	src/io/PathUtils.cpp \
+	src/opt/IndexMapper.cpp \
+	src/opt/OptimizationInstance.cpp \
+	src/risk/RiskMeasure.cpp \
+	tests/test_weighted_batch_config.cpp
+
+TEST_WEIGHTED_SUBSET_ATTACHMENT_SOURCES := \
+	src/core/FirebreakSolution.cpp \
+	src/core/Graph.cpp \
+	src/core/Instance.cpp \
+	src/core/LandscapeWeightMap.cpp \
+	src/core/Scenario.cpp \
+	src/io/PathUtils.cpp \
+	src/opt/IndexMapper.cpp \
+	src/opt/OptimizationInstance.cpp \
+	src/opt/OptimizationInstanceBuilder.cpp \
+	src/opt/DpvIndexBuilder.cpp \
+	src/risk/RiskMeasure.cpp \
+	src/solver/FppWeightedLossUtils.cpp \
+	tests/test_weighted_subset_attachment.cpp
+
+TEST_WEIGHTED_CAPABILITY_CROSS_CHECK_SOURCES := \
+	src/experiments/WeightedMethodCapability.cpp \
+	tests/test_weighted_capability_cross_check.cpp
+
 TEST_DPV_INDEX_SOURCES := \
 	src/opt/IndexMapper.cpp \
 	src/opt/OptimizationInstance.cpp \
@@ -965,6 +996,9 @@ TEST_EXES := \
 	$(BUILD_DIR)/test_weight_map_registry \
 	$(BUILD_DIR)/test_weight_paired_instance_mapping \
 	$(BUILD_DIR)/test_weight_capability_matrix \
+	$(BUILD_DIR)/test_weighted_batch_config \
+	$(BUILD_DIR)/test_weighted_subset_attachment \
+	$(BUILD_DIR)/test_weighted_capability_cross_check \
 	$(BUILD_DIR)/test_dpv_index_builder \
 	$(BUILD_DIR)/test_weighted_fpp_dpv \
 	$(BUILD_DIR)/test_weighted_fpp_dpv_variants \
@@ -1155,6 +1189,15 @@ $(BUILD_DIR)/test_weight_paired_instance_mapping: $(call test_obj,$(TEST_WEIGHT_
 	$(CXX) $^ -o $@
 
 $(BUILD_DIR)/test_weight_capability_matrix: $(call test_obj,$(TEST_WEIGHT_CAPABILITY_MATRIX_SOURCES))
+	$(CXX) $^ -o $@
+
+$(BUILD_DIR)/test_weighted_batch_config: $(call test_obj,$(TEST_WEIGHTED_BATCH_CONFIG_SOURCES))
+	$(CXX) $^ -o $@
+
+$(BUILD_DIR)/test_weighted_subset_attachment: $(call test_obj,$(TEST_WEIGHTED_SUBSET_ATTACHMENT_SOURCES))
+	$(CXX) $^ -o $@
+
+$(BUILD_DIR)/test_weighted_capability_cross_check: $(call test_obj,$(TEST_WEIGHTED_CAPABILITY_CROSS_CHECK_SOURCES))
 	$(CXX) $^ -o $@
 
 $(BUILD_DIR)/test_dpv_index_builder: $(call test_obj,$(TEST_DPV_INDEX_SOURCES))
@@ -1526,6 +1569,9 @@ test: $(TEST_EXES)
 	./build_gpp/test_weight_map_registry
 	./build_gpp/test_weight_paired_instance_mapping
 	./build_gpp/test_weight_capability_matrix
+	./build_gpp/test_weighted_batch_config
+	./build_gpp/test_weighted_subset_attachment
+	./build_gpp/test_weighted_capability_cross_check
 	./build_gpp/test_dpv_index_builder
 	./build_gpp/test_weighted_fpp_dpv
 	./build_gpp/test_weighted_fpp_dpv_variants

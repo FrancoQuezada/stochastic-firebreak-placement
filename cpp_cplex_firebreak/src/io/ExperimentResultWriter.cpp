@@ -1420,6 +1420,25 @@ void write_experiment_result_json(
     out << "  \"weight_profile\": \"" << json_escape_local(result.weight_profile) << "\",\n";
     out << "  \"weight_map_file\": \"" << json_escape_local(result.weight_map_file) << "\",\n";
     out << "  \"weight_map_hash\": \"" << json_escape_local(result.weight_map_hash) << "\",\n";
+    out << "  \"weight_replicate\": " << result.weight_replicate << ",\n";
+    out << "  \"weight_generation_seed\": " << result.weight_generation_seed << ",\n";
+    out << "  \"weight_generator_version\": " << result.weight_generator_version << ",\n";
+    out << "  \"canonical_landscape_id\": \""
+        << json_escape_local(result.canonical_landscape_id) << "\",\n";
+    out << "  \"paired_landscape_id\": \""
+        << json_escape_local(result.paired_landscape_id) << "\",\n";
+    out << "  \"weight_source_universe_hash\": \""
+        << json_escape_local(result.weight_source_universe_hash) << "\",\n";
+    out << "  \"weight_mapping_method\": \""
+        << json_escape_local(result.weight_mapping_method) << "\",\n";
+    out << "  \"weight_mapping_hash\": \""
+        << json_escape_local(result.weight_mapping_hash) << "\",\n";
+    out << "  \"weight_mapped_cell_count\": " << result.weight_mapped_cell_count << ",\n";
+    out << "  \"weight_missing_cell_count\": " << result.weight_missing_cell_count << ",\n";
+    out << "  \"paired_reburn_instance_id\": \""
+        << json_escape_local(result.paired_reburn_instance_id) << "\",\n";
+    out << "  \"paired_evaluation_enabled\": "
+        << (result.paired_evaluation_enabled ? "true" : "false") << ",\n";
     out << "  \"weight_normalized\": " << (result.weight_normalized ? "true" : "false") << ",\n";
     out << "  \"weight_mean\": " << format_json_number(result.weight_mean) << ",\n";
     out << "  \"weight_min\": " << format_json_number(result.weight_min) << ",\n";
@@ -1618,6 +1637,8 @@ void append_experiment_result_csv(
         write_header || existing_csv_has_column(output_path, "risk_measure");
     const bool include_weight_reporting =
         write_header || existing_csv_has_column(output_path, "weight_profile");
+    const bool include_weight_identity_reporting =
+        write_header || existing_csv_has_column(output_path, "canonical_landscape_id");
     const bool include_dpv_reporting =
         write_header || existing_csv_has_column(output_path, "dpv_weighted");
     const bool include_dpv_model_reporting =
@@ -1860,6 +1881,10 @@ void append_experiment_result_csv(
             << "heuristic_time_sec,heuristic_objective,heuristic_exact_evaluations,heuristic_selected_count,"
             << "evaluator_objective,evaluator_abs_diff,evaluator_rel_diff,"
             << "weight_profile,weight_map_file,weight_map_hash,weight_normalized,"
+            << "weight_replicate,weight_generation_seed,weight_generator_version,"
+            << "canonical_landscape_id,paired_landscape_id,weight_source_universe_hash,"
+            << "weight_mapping_method,weight_mapping_hash,weight_mapped_cell_count,"
+            << "weight_missing_cell_count,paired_reburn_instance_id,paired_evaluation_enabled,"
             << "weight_mean,weight_min,weight_max,weight_total,"
             << "solver_weighted_objective,evaluator_weighted_objective,"
             << "objective_validation_abs_difference,objective_validation_rel_difference,"
@@ -2299,8 +2324,22 @@ void append_experiment_result_csv(
         out << csv_escape(result.weight_profile) << ","
             << csv_escape(result.weight_map_file) << ","
             << csv_escape(result.weight_map_hash) << ","
-            << (result.weight_normalized ? "true" : "false") << ","
-            << format_csv_number(result.weight_mean) << ","
+            << (result.weight_normalized ? "true" : "false") << ",";
+        if (include_weight_identity_reporting) {
+            out << result.weight_replicate << ","
+                << result.weight_generation_seed << ","
+                << result.weight_generator_version << ","
+                << csv_escape(result.canonical_landscape_id) << ","
+                << csv_escape(result.paired_landscape_id) << ","
+                << csv_escape(result.weight_source_universe_hash) << ","
+                << csv_escape(result.weight_mapping_method) << ","
+                << csv_escape(result.weight_mapping_hash) << ","
+                << result.weight_mapped_cell_count << ","
+                << result.weight_missing_cell_count << ","
+                << csv_escape(result.paired_reburn_instance_id) << ","
+                << (result.paired_evaluation_enabled ? "true" : "false") << ",";
+        }
+        out << format_csv_number(result.weight_mean) << ","
             << format_csv_number(result.weight_min) << ","
             << format_csv_number(result.weight_max) << ","
             << format_csv_number(result.weight_total) << ","

@@ -147,17 +147,39 @@ void attach_direct_fpp_validation(
 
 void attach_weight_map_to_optimization_instance(
     opt::OptimizationInstance& opt,
-    const std::filesystem::path& weight_map_file) {
+    const std::filesystem::path& weight_map_file,
+    const std::string& expected_weight_map_hash,
+    WeightMapAttachmentDiagnostics* diagnostics) {
     if (weight_map_file.empty()) {
         return;
     }
     const auto path = io::resolve_input_path(weight_map_file.string());
-    opt.cell_weight_map = core::load_landscape_weight_map_csv(
-        path,
-        opt.node_mapper.original_nodes());
+    // Subset-tolerant: no expected-ID set is passed here, so the canonical map may cover
+    // more physical cells than this instance's compact universe. Coverage of every
+    // instance compact cell is still enforced below by build_compact_weight_vector,
+    // which throws if any compact node's original ID is missing from the map.
+    opt.cell_weight_map = core::load_landscape_weight_map_csv(path);
+    if (!expected_weight_map_hash.empty() &&
+        opt.cell_weight_map.deterministic_hash != expected_weight_map_hash) {
+        throw std::runtime_error(
+            "Weight map hash mismatch: expected " + expected_weight_map_hash +
+            " but loaded map " + path.string() + " has hash " +
+            opt.cell_weight_map.deterministic_hash + ".");
+    }
     opt.compact_cell_weights = core::build_compact_weight_vector(
         opt.cell_weight_map,
         opt.node_mapper);
+    if (diagnostics != nullptr) {
+        diagnostics->mapping_method = "original_cell_id";
+        diagnostics->canonical_cell_count =
+            static_cast<int>(opt.cell_weight_map.weight_by_original_cell_id.size());
+        diagnostics->instance_cell_count = opt.node_mapper.size();
+        diagnostics->mapped_instance_cell_count = opt.node_mapper.size();
+        diagnostics->missing_instance_cell_count = 0;
+        diagnostics->duplicate_instance_original_id_count = 0;
+        diagnostics->unused_canonical_cell_count =
+            diagnostics->canonical_cell_count - diagnostics->mapped_instance_cell_count;
+    }
     (void)direct_fpp_compact_weights(opt);
 }
 

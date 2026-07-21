@@ -45,6 +45,7 @@ FIELDS = [
     "method",
     "method_family",
     "fpp_mode",
+    "greedy_metric",
     "risk_measure",
     "cvar_beta",
     "cvar_lambda",
@@ -413,11 +414,64 @@ def method_flags(method: str) -> dict[str, str]:
     use_standard_llbi = "LLBI" in tokens
     use_root = method.endswith("-RootCuts")
     scenario_order = "eta-desc" if method.endswith("-EtaDesc") else "eta-asc"
+
+    # DPV / Static-DPV / Greedy-DPV method families dispatch to their own dedicated CLI
+    # subcommands (Phase 8B section 8: connect the existing DPV commands to the manifest
+    # generator, which previously only recognized FPP-SAA/FPP-Branch-Benders labels).
+    dpv_command_by_method = {
+        "Static-DPV": "run-static-dpv-oos",
+        "Static-DPV-MIP": "run-static-dpv-mip-oos",
+        "Greedy-DPV2": "run-greedy-oos",
+        "Greedy-DPV3": "run-greedy-oos",
+        "DPV-SAA": "run-dpv-saa-oos",
+        "DPV-Benders": "run-dpv-benders-oos",
+    }
+    greedy_metric = {"Greedy-DPV2": "DPV2", "Greedy-DPV3": "DPV3"}.get(method, "")
+    is_dpv_branch_benders = method == "DPV-Branch-Benders" or method.startswith("DPV-Branch-Benders-")
+
+    if method in dpv_command_by_method:
+        return {
+            "method_family": method,
+            "fpp_mode": "",
+            "solver_command": dpv_command_by_method[method],
+            "greedy_metric": greedy_metric,
+            "projected_llbi_family": "none",
+            "projected_llbi_variant": "none",
+            "use_root_user_cuts": "false",
+            "use_lifted_lower_bounds": "false",
+            "use_projected_llbi": "false",
+            "use_projected_coverage_llbi_poly": "false",
+            "use_projected_path_llbi_poly": "false",
+            "use_projected_coverage_llbi_exp": "false",
+            "use_projected_path_llbi_exp": "false",
+            "use_combinatorial_benders": "false",
+            "combinatorial_benders_scenario_order": "eta-asc",
+        }
+    if is_dpv_branch_benders:
+        return {
+            "method_family": "DPV-Branch-Benders",
+            "fpp_mode": "",
+            "solver_command": "run-dpv-branch-benders-oos",
+            "greedy_metric": "",
+            "projected_llbi_family": "none",
+            "projected_llbi_variant": "none",
+            "use_root_user_cuts": bool_text(use_root),
+            "use_lifted_lower_bounds": bool_text(use_standard_llbi),
+            "use_projected_llbi": "false",
+            "use_projected_coverage_llbi_poly": "false",
+            "use_projected_path_llbi_poly": "false",
+            "use_projected_coverage_llbi_exp": "false",
+            "use_projected_path_llbi_exp": "false",
+            "use_combinatorial_benders": "false",
+            "combinatorial_benders_scenario_order": "eta-asc",
+        }
+
     return {
         "method_family": "FPP-SAA" if is_saa else (
             "FPP-Branch-Benders-Combinatorial" if is_combinatorial else "FPP-Branch-Benders"),
         "fpp_mode": "fpp_base" if is_saa else "",
         "solver_command": "run-fpp-saa-oos" if is_saa else "run-fpp-branch-benders-oos",
+        "greedy_metric": "",
         "projected_llbi_family": projected_family,
         "projected_llbi_variant": projected_variant,
         "use_root_user_cuts": bool_text(use_root),
@@ -621,6 +675,7 @@ def row_for_method(
         "method": method,
         "method_family": flags["method_family"],
         "fpp_mode": flags["fpp_mode"],
+        "greedy_metric": flags["greedy_metric"],
         "risk_measure": risk_measure,
         "cvar_beta": beta,
         "cvar_lambda": cvar_lambda,

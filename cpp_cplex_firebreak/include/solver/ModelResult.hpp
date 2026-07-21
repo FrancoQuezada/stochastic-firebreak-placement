@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <limits>
 #include <string>
 #include <utility>
@@ -416,6 +417,18 @@ struct ModelResult {
     std::string weight_profile = "homogeneous";
     std::string weight_map_file;
     std::string weight_map_hash;
+    int weight_replicate = 0;
+    std::uint64_t weight_generation_seed = 0;
+    int weight_generator_version = 0;
+    std::string canonical_landscape_id;
+    std::string paired_landscape_id;
+    std::string weight_source_universe_hash;
+    std::string weight_mapping_method;
+    std::string weight_mapping_hash;
+    int weight_mapped_cell_count = 0;
+    int weight_missing_cell_count = 0;
+    std::string paired_reburn_instance_id;
+    bool paired_evaluation_enabled = false;
     bool weight_normalized = false;
     double weight_mean = std::numeric_limits<double>::quiet_NaN();
     double weight_min = std::numeric_limits<double>::quiet_NaN();
