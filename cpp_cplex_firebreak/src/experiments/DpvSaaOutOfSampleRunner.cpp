@@ -267,7 +267,14 @@ int DpvSaaOutOfSampleRunner::run(const DpvSaaOutOfSampleOptions& options) const 
     result.weight_map_file = options.weight_map_file.empty() ? "" : options.weight_map_file.string();
     result.weight_map_hash = train_recourse.weight_map_hash;
     result.weight_total = train_recourse.total_landscape_weight;
-    result.solver_weighted_objective = solve_result.solver_weighted_objective;
+    // A DPV decomposition solves the DPV surrogate, not the true weighted
+    // wildfire loss: never copy the surrogate value into the generic
+    // solver_weighted_objective field (Phase 10 section 10; matches the
+    // existing Greedy/Static-DPV convention of leaving this field NaN for
+    // non-exact-FPP methods). The surrogate itself is reported separately
+    // via dpv_surrogate_objective below, and the true evaluated loss via
+    // evaluator_weighted_objective.
+    result.solver_weighted_objective = std::numeric_limits<double>::quiet_NaN();
     result.evaluator_weighted_objective = train_recourse.expected_weighted_burn_loss;
     result.train_expected_weighted_burn_loss = train_recourse.expected_weighted_burn_loss;
     result.test_expected_weighted_burn_loss = test_recourse.expected_weighted_burn_loss;

@@ -1,0 +1,96 @@
+test_name,phase,language,requires_cplex,requires_instance_data,expected_runtime_class,coverage_area
+test_landscape_weight_generator.cpp,various (1-8B),C++,False,True,fast (<5s),unit
+test_landscape_weight_map.cpp,various (1-8B),C++,False,True,fast (<5s),unit
+test_weight_canonical_landscape.cpp,various (1-8B),C++,False,True,fast (<5s),unit
+test_weight_capability_matrix.cpp,various (1-8B),C++,False,True,fast (<5s),unit
+test_weight_map_registry.cpp,various (1-8B),C++,False,True,fast (<5s),unit
+test_weight_paired_instance_mapping.cpp,various (1-8B),C++,False,True,fast (<5s),unit
+test_weighted_batch_config.cpp,various (1-8B),C++,False,True,fast (<5s),unit
+test_weighted_benders_coefficient_candidate_scorer.cpp,various (1-8B),C++,False,True,fast (<5s),unit
+test_weighted_burn_frequency_candidate_scorer.cpp,various (1-8B),C++,False,True,fast (<5s),unit
+test_weighted_capability_cross_check.cpp,various (1-8B),C++,False,True,fast (<5s),unit
+test_weighted_conditional_zero_benefit_fixing.cpp,various (1-8B),C++,False,True,fast (<5s),unit
+test_weighted_conditional_zero_benefit_fixing_cplex.cpp,various (1-8B),C++,True,True,fast-moderate (<30s),CPLEX integration
+test_weighted_coverage_llbi.cpp,various (1-8B),C++,False,True,fast (<5s),unit
+test_weighted_coverage_llbi_cplex.cpp,various (1-8B),C++,True,True,fast-moderate (<30s),CPLEX integration
+test_weighted_coverage_llbi_validity.cpp,various (1-8B),C++,False,True,fast (<5s),unit (structural/validity)
+test_weighted_cvar_tail_aware_candidate_scorer.cpp,various (1-8B),C++,False,True,fast (<5s),unit
+test_weighted_dpv_heuristic_oos.cpp,various (1-8B),C++,False,True,fast (<5s),unit
+test_weighted_dpv_heuristic_reporting.cpp,various (1-8B),C++,False,True,fast (<5s),unit (structural/validity)
+test_weighted_dpv_optimization.cpp,various (1-8B),C++,False,True,fast (<5s),unit
+test_weighted_fpp_benders_cplex.cpp,various (1-8B),C++,True,True,fast-moderate (<30s),CPLEX integration
+test_weighted_fpp_branch_benders_cplex.cpp,various (1-8B),C++,True,True,fast-moderate (<30s),CPLEX integration
+test_weighted_fpp_combinatorial_callback.cpp,various (1-8B),C++,False,True,fast (<5s),unit
+test_weighted_fpp_combinatorial_cplex.cpp,various (1-8B),C++,True,True,fast-moderate (<30s),CPLEX integration
+test_weighted_fpp_combinatorial_cut.cpp,various (1-8B),C++,False,True,fast (<5s),unit
+test_weighted_fpp_combinatorial_cut_validity.cpp,various (1-8B),C++,False,True,fast (<5s),unit (structural/validity)
+test_weighted_fpp_combinatorial_fractional_validity.cpp,various (1-8B),C++,False,True,fast (<5s),unit (structural/validity)
+test_weighted_fpp_combinatorial_initial_cuts.cpp,various (1-8B),C++,False,True,fast (<5s),unit
+test_weighted_fpp_combinatorial_lifting.cpp,various (1-8B),C++,False,True,fast (<5s),unit
+test_weighted_fpp_combinatorial_lifting_counterexamples.cpp,various (1-8B),C++,False,True,fast (<5s),unit (structural/validity)
+test_weighted_fpp_combinatorial_lifting_cplex.cpp,various (1-8B),C++,True,True,fast-moderate (<30s),CPLEX integration
+test_weighted_fpp_combinatorial_lifting_validity.cpp,various (1-8B),C++,False,True,fast (<5s),unit (structural/validity)
+test_weighted_fpp_combinatorial_sampling.cpp,various (1-8B),C++,False,True,fast (<5s),unit
+test_weighted_fpp_combinatorial_sampling_cplex.cpp,various (1-8B),C++,True,True,fast-moderate (<30s),CPLEX integration
+test_weighted_fpp_combinatorial_sampling_exactness.cpp,various (1-8B),C++,False,True,fast (<5s),unit
+test_weighted_fpp_combinatorial_scenario_ordering.cpp,various (1-8B),C++,False,True,fast (<5s),unit
+test_weighted_fpp_dpv.cpp,various (1-8B),C++,False,True,fast (<5s),unit
+test_weighted_fpp_dpv_cache.cpp,various (1-8B),C++,False,True,fast (<5s),unit
+test_weighted_fpp_dpv_diagnostics.cpp,various (1-8B),C++,False,True,fast (<5s),unit (structural/validity)
+test_weighted_fpp_dpv_variants.cpp,various (1-8B),C++,False,True,fast (<5s),unit
+test_weighted_fpp_recourse_evaluator.cpp,various (1-8B),C++,False,True,fast (<5s),unit
+test_weighted_fpp_restricted_branch_benders_cplex.cpp,various (1-8B),C++,True,True,fast-moderate (<30s),CPLEX integration
+test_weighted_fpp_saa_model.cpp,various (1-8B),C++,False,True,fast (<5s),unit
+test_weighted_global_candidate_dominance.cpp,various (1-8B),C++,False,True,fast (<5s),unit
+test_weighted_global_candidate_dominance_cplex.cpp,various (1-8B),C++,True,True,fast-moderate (<30s),CPLEX integration
+test_weighted_greedy_dpv2.cpp,various (1-8B),C++,False,True,fast (<5s),unit
+test_weighted_greedy_dpv3.cpp,various (1-8B),C++,False,True,fast (<5s),unit
+test_weighted_path_llbi.cpp,various (1-8B),C++,False,True,fast (<5s),unit
+test_weighted_path_llbi_cplex.cpp,various (1-8B),C++,True,True,fast-moderate (<30s),CPLEX integration
+test_weighted_path_llbi_validity.cpp,various (1-8B),C++,False,True,fast (<5s),unit (structural/validity)
+test_weighted_projected_coverage_llbi.cpp,various (1-8B),C++,False,True,fast (<5s),unit
+test_weighted_projected_coverage_llbi_cplex.cpp,various (1-8B),C++,True,True,fast-moderate (<30s),CPLEX integration
+test_weighted_projected_coverage_llbi_validity.cpp,various (1-8B),C++,False,True,fast (<5s),unit (structural/validity)
+test_weighted_projected_path_llbi.cpp,various (1-8B),C++,False,True,fast (<5s),unit
+test_weighted_projected_path_llbi_cplex.cpp,various (1-8B),C++,True,True,fast-moderate (<30s),CPLEX integration
+test_weighted_projected_path_llbi_separation.cpp,various (1-8B),C++,False,True,fast (<5s),unit
+test_weighted_projected_path_llbi_validity.cpp,various (1-8B),C++,False,True,fast (<5s),unit (structural/validity)
+test_weighted_restricted_bound_counterexamples.cpp,various (1-8B),C++,False,True,fast (<5s),unit (structural/validity)
+test_weighted_restricted_candidate_bounds.cpp,various (1-8B),C++,False,True,fast (<5s),unit
+test_weighted_restricted_candidate_maintenance.cpp,various (1-8B),C++,False,True,fast (<5s),unit
+test_weighted_restricted_cut_pool_prioritization.cpp,various (1-8B),C++,False,True,fast (<5s),unit
+test_weighted_restricted_cut_reactivation.cpp,various (1-8B),C++,False,True,fast (<5s),unit
+test_weighted_restricted_tail_diagnostics.cpp,various (1-8B),C++,False,True,fast (<5s),unit (structural/validity)
+test_weighted_standard_llbi.cpp,various (1-8B),C++,False,True,fast (<5s),unit
+test_weighted_standard_llbi_validity.cpp,various (1-8B),C++,False,True,fast (<5s),unit (structural/validity)
+test_weighted_static_dpv_heuristic.cpp,various (1-8B),C++,False,True,fast (<5s),unit
+test_weighted_static_dpv_mip.cpp,various (1-8B),C++,False,True,fast (<5s),unit
+test_weighted_subset_attachment.cpp,various (1-8B),C++,False,True,fast (<5s),unit
+test_weight_manifest_generation.py,8A/8B,Python,False,True,fast (<5s),integration
+test_weighted_analysis_end_to_end.py,9B,Python,False,False,fast (<5s),end-to-end
+test_weighted_best_known_values.py,9B,Python,False,False,fast (<5s),unit (analysis)
+test_weighted_comparison_group_keys.py,9A,Python,False,False,fast (<5s),unit (schema/merge)
+test_weighted_failure_paths.py,10,Python,False,False,fast (<5s),unit/regression
+test_weighted_gap_computation.py,9B,Python,False,False,fast (<5s),unit (analysis)
+test_weighted_lower_bound_reference.py,9B,Python,False,False,fast (<5s),unit (analysis)
+test_weighted_manifest_worker.py,8A/8B,Python,True,True,moderate (10-60s),integration (CPLEX)
+test_weighted_mean_cvar_coverage.py,10,Python,False,False,fast (<5s),unit/regression
+test_weighted_method_summary.py,9B,Python,False,False,fast (<5s),unit (analysis)
+test_weighted_oos_regret.py,9B,Python,False,False,fast (<5s),unit (analysis)
+test_weighted_paired_gate_regression.py,10,Python,False,False,fast (<5s),unit/regression
+test_weighted_paired_regret.py,9B,Python,False,False,fast (<5s),unit (analysis)
+test_weighted_performance_profiles.py,9B,Python,False,False,fast (<5s),unit (analysis)
+test_weighted_publication_tables.py,9B,Python,False,False,fast (<5s),unit (analysis)
+test_weighted_quality_profiles.py,9B,Python,False,False,fast (<5s),unit (analysis)
+test_weighted_replicate_aggregation.py,10,Python,False,False,fast (<5s),unit/regression
+test_weighted_result_duplicate_detection.py,9A,Python,False,False,fast (<5s),unit (schema/merge)
+test_weighted_result_legacy_migration.py,9A,Python,False,False,fast (<5s),unit (schema/merge)
+test_weighted_result_merge.py,9A,Python,False,False,fast (<5s),unit (schema/merge)
+test_weighted_result_normalization.py,9A,Python,False,False,fast (<5s),unit (schema/merge)
+test_weighted_result_paired_validation.py,9A,Python,False,False,fast (<5s),unit (schema/merge)
+test_weighted_result_provenance.py,9A,Python,False,False,fast (<5s),unit (schema/merge)
+test_weighted_result_retry_selection.py,9A,Python,False,False,fast (<5s),unit (schema/merge)
+test_weighted_result_schema.py,9A,Python,False,False,fast (<5s),unit (schema/merge)
+test_weighted_statistical_comparisons.py,9B,Python,False,False,fast (<5s),unit (analysis)
+test_weighted_table_stratification.py,10,Python,False,False,fast (<5s),unit/regression
+test_weighted_win_tie_loss.py,9B,Python,False,False,fast (<5s),unit (analysis)

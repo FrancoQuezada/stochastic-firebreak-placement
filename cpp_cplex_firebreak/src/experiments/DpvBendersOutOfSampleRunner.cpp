@@ -449,7 +449,9 @@ int DpvBendersOutOfSampleRunner::run(const DpvBendersOutOfSampleOptions& options
     result.weight_map_file = options.weight_map_file.empty() ? "" : options.weight_map_file.string();
     result.weight_map_hash = train_recourse.weight_map_hash;
     result.weight_total = train_recourse.total_landscape_weight;
-    result.solver_weighted_objective = solve_result.solver_weighted_objective;
+    // See DpvSaaOutOfSampleRunner.cpp for why this is never copied from the
+    // surrogate solve (Phase 10 section 10 objective-space fix).
+    result.solver_weighted_objective = std::numeric_limits<double>::quiet_NaN();
     result.evaluator_weighted_objective = train_recourse.expected_weighted_burn_loss;
     result.train_expected_weighted_burn_loss = train_recourse.expected_weighted_burn_loss;
     result.test_expected_weighted_burn_loss = test_recourse.expected_weighted_burn_loss;

@@ -1723,7 +1723,17 @@ io::StandardExperimentResult MethodDispatcher::run_method(const MethodDispatchRe
             ? opt_instance.cell_weight_map.maximum_weight
             : 1.0;
     result.weight_total = train_recourse.total_landscape_weight;
-    result.solver_weighted_objective = solver_result.solver_weighted_objective;
+    // This shared result-population block serves both exact-FPP and DPV
+    // dispatch branches. For DPV methods, solver_result.solver_weighted_objective
+    // mirrors the DPV surrogate objective, not the true weighted wildfire
+    // loss -- never copy it into the generic field for those rows (Phase 10
+    // section 10; matches the Greedy/Static-DPV convention of leaving this
+    // NaN). Detected via solver_result.dpv_surrogate_objective being finite,
+    // the same signal Phase 9A/9B already use to classify a row as
+    // DPV-surrogate rather than exact-FPP.
+    result.solver_weighted_objective = std::isfinite(solver_result.dpv_surrogate_objective)
+        ? std::numeric_limits<double>::quiet_NaN()
+        : solver_result.solver_weighted_objective;
     result.evaluator_weighted_objective = train_recourse.expected_weighted_burn_loss;
     result.objective_validation_abs_difference =
         solver_result.objective_validation_abs_difference;
