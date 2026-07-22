@@ -41,6 +41,17 @@ _WEIGHT_HASH_FIELDS = (
 
 _TERMINAL_STATUSES = {"optimal", "feasible", "timelimit_feasible", "notapplicable"}
 
+_PAIRED_NOT_ATTEMPTED_STATUSES = ("", "n/a", None)
+
+
+def _paired_evaluation_attempted(record: dict) -> bool:
+    """Whether a paired-reburn evaluation was actually attempted for this
+    row. NOT the same as `paired_evaluation_enabled` -- see the docstring on
+    `weighted_result_schema.is_fully_paired_valid_result` for the confirmed,
+    real discrepancy between that manifest-level flag and what the worker
+    actually does. `paired_reburn_evaluation_status` is the real signal."""
+    return record.get("paired_reburn_evaluation_status") not in _PAIRED_NOT_ATTEMPTED_STATUSES
+
 
 def compute_content_hash(record: dict) -> str:
     """Deterministic hash over every canonical field's value. Two rows with
@@ -116,7 +127,7 @@ def validate_record(
                     f"{field_name}={other!r} does not match weight_map_hash={hash_value!r}"
                 ]
         paired_hash = record.get("paired_reburn_weight_map_hash")
-        if record.get("paired_evaluation_enabled") and paired_hash and hash_value and paired_hash != hash_value:
+        if _paired_evaluation_attempted(record) and paired_hash and hash_value and paired_hash != hash_value:
             return INVALID_WEIGHT_PROVENANCE, [
                 f"paired_reburn_weight_map_hash={paired_hash!r} does not match weight_map_hash={hash_value!r}"
             ]
@@ -132,7 +143,7 @@ def validate_record(
             f"(abs_diff={record.get('objective_validation_abs_difference')!r})"
         ]
 
-    if record.get("paired_evaluation_enabled"):
+    if _paired_evaluation_attempted(record):
         paired_reasons = []
         if record.get("paired_reburn_evaluation_status") != "ok":
             paired_reasons.append(

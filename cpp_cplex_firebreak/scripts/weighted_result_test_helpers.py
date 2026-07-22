@@ -89,13 +89,16 @@ def base_raw_row(**overrides) -> dict:
         "paired_reburn_weight_map_hash": "fnv1a64:abc12345",
         # Off by default so tests unrelated to paired-reburn provenance don't
         # need to reason about it; paired-validation tests turn it on
-        # explicitly and supply a JSON-backed weighted_fpp_expected_paired_reburn.
+        # explicitly (paired_reburn_status="ok", the real gating signal --
+        # NOT paired_evaluation_enabled, which is unreliable on real data,
+        # see weighted_result_schema.is_fully_paired_valid_result) and supply
+        # a JSON-backed weighted_fpp_expected_paired_reburn.
         "paired_evaluation_enabled": "false",
         "paired_reburn_instance_id": "new20x20_reburn",
         "paired_reburn_instance_requested": "new20x20_reburn",
         "paired_reburn_instance_resolved": "new20x20_reburn",
         "paired_reburn_resolution_status": "ok",
-        "paired_reburn_status": "ok",
+        "paired_reburn_status": "n/a",
         "paired_reburn_train_expected_burned_area": "295.125",
         "paired_reburn_train_eval_runtime_sec": "0.02",
         "paired_reburn_train_scenario_count": "8",

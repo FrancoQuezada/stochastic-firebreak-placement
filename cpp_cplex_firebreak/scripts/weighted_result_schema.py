@@ -24,8 +24,10 @@ this schema is derived from.
 
 from __future__ import annotations
 
+import csv
 import math
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from fpp_new_instances_scaling_compact_schema import (
     any_bool,
@@ -486,13 +488,18 @@ def derive_weight_normalization_mode(raw_row: dict) -> str:
 
 @dataclass(frozen=True)
 class ComparisonGroupKey:
+    canonical_landscape_id: str
+    instance_family: str
     instance_id: str
     train_scenario_ids: tuple
+    train_scenario_count: int
+    weight_profile: str
+    weight_replicate: int
+    weight_map_hash: str
     risk_measure: str
     alpha: float
     cvar_beta: float
     mean_cvar_lambda: float
-    weight_map_hash: str
     budget: int
 
 
@@ -503,16 +510,24 @@ def comparison_group_key(record: dict) -> ComparisonGroupKey:
     table) when this key matches exactly. It deliberately excludes `method`
     (methods are what's being compared) and excludes solver vs. DPV
     objective space (comparisons must never mix them -- see
-    objective_space_of()).
+    objective_space_of()). Extended in Phase 9B (section 6) to also pin
+    physical landscape identity, instance family, and weight-replicate
+    identity -- Phase 9A section 23 explicitly deferred this full shape to
+    Phase 9B; this is that continuation, not a duplicate implementation.
     """
     return ComparisonGroupKey(
+        canonical_landscape_id=str(record.get("canonical_landscape_id", "")),
+        instance_family=str(record.get("instance_family", "")),
         instance_id=str(record.get("instance_id", "")),
         train_scenario_ids=tuple(record.get("in_sample_scenario_ids") or ()),
+        train_scenario_count=int(record.get("train_scenario_count") or 0),
+        weight_profile=str(record.get("weight_profile", "")),
+        weight_replicate=int(record.get("weight_replicate") or 0),
+        weight_map_hash=str(record.get("weight_map_hash", "")),
         risk_measure=str(record.get("risk_measure", "")),
         alpha=float(record.get("alpha") or 0.0),
         cvar_beta=float(record.get("cvar_beta") or 0.0),
         mean_cvar_lambda=float(record.get("mean_cvar_lambda") or 0.0),
-        weight_map_hash=str(record.get("weight_map_hash", "")),
         budget=int(record.get("budget") or 0),
     )
 
@@ -576,7 +591,22 @@ def is_valid_dpv_result(record: dict) -> bool:
 def is_fully_paired_valid_result(record: dict) -> bool:
     """Fully paired-valid result: base validity (exact, heuristic, or DPV)
     PLUS a successful, complete paired-reburn evaluation. Never satisfied
-    merely because optimization succeeded (section 16)."""
+    merely because optimization succeeded (section 16).
+
+    NOTE (discovered during Phase 9B, confirmed against real data): the raw
+    `paired_evaluation_enabled` field is NOT a reliable signal that a
+    paired-reburn evaluation ran. In `results/weighted_phase8b_smoke/` it is
+    `false` for every row, while the worker's own `paired_reburn_status` is
+    `ok` for every row -- the worker resolves and runs the paired-reburn
+    evaluation by instance-naming convention regardless of this manifest
+    flag (see `resolve_paired_reburn_instance` in
+    run_fpp_new_instances_scaling_manifest_worker.py); the flag only affects
+    whether a *failed* resolution is treated as an error. The real signal
+    that a paired evaluation was attempted is `paired_reburn_evaluation_status`
+    itself (`""`/`"n/a"` = not attempted; `"ok"`/`"failed"`/`"unavailable"` =
+    attempted), so gating on `paired_evaluation_enabled` here would silently
+    treat every real row as paired-invalid. Gate on status instead.
+    """
     base_valid = (
         is_valid_exact_result(record)
         or is_valid_heuristic_result(record)
@@ -584,10 +614,94 @@ def is_fully_paired_valid_result(record: dict) -> bool:
     )
     if not base_valid:
         return False
-    if not bool_value(record.get("paired_evaluation_enabled")):
-        return False
     if record.get("paired_reburn_evaluation_status") != "ok":
         return False
     if (record.get("paired_selected_firebreaks_missing") or 0) not in (0, "0"):
         return False
     return record.get("weighted_fpp_expected_paired_reburn") not in (None, "")
+
+
+# ---------------------------------------------------------------------------
+# Canonical-CSV rehydration (Phase 9B entry point).
+#
+# Phase 9B analyzes merged_current_valid.csv / merged_all_attempts.csv, which
+# `merge_weighted_experiment_results.py` writes with every value stringified
+# (see its `_stringify()`). Rehydration is the inverse of that stringify
+# step, using the SAME dtype declarations already on CANONICAL_FIELDS -- this
+# is deliberately kept in the Phase 9A schema module rather than duplicated
+# as a second parser in Phase 9B (see Phase 9B section 3).
+# ---------------------------------------------------------------------------
+
+class CanonicalRowRejected(ValueError):
+    """Raised when a row read from a merge output does not itself carry a
+    Phase-9A-valid schema version / classification. Phase 9B must never
+    analyze a row that didn't pass Phase 9A validation, even if it somehow
+    ended up in a file it shouldn't have."""
+
+
+def _rehydrate_scalar(dtype: str, text: str):
+    """Rehydrate one non-empty, non-list scalar. Callers handle the blank
+    (missing) and list cases themselves before reaching here."""
+    if dtype == TYPE_FLOAT:
+        try:
+            return parse_numeric_strict(text)
+        except NumericParseError:
+            return None
+    if dtype == TYPE_INT:
+        try:
+            return parse_int_strict(text)
+        except NumericParseError:
+            return None
+    if dtype == TYPE_BOOL:
+        return text.strip().lower() in {"1", "true", "yes", "on"}
+    return text
+
+
+def rehydrate_canonical_row(raw_row: dict) -> dict:
+    """Convert one string-valued row (as read from a merge CSV output) back
+    into a canonical record with typed values, using CANONICAL_FIELDS'
+    dtype declarations. Unknown extra columns (raw passthrough fields kept
+    for audit purposes) are preserved verbatim under their original key."""
+    record = dict(raw_row)
+    for f in CANONICAL_FIELDS:
+        text = raw_row.get(f.name, "")
+        if f.dtype == TYPE_LIST_INT:
+            record[f.name] = parse_list_int(text)
+        elif text == "":
+            record[f.name] = None if f.dtype != TYPE_STR else ""
+        else:
+            record[f.name] = _rehydrate_scalar(f.dtype, text)
+    if "is_current_valid" in raw_row:
+        record["is_current_valid"] = raw_row["is_current_valid"].strip() in {"1", "true", "True"}
+    return record
+
+
+def read_canonical_csv(path, *, require_valid: bool = True) -> list:
+    """Read a canonical merge-output CSV (merged_current_valid.csv or
+    merged_all_attempts.csv) and rehydrate every row.
+
+    require_valid: when True (the default; used for merged_current_valid.csv),
+    every row must already carry a supported schema version and a
+    valid/valid_legacy_migrated classification -- Phase 9B must reject, not
+    silently analyze, anything that slipped past Phase 9A validation. Set
+    False only when reading merged_all_attempts.csv (which legitimately
+    contains invalid/duplicate rows for diagnostics).
+    """
+    path = Path(path)
+    with path.open(newline="", encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
+    records = [rehydrate_canonical_row(row) for row in rows]
+    if require_valid:
+        for record in records:
+            if record.get("result_schema_version") not in SUPPORTED_SCHEMA_VERSIONS:
+                raise CanonicalRowRejected(
+                    f"{path}: row run_id={record.get('run_id')!r} has unsupported "
+                    f"result_schema_version={record.get('result_schema_version')!r}"
+                )
+            if record.get("validation_classification") not in (VALID, VALID_LEGACY_MIGRATED):
+                raise CanonicalRowRejected(
+                    f"{path}: row run_id={record.get('run_id')!r} has "
+                    f"validation_classification={record.get('validation_classification')!r}, "
+                    "not valid/valid_legacy_migrated -- refusing to analyze it"
+                )
+    return records

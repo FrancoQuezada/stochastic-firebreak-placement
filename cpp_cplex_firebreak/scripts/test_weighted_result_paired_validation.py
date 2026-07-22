@@ -21,7 +21,7 @@ def test_paired_missing_firebreak():  # 27.6
     with tempfile.TemporaryDirectory() as tmp:
         solver_json_path, _ = make_paired_json(Path(tmp))
         row = base_raw_row(
-            output_json=solver_json_path, paired_evaluation_enabled="true",
+            output_json=solver_json_path, paired_evaluation_enabled="true", paired_reburn_status="ok",
             paired_selected_firebreaks_missing="1", paired_selected_mapping_status="missing_cells",
         )
         record = norm.normalize_row(row, prefer_json=True)
@@ -30,7 +30,7 @@ def test_paired_missing_firebreak():  # 27.6
               "a nonzero paired_selected_firebreaks_missing invalidates the paired evaluation")
         check(any("missing" in r for r in reasons), "the rejection reason names the missing-firebreak condition")
 
-        clean_row = base_raw_row(output_json=solver_json_path, paired_evaluation_enabled="true")
+        clean_row = base_raw_row(output_json=solver_json_path, paired_evaluation_enabled="true", paired_reburn_status="ok")
         clean_record = norm.normalize_row(clean_row, prefer_json=True)
         clean_classification, _ = merge.validate_record(clean_record)
         check(clean_classification == schema.VALID, "zero missing firebreaks + successful paired eval validates cleanly")
