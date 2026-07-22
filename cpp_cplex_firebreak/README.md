@@ -4,6 +4,67 @@ This checkout is trimmed to run the `new_instances` FPP scaling experiment.
 Historical experiment launchers, old config files, generated results, and logs
 are intentionally excluded from the active `scripts/` and `config/` folders.
 
+## Weighted Landscapes
+
+The solver, DPV heuristics, and result/analysis pipeline all support
+**non-uniform per-cell wildfire-loss weights** `w_k`, so the optimization
+objective and every evaluation metric reflect loss-weighted burned area
+(`sum_k w_k x_k^s(y)`), not raw burned-cell count. Three weight profiles are
+supported (`homogeneous`, `heterogeneous`, `clustered`), generated
+deterministically and stored in a content-addressed map registry so every
+result row is traceable back to the exact weight map that produced it.
+
+Principal entry points:
+
+```bash
+# Generate and register a weight map for one physical landscape (once, before any solve).
+./build_gpp/firebreak_cpp ensure-weight-map \
+    --landscape new20x20 --weight-profile heterogeneous --weight-replicate 0 \
+    --weight-registry weight_maps/
+
+# Direct exact FPP solve against that weight map.
+./build_gpp/firebreak_cpp run-fpp-saa-oos \
+    --landscape new20x20 --train-ids 1-8 --test-ids 21-24 --alpha 0.02 \
+    --risk-measure expected --weight-map-file weight_maps/.../weights.csv \
+    --output-json result.json --output-csv result.csv
+
+# DPV surrogate optimization against the same weight map.
+./build_gpp/firebreak_cpp run-dpv-saa-oos \
+    --landscape new20x20 --train-ids 1-8 --test-ids 21-24 --alpha 0.02 \
+    --weight-map-file weight_maps/.../weights.csv --dpv-ignition-policy fpp-safe \
+    --output-json dpv_result.json --output-csv dpv_result.csv
+
+# Full paired (reduced + reburn) manifest + worker experiment.
+python3 scripts/generate_fpp_new_instances_scaling_manifests.py \
+    --output-dir results/my_experiment --weight-profiles homogeneous,heterogeneous,clustered \
+    --weight-registry weight_maps/ --generate-missing-weight-maps --paired-reburn-evaluation
+python3 scripts/run_fpp_new_instances_scaling_manifest_worker.py \
+    --worker-id worker_000 --manifest results/my_experiment/manifests/worker_000_manifest.csv \
+    --binary ./build_gpp/firebreak_cpp
+
+# Merge (Phase 9A) and analyze (Phase 9B) the results.
+python3 scripts/merge_weighted_experiment_results.py \
+    --input-root results/my_experiment --output-dir results/my_experiment/merged --strict
+python3 scripts/analyze_weighted_experiment_results.py \
+    --merged-current-valid results/my_experiment/merged/merged_current_valid.csv \
+    --merged-all-attempts results/my_experiment/merged/merged_all_attempts.csv \
+    --output-dir results/my_experiment/analysis
+```
+
+Full conceptual model, supported method/risk/LLBI/combinatorial coverage,
+known unsupported combinations, and troubleshooting:
+**[`docs/WEIGHTED_LANDSCAPES.md`](docs/WEIGHTED_LANDSCAPES.md)** (staged with
+`git add -f` since `docs/` is gitignored). Legacy homogeneous experiments
+require no changes — omitting every `--weight-map-file`/`--weight-profile`
+flag resolves to the homogeneous profile automatically.
+
+Known limitations (see the guide for the full list): the restricted-candidate
+solver does not support LLBI/combinatorial/dominance strengthening for
+non-homogeneous maps; combinatorial Benders does not combine with LLBI,
+dominance, or root user cuts; conditional zero-benefit fixing is a diagnostic
+detector only (applies no actual variable fixings); DPV-CVaR optimization is
+not implemented.
+
 ## Required Files
 
 The experiment launcher is:
