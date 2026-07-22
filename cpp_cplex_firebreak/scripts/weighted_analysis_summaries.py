@@ -112,19 +112,32 @@ def method_summary(rows: list) -> list:
 
 # ---------------------------------------------------------------------------
 # Exact-method table (section 17)
+#
+# Phase 10 section 13: stratified by weight_profile BY DEFAULT (a method
+# solved under heterogeneous vs. clustered maps is not the same comparison
+# group and must never be silently pooled). An aggregate-across-profile
+# variant is available but must be called explicitly and is clearly labeled
+# (weight_profile="ALL_PROFILES_AGGREGATED"), never the default.
 # ---------------------------------------------------------------------------
 
-def exact_method_summary(rows: list) -> list:
+_AGGREGATED_PROFILE_LABEL = "ALL_PROFILES_AGGREGATED"
+
+
+def exact_method_summary(rows: list, *, stratify_by_profile: bool = True) -> list:
     exact_rows = [r for r in rows if r.get("objective_space") == core.OBJECTIVE_SPACE_EXACT_FPP]
     groups: dict = {}
     for r in exact_rows:
-        groups.setdefault(r.get("method"), []).append(r)
+        key = (r.get("method"), r.get("weight_profile") if stratify_by_profile else _AGGREGATED_PROFILE_LABEL)
+        groups.setdefault(key, []).append(r)
 
     out = []
-    for method, group in sorted(groups.items()):
+    for (method, profile), group in sorted(groups.items(), key=lambda kv: (kv[0][0] or "", kv[0][1] or "")):
         statuses = [_status_bucket(r) for r in group]
+        profiles_pooled = len({r.get("weight_profile") for r in group})
         out.append({
             "method": method,
+            "weight_profile": profile,
+            "profiles_pooled": profiles_pooled,
             "instances": len(group),
             "optimal_count": statuses.count("optimal"),
             "feasible_count": statuses.count("feasible"),
@@ -146,23 +159,33 @@ def exact_method_summary(rows: list) -> list:
     return out
 
 
+def exact_method_summary_aggregated(rows: list) -> list:
+    """Explicit, clearly-labeled aggregate-across-profile variant of
+    exact_method_summary. Never the default table."""
+    return exact_method_summary(rows, stratify_by_profile=False)
+
+
 # ---------------------------------------------------------------------------
-# Heuristic / DPV table (section 18)
+# Heuristic / DPV table (section 18) -- same profile-stratification policy.
 # ---------------------------------------------------------------------------
 
-def heuristic_dpv_summary(rows: list) -> list:
+def heuristic_dpv_summary(rows: list, *, stratify_by_profile: bool = True) -> list:
     candidate_rows = [
         r for r in rows
         if r.get("objective_space") in (core.OBJECTIVE_SPACE_DPV_OPTIMIZATION, core.OBJECTIVE_SPACE_HEURISTIC, core.OBJECTIVE_SPACE_APPROXIMATE_FPP)
     ]
     groups: dict = {}
     for r in candidate_rows:
-        groups.setdefault(r.get("method"), []).append(r)
+        key = (r.get("method"), r.get("weight_profile") if stratify_by_profile else _AGGREGATED_PROFILE_LABEL)
+        groups.setdefault(key, []).append(r)
 
     out = []
-    for method, group in sorted(groups.items()):
+    for (method, profile), group in sorted(groups.items(), key=lambda kv: (kv[0][0] or "", kv[0][1] or "")):
+        profiles_pooled = len({r.get("weight_profile") for r in group})
         out.append({
             "method": method,
+            "weight_profile": profile,
+            "profiles_pooled": profiles_pooled,
             "instances": len(group),
             "mean_runtime": mean_or_none([r.get("running_time_sec") for r in group]),
             "median_runtime": median_or_none([r.get("running_time_sec") for r in group]),
@@ -179,6 +202,12 @@ def heuristic_dpv_summary(rows: list) -> list:
             "dpv_surrogate_objective_mean": mean_or_none([r.get("dpv_surrogate_objective") for r in group]),
         })
     return out
+
+
+def heuristic_dpv_summary_aggregated(rows: list) -> list:
+    """Explicit, clearly-labeled aggregate-across-profile variant of
+    heuristic_dpv_summary. Never the default table."""
+    return heuristic_dpv_summary(rows, stratify_by_profile=False)
 
 
 # ---------------------------------------------------------------------------
@@ -334,4 +363,89 @@ def all_win_tie_loss(rows: list, *, tolerance: float = core.DEFAULT_GAP_TOLERANC
         filter_fn=lambda r: r.get("objective_space") == core.OBJECTIVE_SPACE_EXACT_FPP and schema.is_valid_exact_result(r),
         tolerance=tolerance,
     ))
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Replicate-level and replicate-aggregated summaries (Phase 10 section 12).
+#
+# By default every table in this module (method_summary, etc.) already
+# retains weight_replicate as a distinct grouping dimension -- nothing here
+# ever averages across replicates unless the caller explicitly asks for the
+# *_aggregated variant, and raw weight_map_hash values are always preserved
+# in the replicate-level table (maps themselves are never averaged, only
+# the resulting metric values are).
+# ---------------------------------------------------------------------------
+
+def replicate_level_method_summary(rows: list, *, metric_field: str, metric_name: str) -> list:
+    """One row per (method, weight_profile, risk_measure, canonical_landscape_id,
+    weight_replicate, weight_map_hash) -- full granularity, raw map hash
+    preserved, nothing pooled."""
+    groups: dict = {}
+    for r in rows:
+        key = (r.get("method"), r.get("weight_profile"), r.get("risk_measure"),
+               r.get("canonical_landscape_id"), r.get("weight_replicate"), r.get("weight_map_hash"))
+        groups.setdefault(key, []).append(r)
+
+    out = []
+    for (method, profile, risk, landscape, replicate, map_hash), group in sorted(
+        groups.items(), key=lambda kv: (kv[0][0] or "", kv[0][1] or "", kv[0][3] or "", kv[0][4] if kv[0][4] is not None else -1)
+    ):
+        values = [r.get(metric_field) for r in group]
+        out.append({
+            "method": method,
+            "weight_profile": profile,
+            "risk_measure": risk,
+            "canonical_landscape_id": landscape,
+            "weight_replicate": replicate,
+            "weight_map_hash": map_hash,
+            "observations": len(group),
+            "metric": metric_name,
+            "mean_metric": mean_or_none(values),
+            "median_metric": median_or_none(values),
+        })
+    return out
+
+
+def replicate_aggregated_method_summary(rows: list, *, metric_field: str, metric_name: str) -> list:
+    """One row per (method, weight_profile, risk_measure), aggregated ACROSS
+    weight replicates and physical landscapes -- explicitly labeled as such.
+    `between_replicate_std` is the standard deviation of each replicate's
+    OWN mean (variability BETWEEN replicates, not the pooled raw std across
+    every observation) -- left as None (never fabricated as 0.0) when fewer
+    than two replicates contributed, since a single replicate cannot
+    evidence any between-replicate variability at all."""
+    groups: dict = {}
+    for r in rows:
+        key = (r.get("method"), r.get("weight_profile"), r.get("risk_measure"))
+        groups.setdefault(key, []).append(r)
+
+    out = []
+    for (method, profile, risk), group in sorted(groups.items(), key=lambda kv: (kv[0][0] or "", kv[0][1] or "")):
+        landscapes = {r.get("canonical_landscape_id") for r in group if r.get("canonical_landscape_id")}
+        replicates = {r.get("weight_replicate") for r in group if r.get("weight_replicate") is not None}
+        values = [r.get(metric_field) for r in group]
+
+        per_replicate_means = []
+        for replicate in sorted(replicates, key=lambda v: (v is None, v)):
+            replicate_values = [r.get(metric_field) for r in group if r.get("weight_replicate") == replicate]
+            replicate_mean = mean_or_none(replicate_values)
+            if replicate_mean is not None:
+                per_replicate_means.append(replicate_mean)
+        between_replicate_std = (
+            statistics.stdev(per_replicate_means) if len(per_replicate_means) >= 2 else None
+        )
+
+        out.append({
+            "weight_profile": profile,
+            "method": method,
+            "risk_measure": risk,
+            "physical_landscapes": len(landscapes),
+            "weight_replicates": len(replicates),
+            "observations": len(group),
+            "metric": metric_name,
+            "mean_metric": mean_or_none(values),
+            "median_metric": median_or_none(values),
+            "between_replicate_std": between_replicate_std,
+        })
     return out

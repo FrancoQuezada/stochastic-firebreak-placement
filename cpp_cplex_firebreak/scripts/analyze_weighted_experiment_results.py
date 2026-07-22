@@ -133,19 +133,31 @@ def main(argv=None) -> int:
 
     # -- summaries --------------------------------------------------------
     method_summary_rows = summ.method_summary(rows)
+    # Profile-stratified by default (Phase 10 section 13); the aggregated
+    # variant is a separate, explicitly-named artifact, never the default.
     exact_summary_rows = summ.exact_method_summary(rows)
+    exact_summary_aggregated_rows = summ.exact_method_summary_aggregated(rows)
     heuristic_dpv_rows = summ.heuristic_dpv_summary(rows)
+    heuristic_dpv_aggregated_rows = summ.heuristic_dpv_summary_aggregated(rows)
     oos_summary_rows = summ.out_of_sample_summary(rows)
     paired_summary_rows = summ.paired_reburn_summary(rows)
     physical_summary_rows = summ.physical_metric_summary(rows)
     win_tie_loss_rows = summ.all_win_tie_loss(rows, tolerance=args.gap_tolerance)
+    replicate_level_rows = summ.replicate_level_method_summary(
+        rows, metric_field="fpp_comparison_objective_in_sample", metric_name="fpp_comparison_objective_in_sample")
+    replicate_aggregated_rows = summ.replicate_aggregated_method_summary(
+        rows, metric_field="fpp_comparison_objective_in_sample", metric_name="fpp_comparison_objective_in_sample")
 
     _write_csv(out / "summaries" / "method_summary.csv", method_summary_rows,
                list(method_summary_rows[0].keys()) if method_summary_rows else [])
     _write_csv(out / "summaries" / "exact_method_summary.csv", exact_summary_rows,
                list(exact_summary_rows[0].keys()) if exact_summary_rows else [])
+    _write_csv(out / "summaries" / "exact_method_summary_aggregated_across_profiles.csv", exact_summary_aggregated_rows,
+               list(exact_summary_aggregated_rows[0].keys()) if exact_summary_aggregated_rows else [])
     _write_csv(out / "summaries" / "heuristic_dpv_summary.csv", heuristic_dpv_rows,
                list(heuristic_dpv_rows[0].keys()) if heuristic_dpv_rows else [])
+    _write_csv(out / "summaries" / "heuristic_dpv_summary_aggregated_across_profiles.csv", heuristic_dpv_aggregated_rows,
+               list(heuristic_dpv_aggregated_rows[0].keys()) if heuristic_dpv_aggregated_rows else [])
     _write_csv(out / "summaries" / "out_of_sample_summary.csv", oos_summary_rows,
                list(oos_summary_rows[0].keys()) if oos_summary_rows else [])
     _write_csv(out / "summaries" / "paired_reburn_summary.csv", paired_summary_rows,
@@ -153,6 +165,10 @@ def main(argv=None) -> int:
     _write_csv(out / "summaries" / "physical_metric_summary.csv", physical_summary_rows,
                list(physical_summary_rows[0].keys()) if physical_summary_rows else [])
     _write_csv(out / "summaries" / "win_tie_loss.csv", win_tie_loss_rows, WIN_TIE_LOSS_COLUMNS)
+    _write_csv(out / "summaries" / "replicate_level_method_summary.csv", replicate_level_rows,
+               list(replicate_level_rows[0].keys()) if replicate_level_rows else [])
+    _write_csv(out / "summaries" / "replicate_aggregated_method_summary.csv", replicate_aggregated_rows,
+               list(replicate_aggregated_rows[0].keys()) if replicate_aggregated_rows else [])
 
     # -- best-known / comparison groups / row-level gaps -------------------
     comparison_group_columns = [

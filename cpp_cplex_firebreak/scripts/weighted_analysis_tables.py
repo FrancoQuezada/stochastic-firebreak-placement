@@ -49,21 +49,29 @@ def write_latex_table(
     path, rows: list, columns: list, *, headers: dict | None = None,
     caption: str = "", label: str = "", bold_column: str | None = None,
     bold_is_minimum: bool = True, missing_marker: str = "--",
+    bold_within_columns: tuple = (),
 ) -> None:
     """Deterministic row/column order (whatever order `rows`/`columns`
     already have -- callers are responsible for sorting them
     deterministically before calling this). Bolds only the row(s) achieving
-    the best (min or max) value of `bold_column`, never across tables/
-    groups this function wasn't given."""
+    the best (min or max) value of `bold_column`, computed SEPARATELY within
+    each distinct combination of `bold_within_columns` (e.g. weight_profile)
+    -- never across incompatible groups this function wasn't told to keep
+    separate (Phase 10 section 13)."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     headers = headers or {c: c for c in columns}
 
-    best_value = None
+    best_value_by_group: dict = {}
     if bold_column is not None:
-        values = [row.get(bold_column) for row in rows if isinstance(row.get(bold_column), (int, float))]
-        if values:
-            best_value = min(values) if bold_is_minimum else max(values)
+        groups: dict = {}
+        for row in rows:
+            group_key = tuple(row.get(c) for c in bold_within_columns)
+            value = row.get(bold_column)
+            if isinstance(value, (int, float)):
+                groups.setdefault(group_key, []).append(value)
+        for group_key, values in groups.items():
+            best_value_by_group[group_key] = min(values) if bold_is_minimum else max(values)
 
     lines = []
     lines.append(r"\begin{table}[htbp]")
@@ -78,6 +86,8 @@ def write_latex_table(
     lines.append(r"\midrule")
     for row in rows:
         cells = []
+        group_key = tuple(row.get(c) for c in bold_within_columns)
+        best_value = best_value_by_group.get(group_key)
         for column in columns:
             raw = row.get(column)
             text = escape_latex(_format_value(raw, missing_marker))
@@ -100,12 +110,12 @@ def write_latex_table(
 # ---------------------------------------------------------------------------
 
 TABLE_EXACT_METHODS_COLUMNS = [
-    "method", "instances", "optimal_count", "feasible_count", "time_limit_count", "failure_count",
+    "method", "weight_profile", "instances", "optimal_count", "feasible_count", "time_limit_count", "failure_count",
     "mean_time", "median_time", "geometric_mean_time", "mean_solver_gap", "median_solver_gap",
     "mean_gap_to_best_feasible", "mean_gap_to_best_bound",
 ]
 TABLE_EXACT_METHODS_HEADERS = {
-    "method": "Method", "instances": "N", "optimal_count": "Optimal", "feasible_count": "Feasible",
+    "method": "Method", "weight_profile": "Weight profile", "instances": "N", "optimal_count": "Optimal", "feasible_count": "Feasible",
     "time_limit_count": "Time-limit", "failure_count": "Failed",
     "mean_time": "Mean time (s)", "median_time": "Median time (s)", "geometric_mean_time": "GeoMean time (s)",
     "mean_solver_gap": "Mean solver gap", "median_solver_gap": "Median solver gap",
@@ -113,13 +123,13 @@ TABLE_EXACT_METHODS_HEADERS = {
 }
 
 TABLE_HEURISTIC_DPV_COLUMNS = [
-    "method", "instances", "mean_runtime", "median_runtime",
+    "method", "weight_profile", "instances", "mean_runtime", "median_runtime",
     "mean_gap_to_best_feasible", "median_gap_to_best_feasible", "maximum_gap_to_best_feasible",
     "mean_oos_regret", "median_oos_regret", "mean_paired_regret", "median_paired_regret",
     "mean_burned_cells_oos", "mean_weighted_loss_oos",
 ]
 TABLE_HEURISTIC_DPV_HEADERS = {
-    "method": "Method", "instances": "N", "mean_runtime": "Mean runtime (s)", "median_runtime": "Median runtime (s)",
+    "method": "Method", "weight_profile": "Weight profile", "instances": "N", "mean_runtime": "Mean runtime (s)", "median_runtime": "Median runtime (s)",
     "mean_gap_to_best_feasible": "Mean gap to best-known (rel.)", "median_gap_to_best_feasible": "Median gap (rel.)",
     "maximum_gap_to_best_feasible": "Max gap (rel.)",
     "mean_oos_regret": "Mean OOS regret (rel.)", "median_oos_regret": "Median OOS regret (rel.)",
@@ -188,27 +198,30 @@ def write_all_tables(output_dir, *, exact_methods, heuristic_dpv, out_of_sample,
     output_dir = Path(output_dir)
     written = []
 
+    # bold_within_columns: never compare a "best" value across weight
+    # profiles that were never meant to be compared (Phase 10 section 13).
     specs = [
         ("table_exact_methods", exact_methods, TABLE_EXACT_METHODS_COLUMNS, TABLE_EXACT_METHODS_HEADERS,
-         "mean_gap_to_best_feasible", "Exact FPP method summary"),
+         "mean_gap_to_best_feasible", "Exact FPP method summary", ("weight_profile",)),
         ("table_heuristic_dpv_methods", heuristic_dpv, TABLE_HEURISTIC_DPV_COLUMNS, TABLE_HEURISTIC_DPV_HEADERS,
-         "mean_gap_to_best_feasible", "Heuristic and DPV-surrogate method summary"),
+         "mean_gap_to_best_feasible", "Heuristic and DPV-surrogate method summary", ("weight_profile",)),
         ("table_out_of_sample", out_of_sample, TABLE_OUT_OF_SAMPLE_COLUMNS, TABLE_OUT_OF_SAMPLE_HEADERS,
-         "mean_out_of_sample_regret", "Out-of-sample observed-regret summary"),
+         "mean_out_of_sample_regret", "Out-of-sample observed-regret summary", ("weight_profile", "risk_measure")),
         ("table_paired_reburn", paired_reburn, TABLE_PAIRED_REBURN_COLUMNS, TABLE_PAIRED_REBURN_HEADERS,
-         "mean_paired_reburn_regret", "Paired-reburn observed-regret summary"),
+         "mean_paired_reburn_regret", "Paired-reburn observed-regret summary", ("weight_profile", "risk_measure")),
         ("table_best_known", best_known, TABLE_BEST_KNOWN_COLUMNS, TABLE_BEST_KNOWN_HEADERS,
-         None, "Best-known feasible values and lower bounds by comparison group"),
+         None, "Best-known feasible values and lower bounds by comparison group", ()),
         ("table_statistical_comparisons", statistical_comparisons, TABLE_STATISTICAL_COMPARISONS_COLUMNS,
-         TABLE_STATISTICAL_COMPARISONS_HEADERS, None, "Paired statistical comparisons (Holm-corrected within family)"),
+         TABLE_STATISTICAL_COMPARISONS_HEADERS, None, "Paired statistical comparisons (Holm-corrected within family)", ()),
     ]
-    for name, rows, columns, headers, bold_column, caption in specs:
+    for name, rows, columns, headers, bold_column, caption, bold_within_columns in specs:
         csv_path = output_dir / f"{name}.csv"
         write_csv_table(csv_path, rows, columns)
         written.append(csv_path)
         if generate_latex:
             tex_path = output_dir / f"{name}.tex"
             write_latex_table(tex_path, rows, columns, headers=headers, caption=caption,
-                               label=f"tab:{name}", bold_column=bold_column, bold_is_minimum=True)
+                               label=f"tab:{name}", bold_column=bold_column, bold_is_minimum=True,
+                               bold_within_columns=bold_within_columns)
             written.append(tex_path)
     return written
