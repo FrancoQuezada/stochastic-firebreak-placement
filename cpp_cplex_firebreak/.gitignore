@@ -21,6 +21,8 @@ results/**
 !results/batch/**
 results/batch/**/workers/
 results/batch/**/workers/**
+results/batch/**/worker_*/
+results/batch/**/worker_*/**
 results/batch/fpp_new20x20_scaling/batch_results_partial.csv
 
 logs/**

@@ -1,8 +1,0 @@
-{
-  "method": "FPP-SAA-CVaR",
-  "landscape": "Sub20",
-  "alpha": 0.01,
-  "budget": 4,
-  "selected_firebreak_original_nodes": [189,232,264,294],
-  "selected_firebreak_indices": [153,196,224,254]
-}
