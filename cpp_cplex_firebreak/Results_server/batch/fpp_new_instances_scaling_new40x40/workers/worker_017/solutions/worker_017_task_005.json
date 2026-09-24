@@ -1,0 +1,9 @@
+{
+  "method": "FPP-Branch-Benders-Combinatorial",
+  "landscape": "new40x40",
+  "alpha": 0.01,
+  "budget": 16,
+  "selected_firebreak_original_nodes": [267,327,335,338,389,466,488,519,587,738,844,875,914,960,1224,1255],
+  "selected_firebreak_indices": [266,326,334,337,388,465,487,518,586,737,843,874,913,959,1223,1254],
+  "objective_metric": "expected_burned_area_branch_benders_lazy_subproblems"
+}

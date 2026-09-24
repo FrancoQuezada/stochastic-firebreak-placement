@@ -1,0 +1,9 @@
+{
+  "method": "FPP-Branch-Benders-Combinatorial-EtaDesc",
+  "landscape": "new40x40",
+  "alpha": 0.02,
+  "budget": 32,
+  "selected_firebreak_original_nodes": [106,163,261,286,291,335,338,389,398,462,507,587,738,754,821,826,844,875,940,979,988,996,1000,1041,1129,1208,1216,1219,1255,1306,1399,1491],
+  "selected_firebreak_indices": [105,162,260,285,290,334,337,388,397,461,506,586,737,753,820,825,843,874,939,978,987,995,999,1040,1128,1207,1215,1218,1254,1305,1398,1490],
+  "objective_metric": "expected_burned_area_branch_benders_lazy_subproblems"
+}

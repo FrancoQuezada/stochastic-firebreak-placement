@@ -1,0 +1,9 @@
+{
+  "method": "FPP-Branch-Benders-MeanCVaR-ProjectedCoverageLLBI-exp-RootCuts",
+  "landscape": "new40x40",
+  "alpha": 0.02,
+  "budget": 32,
+  "selected_firebreak_original_nodes": [179,191,205,338,389,403,447,452,488,501,519,587,631,738,767,787,844,951,955,960,1019,1055,1100,1130,1142,1209,1221,1229,1293,1294,1306,1399],
+  "selected_firebreak_indices": [178,190,204,337,388,402,446,451,487,500,518,586,630,737,766,786,843,950,954,959,1018,1054,1099,1129,1141,1208,1220,1228,1292,1293,1305,1398],
+  "objective_metric": "mean_cvar_burned_area_beta_0.9_lambda_0.5"
+}

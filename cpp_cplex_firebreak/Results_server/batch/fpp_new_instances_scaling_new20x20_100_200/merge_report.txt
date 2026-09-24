@@ -1,0 +1,42 @@
+merged_rows=90
+expected_rows=90
+workers_expected=30
+workers_merged=30
+missing_workers=0
+incomplete_workers=0
+failed_or_unmerged_rows=0
+methods_per_worker=3
+allow_partial=false
+combined_csv=results/batch/fpp_new_instances_scaling_new20x20/batch_results_all.csv
+compact_csv=results/batch/fpp_new_instances_scaling_new20x20/batch_results_compact.csv
+
+worker_000: 3 rows
+worker_001: 3 rows
+worker_002: 3 rows
+worker_003: 3 rows
+worker_004: 3 rows
+worker_005: 3 rows
+worker_006: 3 rows
+worker_007: 3 rows
+worker_008: 3 rows
+worker_009: 3 rows
+worker_010: 3 rows
+worker_011: 3 rows
+worker_012: 3 rows
+worker_013: 3 rows
+worker_014: 3 rows
+worker_015: 3 rows
+worker_016: 3 rows
+worker_017: 3 rows
+worker_018: 3 rows
+worker_019: 3 rows
+worker_020: 3 rows
+worker_021: 3 rows
+worker_022: 3 rows
+worker_023: 3 rows
+worker_024: 3 rows
+worker_025: 3 rows
+worker_026: 3 rows
+worker_027: 3 rows
+worker_028: 3 rows
+worker_029: 3 rows

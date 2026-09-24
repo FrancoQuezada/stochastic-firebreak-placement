@@ -1,0 +1,75 @@
+merged_rows=540
+previous_consolidated_rows=360
+new_worker_rows=180
+expected_new_worker_rows=180
+workers_expected=60
+workers_merged=60
+missing_workers=0
+incomplete_workers=0
+duplicate_logical_rows_replaced=0
+methods_in_final=9
+allow_partial=false
+combined_csv=results/batch/fpp_new_instances_scaling_new20x20/batch_results_all.csv
+compact_csv=results/batch/fpp_new_instances_scaling_new20x20/batch_results_compact.csv
+
+worker_000: 3 rows
+worker_001: 3 rows
+worker_002: 3 rows
+worker_003: 3 rows
+worker_004: 3 rows
+worker_005: 3 rows
+worker_006: 3 rows
+worker_007: 3 rows
+worker_008: 3 rows
+worker_009: 3 rows
+worker_010: 3 rows
+worker_011: 3 rows
+worker_012: 3 rows
+worker_013: 3 rows
+worker_014: 3 rows
+worker_015: 3 rows
+worker_016: 3 rows
+worker_017: 3 rows
+worker_018: 3 rows
+worker_019: 3 rows
+worker_020: 3 rows
+worker_021: 3 rows
+worker_022: 3 rows
+worker_023: 3 rows
+worker_024: 3 rows
+worker_025: 3 rows
+worker_026: 3 rows
+worker_027: 3 rows
+worker_028: 3 rows
+worker_029: 3 rows
+worker_030: 3 rows
+worker_031: 3 rows
+worker_032: 3 rows
+worker_033: 3 rows
+worker_034: 3 rows
+worker_035: 3 rows
+worker_036: 3 rows
+worker_037: 3 rows
+worker_038: 3 rows
+worker_039: 3 rows
+worker_040: 3 rows
+worker_041: 3 rows
+worker_042: 3 rows
+worker_043: 3 rows
+worker_044: 3 rows
+worker_045: 3 rows
+worker_046: 3 rows
+worker_047: 3 rows
+worker_048: 3 rows
+worker_049: 3 rows
+worker_050: 3 rows
+worker_051: 3 rows
+worker_052: 3 rows
+worker_053: 3 rows
+worker_054: 3 rows
+worker_055: 3 rows
+worker_056: 3 rows
+worker_057: 3 rows
+worker_058: 3 rows
+worker_059: 3 rows
+

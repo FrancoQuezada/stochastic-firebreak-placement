@@ -1,0 +1,9 @@
+{
+  "method": "FPP-Branch-Benders-Combinatorial-CVaR-EtaDesc",
+  "landscape": "new40x40",
+  "alpha": 0.02,
+  "budget": 32,
+  "selected_firebreak_original_nodes": [166,204,220,263,291,338,374,389,462,519,523,551,587,728,767,826,844,858,868,875,880,951,1078,1100,1104,1120,1208,1219,1224,1293,1306,1543],
+  "selected_firebreak_indices": [165,203,219,262,290,337,373,388,461,518,522,550,586,727,766,825,843,857,867,874,879,950,1077,1099,1103,1119,1207,1218,1223,1292,1305,1542],
+  "objective_metric": "cvar_burned_area_beta_0.9"
+}

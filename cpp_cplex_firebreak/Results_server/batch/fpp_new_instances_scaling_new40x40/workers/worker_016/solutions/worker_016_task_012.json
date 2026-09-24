@@ -1,0 +1,9 @@
+{
+  "method": "FPP-Branch-Benders-Combinatorial-CVaR",
+  "landscape": "new40x40",
+  "alpha": 0.01,
+  "budget": 16,
+  "selected_firebreak_original_nodes": [338,389,587,656,844,857,858,875,920,951,1100,1139,1220,1224,1252,1267],
+  "selected_firebreak_indices": [337,388,586,655,843,856,857,874,919,950,1099,1138,1219,1223,1251,1266],
+  "objective_metric": "cvar_burned_area_beta_0.9"
+}

@@ -1,0 +1,8 @@
+{
+  "method": "FPP-SAA-MeanCVaR",
+  "landscape": "new20x20",
+  "alpha": 0.02,
+  "budget": 8,
+  "selected_firebreak_original_nodes": [32,161,181,192,207,216,310,331],
+  "selected_firebreak_indices": [31,160,180,191,206,215,309,330]
+}

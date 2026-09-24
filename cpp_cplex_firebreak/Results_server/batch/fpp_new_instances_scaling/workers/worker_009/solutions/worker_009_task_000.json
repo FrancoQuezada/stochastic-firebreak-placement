@@ -1,0 +1,8 @@
+{
+  "method": "FPP-SAA",
+  "landscape": "new20x20",
+  "alpha": 0.02,
+  "budget": 8,
+  "selected_firebreak_original_nodes": [51,86,97,168,209,216,238,291],
+  "selected_firebreak_indices": [50,85,96,167,208,215,237,290]
+}

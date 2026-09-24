@@ -1,0 +1,9 @@
+{
+  "method": "FPP-Branch-Benders-MeanCVaR-RootCuts",
+  "landscape": "new40x40",
+  "alpha": 0.01,
+  "budget": 16,
+  "selected_firebreak_original_nodes": [261,338,389,462,587,738,767,844,951,996,1040,1100,1142,1216,1221,1293],
+  "selected_firebreak_indices": [260,337,388,461,586,737,766,843,950,995,1039,1099,1141,1215,1220,1292],
+  "objective_metric": "mean_cvar_burned_area_beta_0.9_lambda_0.5"
+}

@@ -1,0 +1,9 @@
+{
+  "method": "FPP-Branch-Benders-LLBI-RootCuts",
+  "landscape": "new40x40",
+  "alpha": 0.02,
+  "budget": 32,
+  "selected_firebreak_original_nodes": [147,261,267,291,316,323,338,350,407,465,488,516,587,599,630,656,754,804,805,821,857,868,951,955,981,1208,1224,1306,1372,1399,1491,1517],
+  "selected_firebreak_indices": [146,260,266,290,315,322,337,349,406,464,487,515,586,598,629,655,753,803,804,820,856,867,950,954,980,1207,1223,1305,1371,1398,1490,1516],
+  "objective_metric": "expected_burned_area_branch_benders_lazy_subproblems"
+}
