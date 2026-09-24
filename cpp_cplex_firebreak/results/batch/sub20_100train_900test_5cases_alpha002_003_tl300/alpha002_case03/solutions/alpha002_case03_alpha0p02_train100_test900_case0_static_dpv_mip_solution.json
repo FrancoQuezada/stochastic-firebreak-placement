@@ -1,0 +1,10 @@
+{
+  "method": "Static-DPV-MIP",
+  "landscape": "Sub20",
+  "alpha": 0.02,
+  "budget": 8,
+  "selected_firebreak_original_nodes": [264,306,325,326,347,283,245,368],
+  "selected_firebreak_indices": [224,266,284,285,306,243,208,327],
+  "objective_metric": "static_DPV_MIP_unit_downstream_value",
+  "selected_firebreak_scores": [18.65000000,16.04000000,15.24000000,14.30000000,13.82000000,12.89000000,12.64000000,12.36000000]
+}

@@ -1,0 +1,9 @@
+{
+  "method": "FPP-Restricted-Branch-Benders",
+  "landscape": "Sub20",
+  "alpha": 0.03,
+  "budget": 12,
+  "selected_firebreak_original_nodes": [183,206,222,247,264,281,283,287,307,327,344,347],
+  "selected_firebreak_indices": [147,170,186,210,224,241,243,247,267,286,303,306],
+  "objective_metric": "expected_burned_area_restricted_branch_benders"
+}

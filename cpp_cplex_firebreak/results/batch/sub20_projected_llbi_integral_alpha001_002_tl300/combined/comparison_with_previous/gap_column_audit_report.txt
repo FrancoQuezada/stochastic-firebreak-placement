@@ -1,0 +1,15 @@
+Gap column audit
+Rows audited: 690
+Previous rows: 450; projected rows: 240
+Previous reported mip_gap unique values: [0.001]
+Finding: previous combined CSV stores the configured tolerance in mip_gap for all rows, not the realized solver gap.
+Correction: all_versions_metrics_by_alpha.csv now computes Gap % from |objective_in_sample - best_bound| / |objective_in_sample|.
+Rows excluded from corrected gap because best_bound is an invalid sentinel: 7
+Projected rows where reported mip_gap differs materially from calculated objective/bound gap: 0
+Rows at/near time limit with reported default gap but different calculated gap: 238
+Rows with corrected gap > 0.15% and runtime < 95% of time limit: 0
+
+Output files:
+results/batch/sub20_projected_llbi_integral_alpha001_002_tl300/combined/comparison_with_previous/all_versions_metrics_by_alpha.csv
+results/batch/sub20_projected_llbi_integral_alpha001_002_tl300/combined/comparison_with_previous/all_versions_metrics_by_alpha.md
+results/batch/sub20_projected_llbi_integral_alpha001_002_tl300/combined/comparison_with_previous/gap_column_audit.csv

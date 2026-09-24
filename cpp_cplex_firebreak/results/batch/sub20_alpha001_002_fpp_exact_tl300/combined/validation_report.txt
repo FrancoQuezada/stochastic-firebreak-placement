@@ -1,0 +1,8 @@
+Sub20 alpha 0.01/0.02 FPP exact-study validation
+Rows: 450
+Workers: {'worker_00': 45, 'worker_01': 45, 'worker_02': 45, 'worker_03': 45, 'worker_04': 45, 'worker_05': 45, 'worker_06': 45, 'worker_07': 45, 'worker_08': 45, 'worker_09': 45}
+Variants: 45
+Expected variants: 45
+Missing optional diagnostic columns: 3
+
+Status: PASS

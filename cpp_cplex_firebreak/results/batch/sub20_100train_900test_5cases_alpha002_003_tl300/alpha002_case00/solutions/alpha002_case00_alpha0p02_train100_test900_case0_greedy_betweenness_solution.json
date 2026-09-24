@@ -1,0 +1,10 @@
+{
+  "method": "Greedy-Betweenness",
+  "landscape": "Sub20",
+  "alpha": 0.02,
+  "budget": 8,
+  "selected_firebreak_original_nodes": [150,151,152,153,154,155,156,157],
+  "selected_firebreak_indices": [114,115,116,117,118,119,120,121],
+  "objective_metric": "greedy_betweenness_unweighted",
+  "selected_firebreak_scores": [7147.29797419,6753.05402648,7650.90749426,8765.08028489,8169.36405448,10173.70075926,10324.70768968,11157.29495018]
+}

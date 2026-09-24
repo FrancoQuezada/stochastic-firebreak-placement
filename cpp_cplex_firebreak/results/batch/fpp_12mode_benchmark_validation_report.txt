@@ -1,0 +1,8 @@
+rows=180
+objective_mismatch_groups=2
+evaluator_validation_warnings=0
+separator_callback_invocations_total=9450
+separator_cuts_added_total=1
+objective_mismatches=[((0.02, 0), [('fpp_base_dominator', 73.61), ('fpp_base_dominator_separator', 73.61), ('fpp_base_dominator_separator_greedy', 73.61), ('fpp_cut', 73.61), ('fpp_cut_greedy', 73.61), ('fpp_cut_dominator', 73.61), ('fpp_cut_separator', 73.61), ('fpp_cut_dominator_separator', 73.61), ('fpp_cut_dominator_separator_greedy', 73.61)]), ((0.02, 1), [('fpp_cut', 71.78), ('fpp_cut_greedy', 71.78), ('fpp_cut_separator', 71.78)])]
+root_bound_available=false
+root_bound_note=root relaxation bounds were not exposed by the production solver path for this run

@@ -1,0 +1,9 @@
+{
+  "method": "DPV-Branch-Benders-LLBI",
+  "landscape": "Sub20",
+  "alpha": 0.03,
+  "budget": 12,
+  "selected_firebreak_original_nodes": [110,136,145,151,197,225,245,289,306,326,336,345],
+  "selected_firebreak_indices": [74,100,109,115,161,189,208,249,266,285,295,304],
+  "objective_metric": "solution_dependent_DPV_unit_weights_branch_benders"
+}

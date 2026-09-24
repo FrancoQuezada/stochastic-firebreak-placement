@@ -1,0 +1,8 @@
+PASS controlled split validation for 80 (instance_id, alpha, train_count, case_id) blocks.
+PASS cross-alpha split reuse validation for 30 (instance_id, train_count, case_id) blocks.
+PASS fixed OOS test-set validation for 2 instances.
+WARN expected_methods=18: ('new20x20_reburn', '0.01', '400', 'case00'):9; ('new20x20_reburn', '0.01', '400', 'case01'):8; ('new20x20_reburn', '0.01', '400', 'case02'):7; ('new20x20_reburn', '0.01', '400', 'case03'):3; ('new20x20_reburn', '0.01', '400', 'case04'):1; ('new20x20_reburn', '0.02', '200', 'case04'):10; ('new20x20_reburn', '0.03', '200', 'case00'):10; ('new20x20_reburn', '0.03', '200', 'case01'):10; ('new20x20_reburn', '0.03', '200', 'case02'):10; ('new20x20_reburn', '0.03', '200', 'case03'):10; ('new20x20_reburn', '0.03', '200', 'case04'):9
+WARN missing_blocks=40: ('new20x20', '0.01', '800', 'case00'); ('new20x20', '0.01', '800', 'case01'); ('new20x20', '0.01', '800', 'case02'); ('new20x20', '0.01', '800', 'case03'); ('new20x20', '0.01', '800', 'case04'); ('new20x20', '0.02', '800', 'case00'); ('new20x20', '0.02', '800', 'case01'); ('new20x20', '0.02', '800', 'case02'); ('new20x20', '0.02', '800', 'case03'); ('new20x20', '0.02', '800', 'case04'); ('new20x20', '0.03', '800', 'case00'); ('new20x20', '0.03', '800', 'case01'); ('new20x20', '0.03', '800', 'case02'); ('new20x20', '0.03', '800', 'case03'); ('new20x20', '0.03', '800', 'case04'); ('new20x20_reburn', '0.01', '800', 'case00'); ('new20x20_reburn', '0.01', '800', 'case01'); ('new20x20_reburn', '0.01', '800', 'case02'); ('new20x20_reburn', '0.01', '800', 'case03'); ('new20x20_reburn', '0.01', '800', 'case04')
+Allow partial: true
+Expected methods per block: 18
+Total rows: 1329

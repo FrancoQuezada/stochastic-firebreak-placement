@@ -1,0 +1,3 @@
+subproblem_total_solve_time_sec
+subproblem_avg_solve_time_sec
+subproblem_max_solve_time_sec

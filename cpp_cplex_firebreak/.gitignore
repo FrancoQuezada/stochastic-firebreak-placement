@@ -15,6 +15,14 @@ results/**
 !results/splits/
 !results/splits/.gitkeep
 
+# Keep consolidated batch artefacts, but never commit per-worker intermediates
+# or the CSV that exceeds GitHub's 100 MiB file-size limit.
+!results/batch/
+!results/batch/**
+results/batch/**/workers/
+results/batch/**/workers/**
+results/batch/fpp_new20x20_scaling/batch_results_partial.csv
+
 logs/**
 !logs/
 !logs/.gitkeep

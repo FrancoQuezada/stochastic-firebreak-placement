@@ -1,0 +1,9 @@
+{
+  "method": "FPP-Branch-Benders-LLBI",
+  "landscape": "Sub20",
+  "alpha": 0.03,
+  "budget": 12,
+  "selected_firebreak_original_nodes": [130,134,192,203,208,252,264,292,306,326,347,372],
+  "selected_firebreak_indices": [94,98,156,167,172,215,224,252,266,285,306,331],
+  "objective_metric": "expected_burned_area_branch_benders_lazy_subproblems"
+}

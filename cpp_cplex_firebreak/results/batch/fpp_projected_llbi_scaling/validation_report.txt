@@ -1,0 +1,3 @@
+PASS controlled split validation for 60 (landscape, alpha, train_count, case_id) blocks.
+PASS cross-alpha split reuse validation for 20 (landscape, train_count, case_id) blocks.
+Total rows: 1440

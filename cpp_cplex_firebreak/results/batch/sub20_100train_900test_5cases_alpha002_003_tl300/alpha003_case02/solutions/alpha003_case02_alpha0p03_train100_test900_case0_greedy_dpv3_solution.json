@@ -1,0 +1,10 @@
+{
+  "method": "Greedy-DPV3",
+  "landscape": "Sub20",
+  "alpha": 0.03,
+  "budget": 12,
+  "selected_firebreak_original_nodes": [264,347,242,325,345,225,306,269,266,308,228,162],
+  "selected_firebreak_indices": [224,306,205,284,304,189,266,229,226,268,192,126],
+  "objective_metric": "greedy_DPV3_inverse_weighted_reachability",
+  "selected_firebreak_scores": [27350.79611798,23069.17224815,21382.61353031,20706.35571090,17051.84942101,15960.35738581,15408.53418052,15021.05449353,14548.32660702,14112.61038064,13779.56748098,13730.20028070]
+}

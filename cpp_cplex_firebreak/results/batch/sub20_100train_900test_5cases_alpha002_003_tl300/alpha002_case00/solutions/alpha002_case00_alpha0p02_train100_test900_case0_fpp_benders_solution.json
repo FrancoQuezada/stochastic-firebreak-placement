@@ -1,0 +1,9 @@
+{
+  "method": "FPP-Benders",
+  "landscape": "Sub20",
+  "alpha": 0.02,
+  "budget": 8,
+  "selected_firebreak_original_nodes": [131,166,216,227,245,291,306,326],
+  "selected_firebreak_indices": [95,130,180,191,208,251,266,285],
+  "objective_metric": "expected_burned_area_benders_lp_subproblems"
+}

@@ -1,0 +1,131 @@
+merged_rows=1329
+expected_rows=2160
+workers_expected=120
+workers_merged=80
+missing_workers=40
+incomplete_workers=11
+failed_or_unmerged_rows=0
+methods_per_worker=18
+allow_partial=true
+combined_csv=results/batch/fpp_new20x20_scaling/batch_results_partial.csv
+
+worker_000: 18 rows
+worker_001: 18 rows
+worker_002: 18 rows
+worker_003: 18 rows
+worker_004: 18 rows
+worker_005: 18 rows
+worker_006: 18 rows
+worker_007: 18 rows
+worker_008: 18 rows
+worker_009: 18 rows
+worker_010: 18 rows
+worker_011: 18 rows
+worker_012: 18 rows
+worker_013: 18 rows
+worker_014: 18 rows
+worker_015: 18 rows
+worker_016: 18 rows
+worker_017: 18 rows
+worker_018: 18 rows
+worker_019: 18 rows
+worker_020: 18 rows
+worker_021: 18 rows
+worker_022: 18 rows
+worker_023: 18 rows
+worker_024: 18 rows
+worker_025: 18 rows
+worker_026: 18 rows
+worker_027: 18 rows
+worker_028: 18 rows
+worker_029: 18 rows
+worker_030: 18 rows
+worker_031: 18 rows
+worker_032: 18 rows
+worker_033: 18 rows
+worker_034: 18 rows
+worker_035: 18 rows
+worker_036: 18 rows
+worker_037: 18 rows
+worker_038: 18 rows
+worker_039: 18 rows
+worker_040: 18 rows
+worker_041: 18 rows
+worker_042: 18 rows
+worker_043: 18 rows
+worker_044: 18 rows
+worker_045: missing
+worker_046: missing
+worker_047: missing
+worker_048: missing
+worker_049: missing
+worker_050: missing
+worker_051: missing
+worker_052: missing
+worker_053: missing
+worker_054: missing
+worker_055: missing
+worker_056: missing
+worker_057: missing
+worker_058: missing
+worker_059: missing
+worker_060: 18 rows
+worker_061: 18 rows
+worker_062: 18 rows
+worker_063: 18 rows
+worker_064: 18 rows
+worker_065: 18 rows
+worker_066: 18 rows
+worker_067: 18 rows
+worker_068: 18 rows
+worker_069: 18 rows
+worker_070: 18 rows
+worker_071: 18 rows
+worker_072: 18 rows
+worker_073: 18 rows
+worker_074: 18 rows
+worker_075: 18 rows
+worker_076: 18 rows
+worker_077: 18 rows
+worker_078: 18 rows
+worker_079: 18 rows
+worker_080: 18 rows
+worker_081: 18 rows
+worker_082: 18 rows
+worker_083: 18 rows
+worker_084: 10/18 successful rows
+worker_085: 10/18 successful rows
+worker_086: 10/18 successful rows
+worker_087: 10/18 successful rows
+worker_088: 10/18 successful rows
+worker_089: 9/18 successful rows
+worker_090: 9/18 successful rows
+worker_091: 8/18 successful rows
+worker_092: 7/18 successful rows
+worker_093: 3/18 successful rows
+worker_094: 1/18 successful rows
+worker_095: missing
+worker_096: missing
+worker_097: missing
+worker_098: missing
+worker_099: missing
+worker_100: missing
+worker_101: missing
+worker_102: missing
+worker_103: missing
+worker_104: missing
+worker_105: missing
+worker_106: missing
+worker_107: missing
+worker_108: missing
+worker_109: missing
+worker_110: missing
+worker_111: missing
+worker_112: missing
+worker_113: missing
+worker_114: missing
+worker_115: missing
+worker_116: missing
+worker_117: missing
+worker_118: missing
+worker_119: missing

@@ -1,0 +1,553 @@
+{
+  "experiment_id": "alpha003_case02",
+  "case_id": 0,
+  "run_id": "alpha003_case02_alpha0p03_train100_test900_case0_dpv_branch_benders",
+  "timestamp": "2026-05-25T18:08:12Z",
+  "landscape": "Sub20",
+  "method": "DPV-Branch-Benders",
+  "objective_metric": "solution_dependent_DPV_unit_weights_branch_benders",
+  "alpha": 0.03000000,
+  "budget": 12,
+  "train_scenario_count": 100,
+  "test_scenario_count": 900,
+  "train_ids": [10,13,36,42,65,67,74,83,93,95,101,131,139,144,150,156,162,175,178,193,198,203,209,237,248,251,261,267,271,277,281,282,290,300,308,311,323,344,356,369,388,409,420,423,424,430,432,442,466,495,509,511,536,542,548,560,567,578,594,620,624,627,645,647,650,657,658,659,661,684,703,705,716,739,740,748,751,764,768,786,790,825,826,828,831,851,866,874,885,889,896,928,930,935,958,978,981,994,995,999],
+  "test_ids": [1,2,3,4,5,6,7,8,9,11,12,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,37,38,39,40,41,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,66,68,69,70,71,72,73,75,76,77,78,79,80,81,82,84,85,86,87,88,89,90,91,92,94,96,97,98,99,100,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119,120,121,122,123,124,125,126,127,128,129,130,132,133,134,135,136,137,138,140,141,142,143,145,146,147,148,149,151,152,153,154,155,157,158,159,160,161,163,164,165,166,167,168,169,170,171,172,173,174,176,177,179,180,181,182,183,184,185,186,187,188,189,190,191,192,194,195,196,197,199,200,201,202,204,205,206,207,208,210,211,212,213,214,215,216,217,218,219,220,221,222,223,224,225,226,227,228,229,230,231,232,233,234,235,236,238,239,240,241,242,243,244,245,246,247,249,250,252,253,254,255,256,257,258,259,260,262,263,264,265,266,268,269,270,272,273,274,275,276,278,279,280,283,284,285,286,287,288,289,291,292,293,294,295,296,297,298,299,301,302,303,304,305,306,307,309,310,312,313,314,315,316,317,318,319,320,321,322,324,325,326,327,328,329,330,331,332,333,334,335,336,337,338,339,340,341,342,343,345,346,347,348,349,350,351,352,353,354,355,357,358,359,360,361,362,363,364,365,366,367,368,370,371,372,373,374,375,376,377,378,379,380,381,382,383,384,385,386,387,389,390,391,392,393,394,395,396,397,398,399,400,401,402,403,404,405,406,407,408,410,411,412,413,414,415,416,417,418,419,421,422,425,426,427,428,429,431,433,434,435,436,437,438,439,440,441,443,444,445,446,447,448,449,450,451,452,453,454,455,456,457,458,459,460,461,462,463,464,465,467,468,469,470,471,472,473,474,475,476,477,478,479,480,481,482,483,484,485,486,487,488,489,490,491,492,493,494,496,497,498,499,500,501,502,503,504,505,506,507,508,510,512,513,514,515,516,517,518,519,520,521,522,523,524,525,526,527,528,529,530,531,532,533,534,535,537,538,539,540,541,543,544,545,546,547,549,550,551,552,553,554,555,556,557,558,559,561,562,563,564,565,566,568,569,570,571,572,573,574,575,576,577,579,580,581,582,583,584,585,586,587,588,589,590,591,592,593,595,596,597,598,599,600,601,602,603,604,605,606,607,608,609,610,611,612,613,614,615,616,617,618,619,621,622,623,625,626,628,629,630,631,632,633,634,635,636,637,638,639,640,641,642,643,644,646,648,649,651,652,653,654,655,656,660,662,663,664,665,666,667,668,669,670,671,672,673,674,675,676,677,678,679,680,681,682,683,685,686,687,688,689,690,691,692,693,694,695,696,697,698,699,700,701,702,704,706,707,708,709,710,711,712,713,714,715,717,718,719,720,721,722,723,724,725,726,727,728,729,730,731,732,733,734,735,736,737,738,741,742,743,744,745,746,747,749,750,752,753,754,755,756,757,758,759,760,761,762,763,765,766,767,769,770,771,772,773,774,775,776,777,778,779,780,781,782,783,784,785,787,788,789,791,792,793,794,795,796,797,798,799,800,801,802,803,804,805,806,807,808,809,810,811,812,813,814,815,816,817,818,819,820,821,822,823,824,827,829,830,832,833,834,835,836,837,838,839,840,841,842,843,844,845,846,847,848,849,850,852,853,854,855,856,857,858,859,860,861,862,863,864,865,867,868,869,870,871,872,873,875,876,877,878,879,880,881,882,883,884,886,887,888,890,891,892,893,894,895,897,898,899,900,901,902,903,904,905,906,907,908,909,910,911,912,913,914,915,916,917,918,919,920,921,922,923,924,925,926,927,929,931,932,933,934,936,937,938,939,940,941,942,943,944,945,946,947,948,949,950,951,952,953,954,955,956,957,959,960,961,962,963,964,965,966,967,968,969,970,971,972,973,974,975,976,977,979,980,982,983,984,985,986,987,988,989,990,991,992,993,996,997,998,1000],
+  "solver_status": "Feasible",
+  "objective_in_sample": 1147.07000000,
+  "best_bound": 501.69178908,
+  "mip_gap": 0.56263193,
+  "runtime_seconds": 302.97646770,
+  "solver_status_code": 11,
+  "explored_nodes": 650,
+  "num_variables": 460,
+  "num_constraints": 3837,
+  "solver_iterations": 28253,
+  "cuts_added": 3836,
+  "max_cut_violation": 0.00000000,
+  "branch_benders": {
+    "enabled": true,
+    "callback_calls": 55,
+    "incumbent_callback_calls": 55,
+    "candidate_incumbents_checked": 55,
+    "subproblems_solved": 5600,
+    "lazy_cuts_added": 3836,
+    "max_cut_violation": 0.00000000,
+    "largest_incumbent_cut_violation": 11880.00000000,
+    "callback_time_sec": 283.21968760,
+    "subproblem_time_sec": 167.41658756,
+    "use_root_user_cuts": false,
+    "root_user_cut_max_rounds": 1,
+    "root_user_cut_tolerance": 0.00000100,
+    "root_user_cut_rounds_executed": 0,
+    "root_user_cut_callback_calls": 0,
+    "root_user_cuts_added": 0,
+    "root_user_cut_scenarios_solved": 0,
+    "root_user_cut_max_violation": 0.00000000,
+    "root_user_cut_total_time_sec": 0.00000000,
+    "root_user_cut_subproblem_time_sec": 0.00000000,
+    "root_user_cut_skipped_reason": "Root user cuts disabled.",
+    "root_user_cut_only_at_root_confirmed": true,
+    "root_user_cut_round_log": [
+    ],
+    "incumbent_log": [
+      {
+        "incumbent_index": 1,
+        "incumbent_objective": 0.00000000,
+        "selected_firebreak_count": 0,
+        "cuts_added": 99,
+        "max_cut_violation": 11880.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 2,
+        "incumbent_objective": 0.00000000,
+        "selected_firebreak_count": 0,
+        "cuts_added": 99,
+        "max_cut_violation": 11880.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 3,
+        "incumbent_objective": 0.00000000,
+        "selected_firebreak_count": 0,
+        "cuts_added": 99,
+        "max_cut_violation": 11880.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 4,
+        "incumbent_objective": 0.00000000,
+        "selected_firebreak_count": 0,
+        "cuts_added": 99,
+        "max_cut_violation": 11880.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 5,
+        "incumbent_objective": 0.00000000,
+        "selected_firebreak_count": 0,
+        "cuts_added": 99,
+        "max_cut_violation": 11880.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 6,
+        "incumbent_objective": 0.00000000,
+        "selected_firebreak_count": 0,
+        "cuts_added": 99,
+        "max_cut_violation": 11880.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 7,
+        "incumbent_objective": 0.00000000,
+        "selected_firebreak_count": 0,
+        "cuts_added": 99,
+        "max_cut_violation": 11880.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 8,
+        "incumbent_objective": 508.16000000,
+        "selected_firebreak_count": 12,
+        "cuts_added": 87,
+        "max_cut_violation": 4744.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 9,
+        "incumbent_objective": 1334.26000000,
+        "selected_firebreak_count": 12,
+        "cuts_added": 0,
+        "max_cut_violation": 0.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 10,
+        "incumbent_objective": 536.58000000,
+        "selected_firebreak_count": 12,
+        "cuts_added": 84,
+        "max_cut_violation": 5887.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 11,
+        "incumbent_objective": 515.24000000,
+        "selected_firebreak_count": 12,
+        "cuts_added": 87,
+        "max_cut_violation": 5936.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 12,
+        "incumbent_objective": 687.77000000,
+        "selected_firebreak_count": 12,
+        "cuts_added": 82,
+        "max_cut_violation": 4738.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 13,
+        "incumbent_objective": 1265.69000000,
+        "selected_firebreak_count": 12,
+        "cuts_added": 0,
+        "max_cut_violation": 0.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 14,
+        "incumbent_objective": 792.89000000,
+        "selected_firebreak_count": 12,
+        "cuts_added": 78,
+        "max_cut_violation": 5785.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 15,
+        "incumbent_objective": 807.53000000,
+        "selected_firebreak_count": 12,
+        "cuts_added": 74,
+        "max_cut_violation": 2445.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 16,
+        "incumbent_objective": 1035.59000000,
+        "selected_firebreak_count": 12,
+        "cuts_added": 80,
+        "max_cut_violation": 3040.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 17,
+        "incumbent_objective": 903.11000000,
+        "selected_firebreak_count": 12,
+        "cuts_added": 82,
+        "max_cut_violation": 2145.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 18,
+        "incumbent_objective": 1233.64000000,
+        "selected_firebreak_count": 12,
+        "cuts_added": 0,
+        "max_cut_violation": 0.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 19,
+        "incumbent_objective": 950.95000000,
+        "selected_firebreak_count": 12,
+        "cuts_added": 71,
+        "max_cut_violation": 3338.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 20,
+        "incumbent_objective": 1126.30000000,
+        "selected_firebreak_count": 12,
+        "cuts_added": 53,
+        "max_cut_violation": 1745.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 21,
+        "incumbent_objective": 1218.80000000,
+        "selected_firebreak_count": 12,
+        "cuts_added": 30,
+        "max_cut_violation": 1123.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 22,
+        "incumbent_objective": 1177.48000000,
+        "selected_firebreak_count": 12,
+        "cuts_added": 17,
+        "max_cut_violation": 472.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 23,
+        "incumbent_objective": 1191.84000000,
+        "selected_firebreak_count": 12,
+        "cuts_added": 0,
+        "max_cut_violation": 0.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 24,
+        "incumbent_objective": 986.99000000,
+        "selected_firebreak_count": 12,
+        "cuts_added": 78,
+        "max_cut_violation": 2932.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 25,
+        "incumbent_objective": 864.87000000,
+        "selected_firebreak_count": 12,
+        "cuts_added": 76,
+        "max_cut_violation": 1743.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 26,
+        "incumbent_objective": 1147.07000000,
+        "selected_firebreak_count": 12,
+        "cuts_added": 0,
+        "max_cut_violation": 0.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 27,
+        "incumbent_objective": 969.35000000,
+        "selected_firebreak_count": 12,
+        "cuts_added": 71,
+        "max_cut_violation": 1995.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 28,
+        "incumbent_objective": 1008.39000000,
+        "selected_firebreak_count": 12,
+        "cuts_added": 67,
+        "max_cut_violation": 1431.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 29,
+        "incumbent_objective": 1095.28000000,
+        "selected_firebreak_count": 12,
+        "cuts_added": 49,
+        "max_cut_violation": 1029.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 30,
+        "incumbent_objective": 1130.11000000,
+        "selected_firebreak_count": 12,
+        "cuts_added": 24,
+        "max_cut_violation": 957.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 31,
+        "incumbent_objective": 1131.20000000,
+        "selected_firebreak_count": 12,
+        "cuts_added": 74,
+        "max_cut_violation": 1501.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 32,
+        "incumbent_objective": 1004.26000000,
+        "selected_firebreak_count": 12,
+        "cuts_added": 80,
+        "max_cut_violation": 2104.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 33,
+        "incumbent_objective": 912.02000000,
+        "selected_firebreak_count": 12,
+        "cuts_added": 73,
+        "max_cut_violation": 1777.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 34,
+        "incumbent_objective": 1103.23000000,
+        "selected_firebreak_count": 12,
+        "cuts_added": 83,
+        "max_cut_violation": 1882.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 35,
+        "incumbent_objective": 1108.06000000,
+        "selected_firebreak_count": 12,
+        "cuts_added": 83,
+        "max_cut_violation": 1399.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 36,
+        "incumbent_objective": 1128.15000000,
+        "selected_firebreak_count": 12,
+        "cuts_added": 81,
+        "max_cut_violation": 6092.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 37,
+        "incumbent_objective": 1134.18000000,
+        "selected_firebreak_count": 12,
+        "cuts_added": 77,
+        "max_cut_violation": 1450.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 38,
+        "incumbent_objective": 1108.91000000,
+        "selected_firebreak_count": 12,
+        "cuts_added": 83,
+        "max_cut_violation": 2866.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 39,
+        "incumbent_objective": 1138.44000000,
+        "selected_firebreak_count": 12,
+        "cuts_added": 73,
+        "max_cut_violation": 1880.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 40,
+        "incumbent_objective": 846.63000000,
+        "selected_firebreak_count": 12,
+        "cuts_added": 78,
+        "max_cut_violation": 2990.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 41,
+        "incumbent_objective": 701.24000000,
+        "selected_firebreak_count": 12,
+        "cuts_added": 89,
+        "max_cut_violation": 3775.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 42,
+        "incumbent_objective": 693.23000000,
+        "selected_firebreak_count": 12,
+        "cuts_added": 86,
+        "max_cut_violation": 2507.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 43,
+        "incumbent_objective": 918.13000000,
+        "selected_firebreak_count": 11,
+        "cuts_added": 78,
+        "max_cut_violation": 2599.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 44,
+        "incumbent_objective": 802.92000000,
+        "selected_firebreak_count": 12,
+        "cuts_added": 79,
+        "max_cut_violation": 4938.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 45,
+        "incumbent_objective": 1003.00000000,
+        "selected_firebreak_count": 12,
+        "cuts_added": 80,
+        "max_cut_violation": 2181.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 46,
+        "incumbent_objective": 942.52000000,
+        "selected_firebreak_count": 12,
+        "cuts_added": 80,
+        "max_cut_violation": 2326.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 47,
+        "incumbent_objective": 1028.41000000,
+        "selected_firebreak_count": 12,
+        "cuts_added": 81,
+        "max_cut_violation": 2077.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 48,
+        "incumbent_objective": 1018.14000000,
+        "selected_firebreak_count": 12,
+        "cuts_added": 74,
+        "max_cut_violation": 4755.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 49,
+        "incumbent_objective": 1121.15000000,
+        "selected_firebreak_count": 12,
+        "cuts_added": 76,
+        "max_cut_violation": 2892.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 50,
+        "incumbent_objective": 987.37000000,
+        "selected_firebreak_count": 12,
+        "cuts_added": 74,
+        "max_cut_violation": 1718.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 51,
+        "incumbent_objective": 1038.21000000,
+        "selected_firebreak_count": 12,
+        "cuts_added": 76,
+        "max_cut_violation": 4164.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 52,
+        "incumbent_objective": 1144.12000000,
+        "selected_firebreak_count": 12,
+        "cuts_added": 76,
+        "max_cut_violation": 1818.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 53,
+        "incumbent_objective": 1117.70000000,
+        "selected_firebreak_count": 12,
+        "cuts_added": 66,
+        "max_cut_violation": 1458.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 54,
+        "incumbent_objective": 1092.58000000,
+        "selected_firebreak_count": 10,
+        "cuts_added": 77,
+        "max_cut_violation": 1851.00000000,
+        "subproblems_solved": 100
+      },
+      {
+        "incumbent_index": 55,
+        "incumbent_objective": 976.74000000,
+        "selected_firebreak_count": 12,
+        "cuts_added": 76,
+        "max_cut_violation": 1458.00000000,
+        "subproblems_solved": 100
+      }
+    ]
+  },
+  "fpp_mode": "",
+  "formulation": "base",
+  "dominator_cuts_enabled": false,
+  "separator_cuts_enabled": false,
+  "greedy_warm_start_enabled": false,
+  "local_search_enabled": false,
+  "separator_cuts_added": 0,
+  "separator_min_cut_calls": 0,
+  "separator_callback_invocations": 0,
+  "separator_duplicate_cuts_skipped": 0,
+  "separator_large_cuts_skipped": 0,
+  "separator_time_sec": 0.00000000,
+  "dominator_cuts_added": 0,
+  "dominator_aggregate_cuts_added": 0,
+  "dominator_individual_cuts_added": 0,
+  "dominator_dag_scenarios": 0,
+  "dominator_fallback_scenarios": 0,
+  "dominator_preprocessing_time_sec": 0.00000000,
+  "heuristic_time_sec": 0.00000000,
+  "heuristic_objective": null,
+  "heuristic_exact_evaluations": 0,
+  "heuristic_selected_count": 0,
+  "compact_node_count": 0,
+  "eligible_node_count": 0,
+  "total_observed_scenario_nodes": 0,
+  "total_scenario_arcs": 0,
+  "evaluator_objective": null,
+  "evaluator_abs_diff": null,
+  "evaluator_rel_diff": null,
+  "risk_measure": "expected",
+  "cvar_beta": 0.90000000,
+  "cvar_lambda": 1.00000000,
+  "risk_threshold_value": null,
+  "expected_loss_component": null,
+  "cvar_loss_component": null,
+  "train_empirical_var_burned_area": 134.00000000,
+  "train_empirical_cvar_burned_area": 169.80000000,
+  "test_empirical_var_burned_area": 147.00000000,
+  "test_empirical_cvar_burned_area": 177.78888889,
+  "validation_status": "",
+  "selected_firebreaks": [114,131,153,206,215,252,264,270,295,306,325,347],
+  "warm_start_used": false,
+  "mip_start_accepted": false,
+  "warm_start_source": "",
+  "warm_start_valid_nodes": [],
+  "warm_start_ignored_nodes": [],
+  "warm_start_notes": [],
+  "train_expected_burned_area": 71.80000000,
+  "train_worst_10pct_burned_area": 169.80000000,
+  "test_expected_burned_area": 77.66111111,
+  "test_worst_10pct_burned_area": 177.78888889,
+  "train_evaluation_runtime_seconds": 0.00907531,
+  "test_evaluation_runtime_seconds": 0.13676741,
+  "test_scenario_loading_runtime_seconds": 0.73544512,
+  "train_graph_classification_ratios": "RT=0.430000;ADAG=0.560000;GDG=0.000000;NFR=0.000000;EMPTY=0.010000",
+  "test_graph_classification_ratios": "RT=0.456667;ADAG=0.540000;GDG=0.000000;NFR=0.000000;EMPTY=0.003333",
+  "graph_type_note": "Cell2Fire scenarios are treated as directed propagation graphs.",
+  "notes": ["Callback-based DPV-SAA Branch-and-Benders-cut solver.","Lazy Benders optimality cuts are generated only at integer candidate incumbents.","Fractional root user cuts were disabled.","Benders cuts preserve the Phase 13/14 CPLEX dual sign convention.","Lifted lower-bound inequalities were disabled.","Batch method label DPV-Branch-Benders maps to callback DPV Branch-and-Benders with LLBI=false and root_user_cuts=false.","Train reader warning: IgnitionsHistory/ignitions_log.csv has one numeric column; assuming line number is the scenario ID.","Train reader warning: No arcs parsed from MessagesFile0748.csv.","Test reader warning: IgnitionsHistory/ignitions_log.csv has one numeric column; assuming line number is the scenario ID.","Test reader warning: No arcs parsed from MessagesFile0291.csv.","Test reader warning: No arcs parsed from MessagesFile0616.csv.","Test reader warning: No arcs parsed from MessagesFile0665.csv.","Test scenarios were used only for out-of-sample evaluation."]
+}

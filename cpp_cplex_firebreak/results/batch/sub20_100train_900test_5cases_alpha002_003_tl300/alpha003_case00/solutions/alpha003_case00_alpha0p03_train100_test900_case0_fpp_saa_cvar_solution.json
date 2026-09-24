@@ -1,0 +1,9 @@
+{
+  "method": "FPP-SAA-CVaR",
+  "landscape": "Sub20",
+  "alpha": 0.03,
+  "budget": 12,
+  "selected_firebreak_original_nodes": [111,135,166,193,214,216,228,264,293,310,326,337],
+  "selected_firebreak_indices": [75,99,130,157,178,180,192,224,253,270,285,296],
+  "objective_metric": "cvar_burned_area_beta_0.9"
+}

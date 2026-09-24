@@ -1,0 +1,1 @@
+experiment_id,case_id,landscape,alpha,train_count,test_count,fpp_mode,test_expected_burned_area_fpp,test_expected_burned_area_dpv,difference,relative_difference,winner

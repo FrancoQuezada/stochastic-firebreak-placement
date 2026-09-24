@@ -1,0 +1,16 @@
+Sub20 combined completeness audit
+Previous combined rows: 450 / expected 450
+Projected combined rows: 240 / expected 240
+Union rows: 690 / expected 690
+Expected normalized versions: 23
+Expected alpha-objective-version groups: 138
+Missing exact rows in union: 0
+Unexpected exact rows in union: 0
+Missing previous rows: 0
+Missing projected rows: 0
+Groups with row count != 5: 0
+
+Previous worker row counts: worker_00=45, worker_01=45, worker_02=45, worker_03=45, worker_04=45, worker_05=45, worker_06=45, worker_07=45, worker_08=45, worker_09=45
+Projected worker row counts: worker_00=24, worker_01=24, worker_02=24, worker_03=24, worker_04=24, worker_05=24, worker_06=24, worker_07=24, worker_08=24, worker_09=24
+Missing previous rows present in previous workers: 0
+Missing projected rows present in projected workers: 0

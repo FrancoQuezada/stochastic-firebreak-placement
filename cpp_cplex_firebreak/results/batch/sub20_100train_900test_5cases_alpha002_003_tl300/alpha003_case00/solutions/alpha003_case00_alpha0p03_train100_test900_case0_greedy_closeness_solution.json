@@ -1,0 +1,10 @@
+{
+  "method": "Greedy-Closeness",
+  "landscape": "Sub20",
+  "alpha": 0.03,
+  "budget": 12,
+  "selected_firebreak_original_nodes": [25,210,230,231,190,250,212,232,208,228,249,233],
+  "selected_firebreak_indices": [7,174,194,195,154,213,176,196,172,192,212,197],
+  "objective_metric": "greedy_closeness_unweighted",
+  "selected_firebreak_scores": [1.00000000,0.15742397,0.15704698,0.15500443,0.15428824,0.15176625,0.15021645,0.14984842,0.14743590,0.14707140,0.14540059,0.14363713]
+}

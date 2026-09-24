@@ -1,0 +1,2 @@
+root_bound_available,note
+false,Root bounds were not available from the production run-batch-oos solver path.

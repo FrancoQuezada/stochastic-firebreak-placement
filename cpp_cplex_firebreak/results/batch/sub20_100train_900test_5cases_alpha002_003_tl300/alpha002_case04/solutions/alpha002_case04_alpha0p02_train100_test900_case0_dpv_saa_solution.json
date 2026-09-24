@@ -1,0 +1,9 @@
+{
+  "method": "DPV-SAA",
+  "landscape": "Sub20",
+  "alpha": 0.02,
+  "budget": 8,
+  "selected_firebreak_original_nodes": [13,17,18,19,20,21,22,25],
+  "selected_firebreak_indices": [0,1,2,3,4,5,6,7],
+  "objective_metric": "solution_dependent_DPV_unit_weights"
+}

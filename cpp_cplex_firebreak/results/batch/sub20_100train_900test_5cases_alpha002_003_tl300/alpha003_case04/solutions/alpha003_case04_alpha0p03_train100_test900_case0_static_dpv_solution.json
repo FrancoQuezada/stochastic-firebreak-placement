@@ -1,0 +1,10 @@
+{
+  "method": "Static-DPV",
+  "landscape": "Sub20",
+  "alpha": 0.03,
+  "budget": 12,
+  "selected_firebreak_original_nodes": [368,125,306,264,347,194,281,225,326,313,115,251],
+  "selected_firebreak_indices": [327,89,266,224,306,158,241,189,285,273,79,214],
+  "objective_metric": "precomputed_static_DPV_unit_weights",
+  "selected_firebreak_scores": [43.60000000,37.24000000,37.21000000,31.47000000,27.86000000,27.04000000,26.50000000,25.60000000,25.50000000,24.76000000,23.48000000,23.05000000]
+}

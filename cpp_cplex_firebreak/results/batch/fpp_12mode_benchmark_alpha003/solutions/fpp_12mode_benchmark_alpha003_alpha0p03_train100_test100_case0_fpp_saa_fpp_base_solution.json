@@ -1,0 +1,9 @@
+{
+  "method": "FPP-SAA",
+  "landscape": "Sub20",
+  "alpha": 0.03,
+  "budget": 12,
+  "selected_firebreak_original_nodes": [131,187,212,225,252,266,283,291,308,325,335,347],
+  "selected_firebreak_indices": [95,151,176,189,215,226,243,251,268,284,294,306],
+  "objective_metric": "expected_burned_area"
+}

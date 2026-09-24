@@ -1,0 +1,9 @@
+{
+  "method": "FPP-Branch-Benders-CVaR-PathLLBI",
+  "landscape": "Sub20",
+  "alpha": 0.01,
+  "budget": 4,
+  "selected_firebreak_original_nodes": [151,264,271,306],
+  "selected_firebreak_indices": [115,224,231,266],
+  "objective_metric": "cvar_burned_area_beta_0.9"
+}

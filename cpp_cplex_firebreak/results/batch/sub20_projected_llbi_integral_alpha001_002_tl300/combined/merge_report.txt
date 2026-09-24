@@ -1,0 +1,16 @@
+worker_00: 24 rows
+worker_01: 24 rows
+worker_02: 24 rows
+worker_03: 24 rows
+worker_04: 24 rows
+worker_05: 24 rows
+worker_06: 24 rows
+worker_07: 24 rows
+worker_08: 24 rows
+worker_09: 24 rows
+
+Expected workers: 10
+Expected rows per worker: 24
+Merged rows: 240
+Output CSV: results/batch/sub20_projected_llbi_integral_alpha001_002_tl300/combined/batch_results_projected_integral_all.csv
+Status: PASS

@@ -1,0 +1,9 @@
+{
+  "method": "FPP-Branch-Benders-RootCuts",
+  "landscape": "Sub20",
+  "alpha": 0.03,
+  "budget": 12,
+  "selected_firebreak_original_nodes": [130,191,197,203,211,255,264,294,306,327,347,372],
+  "selected_firebreak_indices": [94,155,161,167,175,218,224,254,266,286,306,331],
+  "objective_metric": "expected_burned_area_branch_benders_lazy_subproblems"
+}

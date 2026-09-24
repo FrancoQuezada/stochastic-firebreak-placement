@@ -1,0 +1,36 @@
+{
+  "active_split_dir": "results/batch/sub20_alpha001_002_fpp_exact_tl300/splits",
+  "cases": {
+    "case00": {
+      "seed": 20260601,
+      "test_path": "results/batch/sub20_alpha001_002_fpp_exact_tl300/splits/Sub20_seed20260601_train100_test900_case0_test.csv",
+      "train_path": "results/batch/sub20_alpha001_002_fpp_exact_tl300/splits/Sub20_seed20260601_train100_test900_case0_train.csv"
+    },
+    "case01": {
+      "seed": 20260602,
+      "test_path": "results/batch/sub20_alpha001_002_fpp_exact_tl300/splits/Sub20_seed20260602_train100_test900_case1_test.csv",
+      "train_path": "results/batch/sub20_alpha001_002_fpp_exact_tl300/splits/Sub20_seed20260602_train100_test900_case1_train.csv"
+    },
+    "case02": {
+      "seed": 20260603,
+      "test_path": "results/batch/sub20_alpha001_002_fpp_exact_tl300/splits/Sub20_seed20260603_train100_test900_case2_test.csv",
+      "train_path": "results/batch/sub20_alpha001_002_fpp_exact_tl300/splits/Sub20_seed20260603_train100_test900_case2_train.csv"
+    },
+    "case03": {
+      "seed": 20260604,
+      "test_path": "results/batch/sub20_alpha001_002_fpp_exact_tl300/splits/Sub20_seed20260604_train100_test900_case3_test.csv",
+      "train_path": "results/batch/sub20_alpha001_002_fpp_exact_tl300/splits/Sub20_seed20260604_train100_test900_case3_train.csv"
+    },
+    "case04": {
+      "seed": 20260605,
+      "test_path": "results/batch/sub20_alpha001_002_fpp_exact_tl300/splits/Sub20_seed20260605_train100_test900_case4_test.csv",
+      "train_path": "results/batch/sub20_alpha001_002_fpp_exact_tl300/splits/Sub20_seed20260605_train100_test900_case4_train.csv"
+    }
+  },
+  "landscape": "Sub20",
+  "num_cases": 5,
+  "seed_base": 20260601,
+  "source": "generated_new",
+  "test_count": 900,
+  "train_count": 100
+}

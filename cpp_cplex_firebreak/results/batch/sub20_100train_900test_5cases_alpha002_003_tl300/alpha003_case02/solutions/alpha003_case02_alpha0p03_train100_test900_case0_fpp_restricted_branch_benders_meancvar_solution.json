@@ -1,0 +1,9 @@
+{
+  "method": "FPP-Restricted-Branch-Benders-MeanCVaR",
+  "landscape": "Sub20",
+  "alpha": 0.03,
+  "budget": 12,
+  "selected_firebreak_original_nodes": [172,189,193,209,225,227,250,264,268,270,307,326],
+  "selected_firebreak_indices": [136,153,157,173,189,191,213,224,228,230,267,285],
+  "objective_metric": "mean_cvar_burned_area_beta_0.9_lambda_0.5"
+}

@@ -1,0 +1,16 @@
+worker_00: 45 rows
+worker_01: 45 rows
+worker_02: 45 rows
+worker_03: 45 rows
+worker_04: 45 rows
+worker_05: 45 rows
+worker_06: 45 rows
+worker_07: 45 rows
+worker_08: 45 rows
+worker_09: 45 rows
+
+Expected workers: 10
+Expected rows per worker: 45
+Merged rows: 450
+Output CSV: results/batch/sub20_alpha001_002_fpp_exact_tl300/combined/batch_results_all.csv
+Status: PASS
