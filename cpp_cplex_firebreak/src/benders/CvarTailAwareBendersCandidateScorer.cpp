@@ -177,7 +177,8 @@ CvarTailAwareBendersScoringSummary CvarTailAwareBendersCandidateScorer::scoreCan
     const std::vector<std::pair<int, double>>& scenario_losses_by_id,
     double cvar_beta,
     double gamma,
-    const std::map<int, double>& scenario_probability_by_id) const {
+    const std::map<int, double>& scenario_probability_by_id,
+    const std::string& weight_map_hash) const {
     validate_candidate_count(candidate_count);
     if (static_cast<int>(eligible_compact_indices.size()) != candidate_count) {
         throw std::invalid_argument(
@@ -191,6 +192,8 @@ CvarTailAwareBendersScoringSummary CvarTailAwareBendersCandidateScorer::scoreCan
 
     CvarTailAwareBendersScoringSummary summary;
     summary.gamma = gamma;
+    summary.weighted = !weight_map_hash.empty();
+    summary.weight_map_hash = weight_map_hash;
     summary.empirical_tail_scenario_ids =
         empirical_tail_scenario_ids(scenario_losses_by_id, cvar_beta);
     const auto tail_cuts =
@@ -202,13 +205,15 @@ CvarTailAwareBendersScoringSummary CvarTailAwareBendersCandidateScorer::scoreCan
         eligible_compact_indices,
         candidates,
         accumulated_cuts,
-        scenario_probability_by_id);
+        scenario_probability_by_id,
+        weight_map_hash);
     const auto tail_summary = scorer.scoreCandidates(
         candidate_count,
         eligible_compact_indices,
         candidates,
         tail_cuts,
-        scenario_probability_by_id);
+        scenario_probability_by_id,
+        weight_map_hash);
 
     summary.cuts_used = generic_summary.cuts_used;
     summary.tail_cuts_used = tail_summary.cuts_used;

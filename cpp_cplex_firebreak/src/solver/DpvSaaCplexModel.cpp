@@ -6,6 +6,7 @@
 #include <stdexcept>
 #include <unordered_map>
 
+#include "opt/WeightedDpvScoring.hpp"
 #include "solver/CplexEnvironment.hpp"
 
 #ifdef FIREBREAK_WITH_CPLEX
@@ -97,6 +98,7 @@ DpvSaaModelStructure analyze_dpv_saa_model_structure(const opt::OptimizationInst
     structure.y_indices = opt.eligible_indices;
 
     const auto y_position_by_node = build_y_position_by_node_index(opt);
+    const auto compact_weights = opt::canonical_compact_dpv_weights_or_unit(opt);
     structure.propagation_constraints.reserve(opt.total_arcs);
     structure.objective_terms.reserve(opt.total_dpv_pairs);
     for (const auto& scenario : opt.scenarios) {
@@ -116,6 +118,7 @@ DpvSaaModelStructure analyze_dpv_saa_model_structure(const opt::OptimizationInst
                 pair.source_index,
                 pair.successor_index,
                 pair.descendant_index,
+                compact_weights[static_cast<std::size_t>(pair.descendant_index)],
             });
         }
     }
@@ -131,12 +134,38 @@ ModelResult DpvSaaCplexModel::solve(
     double,
     int,
     bool,
-    const WarmStart*) const {
+    const WarmStart*,
+    opt::WeightedDpvIgnitionPolicy) const {
     (void)analyze_dpv_saa_model_structure(opt);
     throw std::runtime_error(cplex_unavailable_message());
 }
 
 #else
+
+namespace {
+
+void attach_dpv_saa_metadata(
+    ModelResult& result,
+    const opt::OptimizationInstance& opt,
+    opt::WeightedDpvIgnitionPolicy ignition_policy) {
+    const auto weights = opt::canonical_compact_dpv_weights_or_unit(opt);
+    result.dpv_model_weighted = true;
+    result.dpv_model_type = "direct_dpv_saa";
+    result.dpv_variant = "solution_dependent_product_pair_loss";
+    result.dpv_structural_definition =
+        "product pairs (source, successor, closed descendant); destination descendant weights; multiplicity preserved";
+    result.dpv_ignition_policy = opt::weighted_dpv_ignition_policy_name(ignition_policy);
+    result.dpv_weight_profile = opt::weighted_dpv_weight_profile(opt, weights);
+    result.dpv_weight_map_hash = opt::weighted_dpv_weight_map_hash(opt, weights);
+    result.dpv_scenario_aggregation = "scenario_probability_weighted_sum";
+    result.dpv_normalization = "none";
+    result.dpv_risk_measure = "expected";
+    result.dpv_surrogate_objective = result.objective_value;
+    result.dpv_surrogate_best_bound = result.best_bound;
+    result.dpv_surrogate_gap = result.mip_gap;
+}
+
+}  // namespace
 
 ModelResult DpvSaaCplexModel::solve(
     const opt::OptimizationInstance& opt,
@@ -144,9 +173,11 @@ ModelResult DpvSaaCplexModel::solve(
     double mip_gap,
     int threads,
     bool verbose,
-    const WarmStart* warm_start) const {
+    const WarmStart* warm_start,
+    opt::WeightedDpvIgnitionPolicy ignition_policy) const {
     const auto structure = analyze_dpv_saa_model_structure(opt);
     const int node_count = opt.node_mapper.size();
+    const auto compact_weights = opt::canonical_compact_dpv_weights_or_unit(opt);
 
     ModelResult result;
     result.method = "DPV-SAA direct CPLEX";
@@ -196,7 +227,11 @@ ModelResult DpvSaaCplexModel::solve(
         for (std::size_t s = 0; s < opt.scenarios.size(); ++s) {
             const double probability = opt.scenarios[s].probability;
             for (IloInt p = 0; p < z[s].getSize(); ++p) {
-                objective += probability * z[s][p];
+                const auto& pair =
+                    opt.scenarios[s].dpv.product_pairs[static_cast<std::size_t>(p)];
+                const double pair_weight =
+                    compact_weights[static_cast<std::size_t>(pair.descendant_index)];
+                objective += probability * pair_weight * z[s][p];
             }
         }
         model.add(IloMinimize(env, objective));
@@ -316,10 +351,16 @@ ModelResult DpvSaaCplexModel::solve(
             }
         }
 
-        result.notes.push_back("DPV-SAA objective is solution-dependent DPV with unit weights.");
+        attach_dpv_saa_metadata(result, opt, ignition_policy);
+        result.objective_metric = "weighted_solution_dependent_DPV_product_pair_loss";
+        result.solver_weighted_objective = result.objective_value;
+        result.notes.push_back("DPV-SAA objective is weighted solution-dependent DPV product-pair loss.");
         result.notes.push_back("DPV product-pair multiplicity is preserved.");
+        result.notes.push_back("Each product pair contributes weight(descendant) * z; candidate/source weights are not used.");
         result.notes.push_back("z variables are continuous in [0,1].");
         result.notes.push_back("Propagation constraints use y_v only when v is eligible.");
+        result.notes.push_back("DPV ignition policy metadata: " +
+                               opt::weighted_dpv_ignition_policy_name(ignition_policy) + ".");
         env.end();
         return result;
     } catch (const IloException& exc) {

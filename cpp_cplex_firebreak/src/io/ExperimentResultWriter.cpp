@@ -218,6 +218,11 @@ bool has_benders_diagnostics(const StandardExperimentResult& result) {
            result.benders_use_lifted_lower_bounds ||
            result.benders_lifted_lower_bound_count > 0 ||
            result.benders_lifted_lower_bound_nonzero_coefficients > 0 ||
+           result.benders_lifted_lower_bound_constraints_added > 0 ||
+           result.coverage_llbi_enabled ||
+           result.coverage_llbi_auxiliary_variables > 0 ||
+           result.path_llbi_enabled ||
+           result.path_llbi_auxiliary_variables > 0 ||
            !result.benders_lifted_lower_bound_notes.empty();
 }
 
@@ -264,6 +269,28 @@ void write_benders_json_block(std::ostream& out, const StandardExperimentResult&
         << format_json_number(result.benders_lifted_lower_bound_min_rhs) << ",\n";
     out << "    \"lifted_lower_bound_max_rhs\": "
         << format_json_number(result.benders_lifted_lower_bound_max_rhs) << ",\n";
+    out << "    \"lifted_lower_bound_weighted\": "
+        << (result.benders_lifted_lower_bound_weighted ? "true" : "false") << ",\n";
+    out << "    \"lifted_lower_bound_weight_map_hash\": \""
+        << json_escape_local(result.benders_lifted_lower_bound_weight_map_hash) << "\",\n";
+    out << "    \"lifted_lower_bound_scenarios_precomputed\": "
+        << result.benders_lifted_lower_bound_scenarios_precomputed << ",\n";
+    out << "    \"lifted_lower_bound_singletons_evaluated\": "
+        << result.benders_lifted_lower_bound_singletons_evaluated << ",\n";
+    out << "    \"lifted_lower_bound_no_firebreak_loss_min\": "
+        << format_json_number(result.benders_lifted_lower_bound_no_firebreak_loss_min) << ",\n";
+    out << "    \"lifted_lower_bound_no_firebreak_loss_max\": "
+        << format_json_number(result.benders_lifted_lower_bound_no_firebreak_loss_max) << ",\n";
+    out << "    \"lifted_lower_bound_singleton_benefit_min\": "
+        << format_json_number(result.benders_lifted_lower_bound_singleton_benefit_min) << ",\n";
+    out << "    \"lifted_lower_bound_singleton_benefit_max\": "
+        << format_json_number(result.benders_lifted_lower_bound_singleton_benefit_max) << ",\n";
+    out << "    \"lifted_lower_bound_constraints_added\": "
+        << result.benders_lifted_lower_bound_constraints_added << ",\n";
+    out << "    \"lifted_lower_bound_cache_hit\": "
+        << (result.benders_lifted_lower_bound_cache_hit ? "true" : "false") << ",\n";
+    out << "    \"lifted_lower_bound_validity_mode\": \""
+        << json_escape_local(result.benders_lifted_lower_bound_validity_mode) << "\",\n";
     out << "    \"lifted_lower_bound_notes\": ";
     write_json_string_array(out, result.benders_lifted_lower_bound_notes);
     out << ",\n";
@@ -415,6 +442,26 @@ void write_restricted_candidate_json_block(std::ostream& out, const StandardExpe
     out << "  \"restricted_candidate\": {\n";
     out << "    \"enabled\": " << (result.restricted_candidate_enabled ? "true" : "false") << ",\n";
     out << "    \"exact_mode\": " << (result.restricted_candidate_exact_mode ? "true" : "false") << ",\n";
+    out << "    \"candidate_bounds_enabled\": "
+        << (result.restricted_candidate_bounds_enabled ? "true" : "false") << ",\n";
+    out << "    \"candidate_bounds_weighted\": "
+        << (result.restricted_candidate_bounds_weighted ? "true" : "false") << ",\n";
+    out << "    \"candidate_bound_type\": \""
+        << json_escape_local(result.restricted_candidate_bound_type) << "\",\n";
+    out << "    \"candidate_bound_map_hash\": \""
+        << json_escape_local(result.restricted_candidate_bound_map_hash) << "\",\n";
+    out << "    \"candidates_evaluated_by_bound\": "
+        << result.restricted_candidates_evaluated_by_bound << ",\n";
+    out << "    \"candidates_permanently_pruned\": "
+        << result.restricted_candidates_permanently_pruned << ",\n";
+    out << "    \"candidates_not_pruned_due_to_safety\": "
+        << result.restricted_candidates_not_pruned_due_to_safety << ",\n";
+    out << "    \"early_exactness_certificate_used\": "
+        << (result.restricted_candidate_early_exactness_certificate_used ? "true" : "false") << ",\n";
+    out << "    \"full_activation_avoided\": "
+        << (result.restricted_candidate_full_activation_avoided ? "true" : "false") << ",\n";
+    out << "    \"unvalidated_bound_rejected\": "
+        << (result.restricted_candidate_unvalidated_bound_rejected ? "true" : "false") << ",\n";
     out << "    \"initial_candidate_policy\": \""
         << json_escape_local(result.restricted_candidate_initial_policy) << "\",\n";
     out << "    \"activation_policy\": \""
@@ -436,6 +483,12 @@ void write_restricted_candidate_json_block(std::ostream& out, const StandardExpe
     out << "    \"cut_reuse_enabled\": "
         << (result.restricted_candidate_cut_reuse_enabled ? "true" : "false") << ",\n";
     out << "    \"cut_pool_size\": " << result.restricted_candidate_cut_pool_size << ",\n";
+    out << "    \"cut_pool_peak_size\": "
+        << result.restricted_candidate_cut_pool_peak_size << ",\n";
+    out << "    \"cut_pool_evictions\": "
+        << result.restricted_candidate_cut_pool_evictions << ",\n";
+    out << "    \"cut_pool_reinstantiations\": "
+        << result.restricted_candidate_cut_pool_reinstantiations << ",\n";
     out << "    \"candidate_rounds\": " << result.restricted_candidate_rounds << ",\n";
     out << "    \"cuts_reused_in_full_stage\": "
         << result.restricted_candidate_cuts_reused_in_full_stage << ",\n";
@@ -475,16 +528,52 @@ void write_restricted_candidate_json_block(std::ostream& out, const StandardExpe
         << format_json_number(result.restricted_candidate_active_fraction_at_stop) << ",\n";
     out << "    \"candidate_maintenance_policy\": \""
         << json_escape_local(result.restricted_candidate_maintenance_policy) << "\",\n";
+    out << "    \"maintenance_weighted\": "
+        << (result.restricted_candidate_maintenance_weighted ? "true" : "false") << ",\n";
+    out << "    \"maintenance_map_hash\": \""
+        << json_escape_local(result.restricted_candidate_maintenance_map_hash) << "\",\n";
     out << "    \"candidate_score_mode\": \""
         << json_escape_local(result.restricted_candidate_score_mode) << "\",\n";
     out << "    \"candidate_tail_score_gamma\": "
         << format_json_number(result.restricted_candidate_tail_score_gamma) << ",\n";
     out << "    \"candidate_tail_protection_size\": "
         << result.restricted_candidate_tail_protection_size << ",\n";
+    out << "    \"candidate_scorer\": \""
+        << json_escape_local(result.restricted_candidate_scorer) << "\",\n";
+    out << "    \"candidate_scorer_weighted\": "
+        << (result.restricted_candidate_scorer_weighted ? "true" : "false") << ",\n";
+    out << "    \"candidate_score_map_hash\": \""
+        << json_escape_local(result.restricted_candidate_score_map_hash) << "\",\n";
+    out << "    \"initial_candidate_ids\": ";
+    write_json_int_array(out, result.restricted_initial_candidate_ids);
+    out << ",\n";
+    out << "    \"initial_candidate_scores\": ";
+    write_candidate_score_pair_array(out, result.restricted_initial_candidate_scores);
+    out << ",\n";
+    out << "    \"score_recomputations\": "
+        << result.restricted_score_recomputations << ",\n";
+    out << "    \"candidates_activated_by_score\": ";
+    write_json_int_array(out, result.restricted_candidates_activated_by_score);
+    out << ",\n";
+    out << "    \"candidates_activated_by_full_fallback\": ";
+    write_json_int_array(out, result.restricted_candidates_activated_by_full_fallback);
+    out << ",\n";
     out << "    \"deactivation_enabled\": "
         << (result.restricted_candidate_deactivation_enabled ? "true" : "false") << ",\n";
     out << "    \"deactivation_rounds\": "
         << result.restricted_candidate_deactivation_rounds << ",\n";
+    out << "    \"active_candidate_target\": "
+        << result.restricted_candidate_active_target << ",\n";
+    out << "    \"candidates_considered_for_deactivation\": "
+        << result.restricted_candidate_considered_for_deactivation << ",\n";
+    out << "    \"candidates_deactivated\": "
+        << result.restricted_candidate_deactivated_total << ",\n";
+    out << "    \"candidates_reactivated\": "
+        << result.restricted_candidate_reactivated_total << ",\n";
+    out << "    \"candidates_protected_from_deactivation\": "
+        << result.restricted_candidate_protected_from_deactivation_total << ",\n";
+    out << "    \"full_activation_overrode_maintenance\": "
+        << (result.restricted_candidate_full_activation_overrode_maintenance ? "true" : "false") << ",\n";
     out << "    \"candidate_min_active_size\": "
         << result.restricted_candidate_min_active_size << ",\n";
     out << "    \"candidate_max_active_size\": "
@@ -580,6 +669,11 @@ void write_restricted_candidate_json_block(std::ostream& out, const StandardExpe
         out << "        \"round_index\": " << diag.round_index << ",\n";
         out << "        \"risk_measure\": \"" << json_escape_local(diag.risk_measure) << "\",\n";
         out << "        \"cvar_beta\": " << format_json_number(diag.cvar_beta) << ",\n";
+        out << "        \"weighted\": " << (diag.weighted ? "true" : "false") << ",\n";
+        out << "        \"weight_profile\": \""
+            << json_escape_local(diag.weight_profile) << "\",\n";
+        out << "        \"weight_map_hash\": \""
+            << json_escape_local(diag.weight_map_hash) << "\",\n";
         out << "        \"risk_threshold\": " << format_json_number(diag.risk_threshold) << ",\n";
         out << "        \"tail_definition_used\": \""
             << json_escape_local(diag.tail_definition_used) << "\",\n";
@@ -587,6 +681,28 @@ void write_restricted_candidate_json_block(std::ostream& out, const StandardExpe
         out << "        \"tail_scenario_ids\": ";
         write_json_int_array(out, diag.tail_scenario_ids);
         out << ",\n";
+        out << "        \"scenario_diagnostics\": [";
+        for (std::size_t j = 0; j < diag.scenario_diagnostics.size(); ++j) {
+            const auto& scenario = diag.scenario_diagnostics[j];
+            out << (j == 0 ? "\n" : ",\n");
+            out << "          {"
+                << "\"scenario_id\":" << scenario.scenario_id << ","
+                << "\"scenario_probability\":"
+                << format_json_number(scenario.scenario_probability) << ","
+                << "\"weighted_loss\":"
+                << format_json_number(scenario.weighted_loss) << ","
+                << "\"weighted_var_threshold\":"
+                << format_json_number(scenario.weighted_var_threshold) << ","
+                << "\"tail_membership\":"
+                << (scenario.tail_membership ? "true" : "false") << ","
+                << "\"tail_excess\":"
+                << format_json_number(scenario.tail_excess)
+                << "}";
+        }
+        if (!diag.scenario_diagnostics.empty()) {
+            out << "\n        ";
+        }
+        out << "],\n";
         out << "        \"candidate_count\": " << diag.candidate_count << ",\n";
         out << "        \"active_count_before_round\": " << diag.active_count_before_round << ",\n";
         out << "        \"active_count_after_round\": " << diag.active_count_after_round << ",\n";
@@ -852,17 +968,246 @@ void write_experiment_result_json(
         << format_json_number(result.combinatorial_benders_avg_cut_nonzeros) << ",\n";
     out << "  \"combinatorial_benders_num_violated_cuts\": "
         << result.combinatorial_benders_num_violated_cuts << ",\n";
+    out << "  \"combinatorial_benders_weighted\": "
+        << (result.combinatorial_benders_weighted ? "true" : "false") << ",\n";
+    out << "  \"combinatorial_benders_mode\": \""
+        << json_escape_local(result.combinatorial_benders_mode) << "\",\n";
+    out << "  \"combinatorial_benders_weight_map_hash\": \""
+        << json_escape_local(result.combinatorial_benders_weight_map_hash) << "\",\n";
+    out << "  \"combinatorial_benders_weighted_recourse_evaluations\": "
+        << result.combinatorial_benders_weighted_recourse_evaluations << ",\n";
+    out << "  \"combinatorial_benders_duplicate_cuts\": "
+        << result.combinatorial_benders_duplicate_cuts << ",\n";
+    out << "  \"combinatorial_benders_cuts_tight_at_incumbent\": "
+        << result.combinatorial_benders_cuts_tight_at_incumbent << ",\n";
+    out << "  \"combinatorial_benders_lifting_enabled\": "
+        << (result.combinatorial_benders_lifting_enabled ? "true" : "false") << ",\n";
+    out << "  \"combinatorial_benders_scenario_sampling_enabled\": "
+        << (result.combinatorial_benders_scenario_sampling_enabled ? "true" : "false") << ",\n";
+    out << "  \"combinatorial_benders_max_tightness_error\": "
+        << format_json_number(result.combinatorial_benders_max_tightness_error) << ",\n";
+    out << "  \"combinatorial_benders_max_violation\": "
+        << format_json_number(result.combinatorial_benders_max_violation) << ",\n";
+    out << "  \"combinatorial_benders_propagation_time_sec\": "
+        << format_json_number(result.combinatorial_benders_propagation_time_sec) << ",\n";
+    out << "  \"combinatorial_benders_cut_build_time_sec\": "
+        << format_json_number(result.combinatorial_benders_cut_build_time_sec) << ",\n";
+    out << "  \"combinatorial_benders_validity_mode\": \""
+        << json_escape_local(result.combinatorial_benders_validity_mode) << "\",\n";
+    out << "  \"combinatorial_weighted\": "
+        << (result.combinatorial_weighted ? "true" : "false") << ",\n";
+    out << "  \"combinatorial_mode\": \""
+        << json_escape_local(result.combinatorial_mode) << "\",\n";
+    out << "  \"combinatorial_weight_map_hash\": \""
+        << json_escape_local(result.combinatorial_weight_map_hash) << "\",\n";
+    out << "  \"combinatorial_scenario_order\": \""
+        << json_escape_local(result.combinatorial_scenario_order) << "\",\n";
+    out << "  \"combinatorial_cut_sampling_ratio\": "
+        << format_json_number(result.combinatorial_cut_sampling_ratio) << ",\n";
+    out << "  \"combinatorial_candidate_callbacks\": "
+        << result.combinatorial_candidate_callbacks << ",\n";
+    out << "  \"combinatorial_scenarios_evaluated\": "
+        << result.combinatorial_scenarios_evaluated << ",\n";
+    out << "  \"combinatorial_weighted_recourse_evaluations\": "
+        << result.combinatorial_weighted_recourse_evaluations << ",\n";
+    out << "  \"combinatorial_cuts_generated\": "
+        << result.combinatorial_cuts_generated << ",\n";
+    out << "  \"combinatorial_cuts_added\": "
+        << result.combinatorial_cuts_added << ",\n";
+    out << "  \"combinatorial_duplicate_cuts\": "
+        << result.combinatorial_duplicate_cuts << ",\n";
+    out << "  \"combinatorial_cuts_tight_at_incumbent\": "
+        << result.combinatorial_cuts_tight_at_incumbent << ",\n";
+    out << "  \"combinatorial_max_tightness_error\": "
+        << format_json_number(result.combinatorial_max_tightness_error) << ",\n";
+    out << "  \"combinatorial_max_violation\": "
+        << format_json_number(result.combinatorial_max_violation) << ",\n";
+    out << "  \"combinatorial_propagation_time_sec\": "
+        << format_json_number(result.combinatorial_propagation_time_sec) << ",\n";
+    out << "  \"combinatorial_cut_build_time_sec\": "
+        << format_json_number(result.combinatorial_cut_build_time_sec) << ",\n";
+    out << "  \"combinatorial_callback_time_sec\": "
+        << format_json_number(result.combinatorial_callback_time_sec) << ",\n";
+    out << "  \"combinatorial_validity_mode\": \""
+        << json_escape_local(result.combinatorial_validity_mode) << "\",\n";
+    out << "  \"combinatorial_lifting_enabled\": "
+        << (result.combinatorial_lifting_enabled ? "true" : "false") << ",\n";
+    out << "  \"combinatorial_fractional_cuts_enabled\": "
+        << (result.combinatorial_fractional_cuts_enabled ? "true" : "false")
+        << ",\n";
+    out << "  \"combinatorial_initial_cuts_enabled\": "
+        << (result.combinatorial_initial_cuts_enabled ? "true" : "false") << ",\n";
+    out << "  \"combinatorial_scenario_sampling_enabled\": "
+        << (result.combinatorial_scenario_sampling_enabled ? "true" : "false")
+        << ",\n";
+    out << "  \"combinatorial_lifting_weighted\": "
+        << (result.combinatorial_lifting_weighted ? "true" : "false") << ",\n";
+    out << "  \"combinatorial_lifting_mode\": \""
+        << json_escape_local(result.combinatorial_lifting_mode) << "\",\n";
+    out << "  \"combinatorial_lifting_weight_map_hash\": \""
+        << json_escape_local(result.combinatorial_lifting_weight_map_hash) << "\",\n";
+    out << "  \"combinatorial_lifting_attempts\": "
+        << result.combinatorial_lifting_attempts << ",\n";
+    out << "  \"combinatorial_lifting_successes\": "
+        << result.combinatorial_lifting_successes << ",\n";
+    out << "  \"combinatorial_lifting_failures\": "
+        << result.combinatorial_lifting_failures << ",\n";
+    out << "  \"combinatorial_candidates_considered_for_lifting\": "
+        << result.combinatorial_candidates_considered_for_lifting << ",\n";
+    out << "  \"combinatorial_coefficients_changed\": "
+        << result.combinatorial_coefficients_changed << ",\n";
+    out << "  \"combinatorial_propagation_evaluations_for_lifting\": "
+        << result.combinatorial_propagation_evaluations_for_lifting << ",\n";
+    out << "  \"combinatorial_baseline_cut_nonzeros\": "
+        << result.combinatorial_baseline_cut_nonzeros << ",\n";
+    out << "  \"combinatorial_lifted_cut_nonzeros\": "
+        << result.combinatorial_lifted_cut_nonzeros << ",\n";
+    out << "  \"combinatorial_max_coefficient_change\": "
+        << format_json_number(result.combinatorial_max_coefficient_change) << ",\n";
+    out << "  \"combinatorial_max_baseline_tightness_error\": "
+        << format_json_number(result.combinatorial_max_baseline_tightness_error) << ",\n";
+    out << "  \"combinatorial_max_lifted_tightness_error\": "
+        << format_json_number(result.combinatorial_max_lifted_tightness_error) << ",\n";
+    out << "  \"combinatorial_lifted_cuts_dominating_baseline\": "
+        << result.combinatorial_lifted_cuts_dominating_baseline << ",\n";
+    out << "  \"combinatorial_lifting_time_sec\": "
+        << format_json_number(result.combinatorial_lifting_time_sec) << ",\n";
+    out << "  \"combinatorial_lifting_validity_mode\": \""
+        << json_escape_local(result.combinatorial_lifting_validity_mode) << "\",\n";
+    out << "  \"combinatorial_initial_solutions_evaluated\": "
+        << result.combinatorial_initial_solutions_evaluated << ",\n";
+    out << "  \"combinatorial_initial_cuts_generated\": "
+        << result.combinatorial_initial_cuts_generated << ",\n";
+    out << "  \"combinatorial_initial_duplicate_cuts\": "
+        << result.combinatorial_initial_duplicate_cuts << ",\n";
+    out << "  \"combinatorial_initial_cut_time_sec\": "
+        << format_json_number(result.combinatorial_initial_cut_time_sec) << ",\n";
+    out << "  \"combinatorial_root_cuts_enabled\": "
+        << (result.combinatorial_root_cuts_enabled ? "true" : "false") << ",\n";
+    out << "  \"combinatorial_root_rounds\": "
+        << result.combinatorial_root_rounds << ",\n";
+    out << "  \"combinatorial_root_integer_points_evaluated\": "
+        << result.combinatorial_root_integer_points_evaluated << ",\n";
+    out << "  \"combinatorial_root_fractional_points_evaluated\": "
+        << result.combinatorial_root_fractional_points_evaluated << ",\n";
+    out << "  \"combinatorial_root_cuts_generated\": "
+        << result.combinatorial_root_cuts_generated << ",\n";
+    out << "  \"combinatorial_root_cuts_added\": "
+        << result.combinatorial_root_cuts_added << ",\n";
+    out << "  \"combinatorial_root_duplicate_cuts\": "
+        << result.combinatorial_root_duplicate_cuts << ",\n";
+    out << "  \"combinatorial_root_cut_time_sec\": "
+        << format_json_number(result.combinatorial_root_cut_time_sec) << ",\n";
+    out << "  \"combinatorial_root_skipped_reason\": \""
+        << json_escape_local(result.combinatorial_root_skipped_reason) << "\",\n";
+    out << "  \"combinatorial_fractional_validity_mode\": \""
+        << json_escape_local(result.combinatorial_fractional_validity_mode) << "\",\n";
+    out << "  \"combinatorial_fractional_separation_calls\": "
+        << result.combinatorial_fractional_separation_calls << ",\n";
+    out << "  \"combinatorial_fractional_scenarios_evaluated\": "
+        << result.combinatorial_fractional_scenarios_evaluated << ",\n";
+    out << "  \"combinatorial_fractional_cuts_generated\": "
+        << result.combinatorial_fractional_cuts_generated << ",\n";
+    out << "  \"combinatorial_fractional_duplicate_cuts\": "
+        << result.combinatorial_fractional_duplicate_cuts << ",\n";
+    out << "  \"combinatorial_fractional_max_violation\": "
+        << format_json_number(result.combinatorial_fractional_max_violation) << ",\n";
+    out << "  \"combinatorial_fractional_max_tightness_error\": "
+        << format_json_number(result.combinatorial_fractional_max_tightness_error) << ",\n";
+    out << "  \"combinatorial_fractional_separation_time_sec\": "
+        << format_json_number(result.combinatorial_fractional_separation_time_sec) << ",\n";
+    out << "  \"combinatorial_realized_sample_size\": "
+        << result.combinatorial_realized_sample_size << ",\n";
+    out << "  \"combinatorial_sampling_exact_fallback\": "
+        << (result.combinatorial_sampling_exact_fallback ? "true" : "false") << ",\n";
+    out << "  \"combinatorial_scenario_policy_exact\": "
+        << (result.combinatorial_scenario_policy_exact ? "true" : "false") << ",\n";
+    out << "  \"combinatorial_scenario_policy_heuristic\": "
+        << (result.combinatorial_scenario_policy_heuristic ? "true" : "false") << ",\n";
+    out << "  \"combinatorial_full_verification_before_acceptance\": "
+        << (result.combinatorial_full_verification_before_acceptance ? "true" : "false") << ",\n";
+    out << "  \"combinatorial_candidate_initial_sample_scenarios_evaluated\": "
+        << result.combinatorial_candidate_initial_sample_scenarios_evaluated << ",\n";
+    out << "  \"combinatorial_candidate_fallback_scenarios_evaluated\": "
+        << result.combinatorial_candidate_fallback_scenarios_evaluated << ",\n";
+    out << "  \"combinatorial_candidate_full_sweeps\": "
+        << result.combinatorial_candidate_full_sweeps << ",\n";
+    out << "  \"combinatorial_candidates_rejected_in_initial_sample\": "
+        << result.combinatorial_candidates_rejected_in_initial_sample << ",\n";
+    out << "  \"combinatorial_candidates_rejected_in_fallback\": "
+        << result.combinatorial_candidates_rejected_in_fallback << ",\n";
+    out << "  \"combinatorial_candidates_fully_verified\": "
+        << result.combinatorial_candidates_fully_verified << ",\n";
+    out << "  \"combinatorial_sampled_violations\": "
+        << result.combinatorial_sampled_violations << ",\n";
+    out << "  \"combinatorial_fallback_violations\": "
+        << result.combinatorial_fallback_violations << ",\n";
+    out << "  \"combinatorial_scenarios_skipped_after_candidate_rejection\": "
+        << result.combinatorial_scenarios_skipped_after_candidate_rejection << ",\n";
+    out << "  \"combinatorial_sampling_time_sec\": "
+        << format_json_number(result.combinatorial_sampling_time_sec) << ",\n";
+    out << "  \"combinatorial_ordering_time_sec\": "
+        << format_json_number(result.combinatorial_ordering_time_sec) << ",\n";
     out << "  \"coverage_llbi_enabled\": " << (result.coverage_llbi_enabled ? "true" : "false") << ",\n";
     out << "  \"coverage_llbi_num_zeta_vars\": " << result.coverage_llbi_num_zeta_vars << ",\n";
     out << "  \"coverage_llbi_num_constraints\": " << result.coverage_llbi_num_constraints << ",\n";
     out << "  \"coverage_llbi_precompute_time_sec\": "
         << format_json_number(result.coverage_llbi_precompute_time_sec) << ",\n";
+    out << "  \"coverage_llbi_weighted\": "
+        << (result.coverage_llbi_weighted ? "true" : "false") << ",\n";
+    out << "  \"coverage_llbi_weight_map_hash\": \""
+        << json_escape_local(result.coverage_llbi_weight_map_hash) << "\",\n";
+    out << "  \"coverage_llbi_scenarios_precomputed\": "
+        << result.coverage_llbi_scenarios_precomputed << ",\n";
+    out << "  \"coverage_llbi_baseline_cells\": "
+        << result.coverage_llbi_baseline_cells << ",\n";
+    out << "  \"coverage_llbi_auxiliary_variables\": "
+        << result.coverage_llbi_auxiliary_variables << ",\n";
+    out << "  \"coverage_llbi_linking_constraints\": "
+        << result.coverage_llbi_linking_constraints << ",\n";
+    out << "  \"coverage_llbi_loss_constraints\": "
+        << result.coverage_llbi_loss_constraints << ",\n";
+    out << "  \"coverage_llbi_nonempty_coverage_sets\": "
+        << result.coverage_llbi_nonempty_coverage_sets << ",\n";
+    out << "  \"coverage_llbi_total_incidence_terms\": "
+        << result.coverage_llbi_total_incidence_terms << ",\n";
+    out << "  \"coverage_llbi_build_time_sec\": "
+        << format_json_number(result.coverage_llbi_build_time_sec) << ",\n";
+    out << "  \"coverage_llbi_validity_mode\": \""
+        << json_escape_local(result.coverage_llbi_validity_mode) << "\",\n";
     out << "  \"path_llbi_enabled\": " << (result.path_llbi_enabled ? "true" : "false") << ",\n";
     out << "  \"path_llbi_num_b_vars\": " << result.path_llbi_num_b_vars << ",\n";
     out << "  \"path_llbi_num_path_constraints\": " << result.path_llbi_num_path_constraints << ",\n";
     out << "  \"path_llbi_num_paths_used\": " << result.path_llbi_num_paths_used << ",\n";
+    out << "  \"path_llbi_weighted\": "
+        << (result.path_llbi_weighted ? "true" : "false") << ",\n";
+    out << "  \"path_llbi_weight_map_hash\": \""
+        << json_escape_local(result.path_llbi_weight_map_hash) << "\",\n";
+    out << "  \"path_llbi_scenarios_precomputed\": "
+        << result.path_llbi_scenarios_precomputed << ",\n";
+    out << "  \"path_llbi_baseline_nodes\": "
+        << result.path_llbi_baseline_nodes << ",\n";
+    out << "  \"path_llbi_auxiliary_variables\": "
+        << result.path_llbi_auxiliary_variables << ",\n";
+    out << "  \"path_llbi_path_constraints\": "
+        << result.path_llbi_path_constraints << ",\n";
+    out << "  \"path_llbi_loss_constraints\": "
+        << result.path_llbi_loss_constraints << ",\n";
+    out << "  \"path_llbi_total_paths\": " << result.path_llbi_total_paths << ",\n";
+    out << "  \"path_llbi_total_candidate_incidence_terms\": "
+        << result.path_llbi_total_candidate_incidence_terms << ",\n";
+    out << "  \"path_llbi_nodes_without_paths\": "
+        << result.path_llbi_nodes_without_paths << ",\n";
+    out << "  \"path_llbi_path_enumeration_complete\": "
+        << (result.path_llbi_path_enumeration_complete ? "true" : "false") << ",\n";
+    out << "  \"path_llbi_paths_truncated\": "
+        << result.path_llbi_paths_truncated << ",\n";
     out << "  \"path_llbi_precompute_time_sec\": "
         << format_json_number(result.path_llbi_precompute_time_sec) << ",\n";
+    out << "  \"path_llbi_build_time_sec\": "
+        << format_json_number(result.path_llbi_build_time_sec) << ",\n";
+    out << "  \"path_llbi_validity_mode\": \""
+        << json_escape_local(result.path_llbi_validity_mode) << "\",\n";
     out << "  \"projected_coverage_llbi_enabled\": "
         << (result.projected_coverage_llbi_enabled ? "true" : "false") << ",\n";
     out << "  \"projected_path_llbi_enabled\": "
@@ -929,19 +1274,105 @@ void write_experiment_result_json(
         << (result.projected_exp_enumeration_truncated ? "true" : "false") << ",\n";
     out << "  \"projected_exp_enumeration_limit\": "
         << result.projected_exp_enumeration_limit << ",\n";
+    out << "  \"projected_coverage_llbi_weighted\": "
+        << (result.projected_coverage_llbi_weighted ? "true" : "false") << ",\n";
+    out << "  \"projected_coverage_llbi_mode\": \""
+        << json_escape_local(result.projected_coverage_llbi_mode) << "\",\n";
+    out << "  \"projected_coverage_llbi_weight_map_hash\": \""
+        << json_escape_local(result.projected_coverage_llbi_weight_map_hash) << "\",\n";
+    out << "  \"projected_coverage_llbi_scenarios_precomputed\": "
+        << result.projected_coverage_llbi_scenarios_precomputed << ",\n";
+    out << "  \"projected_coverage_llbi_baseline_cells\": "
+        << result.projected_coverage_llbi_baseline_cells << ",\n";
+    out << "  \"projected_coverage_llbi_nonempty_coverage_sets\": "
+        << result.projected_coverage_llbi_nonempty_coverage_sets << ",\n";
+    out << "  \"projected_coverage_llbi_total_incidence_terms\": "
+        << result.projected_coverage_llbi_total_incidence_terms << ",\n";
+    out << "  \"projected_coverage_llbi_separation_calls\": "
+        << result.projected_coverage_llbi_separation_calls << ",\n";
+    out << "  \"projected_coverage_llbi_cuts_generated\": "
+        << result.projected_coverage_llbi_cuts_generated << ",\n";
+    out << "  \"projected_coverage_llbi_cuts_added\": "
+        << result.projected_coverage_llbi_cuts_added << ",\n";
+    out << "  \"projected_coverage_llbi_duplicate_cuts\": "
+        << result.projected_coverage_llbi_duplicate_cuts << ",\n";
+    out << "  \"projected_coverage_llbi_max_violation\": "
+        << format_json_number(result.projected_coverage_llbi_max_violation) << ",\n";
+    out << "  \"projected_coverage_llbi_precompute_time_sec\": "
+        << format_json_number(result.projected_coverage_llbi_precompute_time_sec) << ",\n";
+    out << "  \"projected_coverage_llbi_separation_time_sec\": "
+        << format_json_number(result.projected_coverage_llbi_separation_time_sec) << ",\n";
+    out << "  \"projected_coverage_llbi_validity_mode\": \""
+        << json_escape_local(result.projected_coverage_llbi_validity_mode) << "\",\n";
+    out << "  \"projected_path_llbi_weighted\": "
+        << (result.projected_path_llbi_weighted ? "true" : "false") << ",\n";
+    out << "  \"projected_path_llbi_mode\": \""
+        << json_escape_local(result.projected_path_llbi_mode) << "\",\n";
+    out << "  \"projected_path_llbi_weight_map_hash\": \""
+        << json_escape_local(result.projected_path_llbi_weight_map_hash) << "\",\n";
+    out << "  \"projected_path_llbi_scenarios_precomputed\": "
+        << result.projected_path_llbi_scenarios_precomputed << ",\n";
+    out << "  \"projected_path_llbi_destination_nodes\": "
+        << result.projected_path_llbi_destination_nodes << ",\n";
+    out << "  \"projected_path_llbi_total_paths\": "
+        << result.projected_path_llbi_total_paths << ",\n";
+    out << "  \"projected_path_llbi_total_incidence_terms\": "
+        << result.projected_path_llbi_total_incidence_terms << ",\n";
+    out << "  \"projected_path_llbi_nodes_without_paths\": "
+        << result.projected_path_llbi_nodes_without_paths << ",\n";
+    out << "  \"projected_path_llbi_enumeration_complete\": "
+        << (result.projected_path_llbi_enumeration_complete ? "true" : "false") << ",\n";
+    out << "  \"projected_path_llbi_paths_truncated\": "
+        << result.projected_path_llbi_paths_truncated << ",\n";
+    out << "  \"projected_path_llbi_separation_calls\": "
+        << result.projected_path_llbi_separation_calls << ",\n";
+    out << "  \"projected_path_llbi_cuts_generated\": "
+        << result.projected_path_llbi_cuts_generated << ",\n";
+    out << "  \"projected_path_llbi_cuts_added\": "
+        << result.projected_path_llbi_cuts_added << ",\n";
+    out << "  \"projected_path_llbi_duplicate_cuts\": "
+        << result.projected_path_llbi_duplicate_cuts << ",\n";
+    out << "  \"projected_path_llbi_max_violation\": "
+        << format_json_number(result.projected_path_llbi_max_violation) << ",\n";
+    out << "  \"projected_path_llbi_precompute_time_sec\": "
+        << format_json_number(result.projected_path_llbi_precompute_time_sec) << ",\n";
+    out << "  \"projected_path_llbi_separation_time_sec\": "
+        << format_json_number(result.projected_path_llbi_separation_time_sec) << ",\n";
+    out << "  \"projected_path_llbi_validity_mode\": \""
+        << json_escape_local(result.projected_path_llbi_validity_mode) << "\",\n";
     out << "  \"global_dominance_enabled\": " << (result.global_dominance_enabled ? "true" : "false") << ",\n";
+    out << "  \"global_dominance_structural_weight_safe\": "
+        << (result.global_dominance_structural_weight_safe ? "true" : "false") << ",\n";
+    out << "  \"global_dominance_original_candidate_count\": "
+        << result.global_dominance_original_candidate_count << ",\n";
     out << "  \"global_dominance_candidates_removed\": "
         << result.global_dominance_candidates_removed << ",\n";
     out << "  \"global_dominance_equivalence_classes\": "
         << result.global_dominance_equivalence_classes << ",\n";
+    out << "  \"global_dominance_post_candidate_count\": "
+        << result.global_dominance_post_candidate_count << ",\n";
+    out << "  \"global_dominance_warm_start_replacements\": "
+        << result.global_dominance_warm_start_replacements << ",\n";
     out << "  \"global_dominance_precompute_time_sec\": "
         << format_json_number(result.global_dominance_precompute_time_sec) << ",\n";
     out << "  \"conditional_zero_benefit_enabled\": "
         << (result.conditional_zero_benefit_enabled ? "true" : "false") << ",\n";
+    out << "  \"conditional_zero_benefit_structural_weight_safe\": "
+        << (result.conditional_zero_benefit_structural_weight_safe ? "true" : "false") << ",\n";
+    out << "  \"conditional_zero_benefit_callback_calls\": "
+        << result.conditional_zero_benefit_callback_calls << ",\n";
+    out << "  \"conditional_zero_benefit_nodes_checked\": "
+        << result.conditional_zero_benefit_nodes_checked << ",\n";
+    out << "  \"conditional_zero_benefit_candidates_checked\": "
+        << result.conditional_zero_benefit_candidates_checked << ",\n";
     out << "  \"conditional_zero_benefit_fixings_attempted\": "
         << result.conditional_zero_benefit_fixings_attempted << ",\n";
     out << "  \"conditional_zero_benefit_fixings_applied\": "
         << result.conditional_zero_benefit_fixings_applied << ",\n";
+    out << "  \"conditional_zero_benefit_variables_fixed_zero\": "
+        << result.conditional_zero_benefit_variables_fixed_zero << ",\n";
+    out << "  \"conditional_zero_benefit_scenarios_reachability_computed\": "
+        << result.conditional_zero_benefit_scenarios_reachability_computed << ",\n";
     out << "  \"conditional_zero_benefit_time_sec\": "
         << format_json_number(result.conditional_zero_benefit_time_sec) << ",\n";
     if (has_benders_diagnostics(result)) {
@@ -986,6 +1417,106 @@ void write_experiment_result_json(
     out << "  \"evaluator_objective\": " << format_json_number(result.evaluator_objective) << ",\n";
     out << "  \"evaluator_abs_diff\": " << format_json_number(result.evaluator_abs_diff) << ",\n";
     out << "  \"evaluator_rel_diff\": " << format_json_number(result.evaluator_rel_diff) << ",\n";
+    out << "  \"weight_profile\": \"" << json_escape_local(result.weight_profile) << "\",\n";
+    out << "  \"weight_map_file\": \"" << json_escape_local(result.weight_map_file) << "\",\n";
+    out << "  \"weight_map_hash\": \"" << json_escape_local(result.weight_map_hash) << "\",\n";
+    out << "  \"weight_replicate\": " << result.weight_replicate << ",\n";
+    out << "  \"weight_generation_seed\": " << result.weight_generation_seed << ",\n";
+    out << "  \"weight_generator_version\": " << result.weight_generator_version << ",\n";
+    out << "  \"canonical_landscape_id\": \""
+        << json_escape_local(result.canonical_landscape_id) << "\",\n";
+    out << "  \"paired_landscape_id\": \""
+        << json_escape_local(result.paired_landscape_id) << "\",\n";
+    out << "  \"weight_source_universe_hash\": \""
+        << json_escape_local(result.weight_source_universe_hash) << "\",\n";
+    out << "  \"weight_mapping_method\": \""
+        << json_escape_local(result.weight_mapping_method) << "\",\n";
+    out << "  \"weight_mapping_hash\": \""
+        << json_escape_local(result.weight_mapping_hash) << "\",\n";
+    out << "  \"weight_mapped_cell_count\": " << result.weight_mapped_cell_count << ",\n";
+    out << "  \"weight_missing_cell_count\": " << result.weight_missing_cell_count << ",\n";
+    out << "  \"paired_reburn_instance_id\": \""
+        << json_escape_local(result.paired_reburn_instance_id) << "\",\n";
+    out << "  \"paired_evaluation_enabled\": "
+        << (result.paired_evaluation_enabled ? "true" : "false") << ",\n";
+    out << "  \"weight_normalized\": " << (result.weight_normalized ? "true" : "false") << ",\n";
+    out << "  \"weight_mean\": " << format_json_number(result.weight_mean) << ",\n";
+    out << "  \"weight_min\": " << format_json_number(result.weight_min) << ",\n";
+    out << "  \"weight_max\": " << format_json_number(result.weight_max) << ",\n";
+    out << "  \"weight_total\": " << format_json_number(result.weight_total) << ",\n";
+    out << "  \"solver_weighted_objective\": "
+        << format_json_number(result.solver_weighted_objective) << ",\n";
+    out << "  \"evaluator_weighted_objective\": "
+        << format_json_number(result.evaluator_weighted_objective) << ",\n";
+    out << "  \"objective_validation_abs_difference\": "
+        << format_json_number(result.objective_validation_abs_difference) << ",\n";
+    out << "  \"objective_validation_rel_difference\": "
+        << format_json_number(result.objective_validation_rel_difference) << ",\n";
+    out << "  \"objective_validation_passed\": "
+        << (result.objective_validation_passed ? "true" : "false") << ",\n";
+    out << "  \"dpv_weighted\": " << (result.dpv_weighted ? "true" : "false") << ",\n";
+    out << "  \"dpv_model_weighted\": "
+        << (result.dpv_model_weighted ? "true" : "false") << ",\n";
+    out << "  \"dpv_model_type\": \"" << json_escape_local(result.dpv_model_type) << "\",\n";
+    out << "  \"dpv_variant\": \"" << json_escape_local(result.dpv_variant) << "\",\n";
+    out << "  \"dpv_structural_definition\": \""
+        << json_escape_local(result.dpv_structural_definition) << "\",\n";
+    out << "  \"dpv_ignition_policy\": \"" << json_escape_local(result.dpv_ignition_policy) << "\",\n";
+    out << "  \"dpv_weight_profile\": \"" << json_escape_local(result.dpv_weight_profile) << "\",\n";
+    out << "  \"dpv_weight_map_hash\": \"" << json_escape_local(result.dpv_weight_map_hash) << "\",\n";
+    out << "  \"dpv_scenario_aggregation\": \""
+        << json_escape_local(result.dpv_scenario_aggregation) << "\",\n";
+    out << "  \"dpv_normalization\": \"" << json_escape_local(result.dpv_normalization) << "\",\n";
+    out << "  \"dpv_risk_measure\": \"" << json_escape_local(result.dpv_risk_measure) << "\",\n";
+    out << "  \"dpv_candidates_scored\": " << result.dpv_candidates_scored << ",\n";
+    out << "  \"dpv_candidates_selected\": " << result.dpv_candidates_selected << ",\n";
+    out << "  \"dpv_score_min\": " << format_json_number(result.dpv_score_min) << ",\n";
+    out << "  \"dpv_score_max\": " << format_json_number(result.dpv_score_max) << ",\n";
+    out << "  \"dpv_score_mean\": " << format_json_number(result.dpv_score_mean) << ",\n";
+    out << "  \"dpv_selected_score_sum\": "
+        << format_json_number(result.dpv_selected_score_sum) << ",\n";
+    out << "  \"dpv_structural_cache_hit\": "
+        << (result.dpv_structural_cache_hit ? "true" : "false") << ",\n";
+    out << "  \"dpv_weighted_cache_hit\": "
+        << (result.dpv_weighted_cache_hit ? "true" : "false") << ",\n";
+    out << "  \"dpv_score_precompute_time_sec\": "
+        << format_json_number(result.dpv_score_precompute_time_sec) << ",\n";
+    out << "  \"dpv_selection_time_sec\": "
+        << format_json_number(result.dpv_selection_time_sec) << ",\n";
+    out << "  \"dpv_surrogate_objective\": "
+        << format_json_number(result.dpv_surrogate_objective) << ",\n";
+    out << "  \"dpv_surrogate_best_bound\": "
+        << format_json_number(result.dpv_surrogate_best_bound) << ",\n";
+    out << "  \"dpv_surrogate_gap\": "
+        << format_json_number(result.dpv_surrogate_gap) << ",\n";
+    out << "  \"dpv_benders_iterations\": " << result.dpv_benders_iterations << ",\n";
+    out << "  \"dpv_benders_subproblems_solved\": "
+        << result.dpv_benders_subproblems_solved << ",\n";
+    out << "  \"dpv_benders_cuts_generated\": " << result.dpv_benders_cuts_generated << ",\n";
+    out << "  \"dpv_benders_cuts_added\": " << result.dpv_benders_cuts_added << ",\n";
+    out << "  \"dpv_benders_duplicate_cuts\": " << result.dpv_benders_duplicate_cuts << ",\n";
+    out << "  \"dpv_benders_max_cut_violation\": "
+        << format_json_number(result.dpv_benders_max_cut_violation) << ",\n";
+    out << "  \"dpv_benders_max_tightness_error\": "
+        << format_json_number(result.dpv_benders_max_tightness_error) << ",\n";
+    out << "  \"dpv_benders_subproblem_time_sec\": "
+        << format_json_number(result.dpv_benders_subproblem_time_sec) << ",\n";
+    out << "  \"dpv_benders_cut_time_sec\": "
+        << format_json_number(result.dpv_benders_cut_time_sec) << ",\n";
+    out << "  \"dpv_llbi_enabled\": " << (result.dpv_llbi_enabled ? "true" : "false") << ",\n";
+    out << "  \"dpv_llbi_weighted\": " << (result.dpv_llbi_weighted ? "true" : "false") << ",\n";
+    out << "  \"dpv_llbi_type\": \"" << json_escape_local(result.dpv_llbi_type) << "\",\n";
+    out << "  \"dpv_llbi_constraints_added\": " << result.dpv_llbi_constraints_added << ",\n";
+    out << "  \"dpv_llbi_precompute_time_sec\": "
+        << format_json_number(result.dpv_llbi_precompute_time_sec) << ",\n";
+    out << "  \"dpv_llbi_validity_mode\": \""
+        << json_escape_local(result.dpv_llbi_validity_mode) << "\",\n";
+    out << "  \"dpv_greedy_iterations\": " << result.dpv_greedy_iterations << ",\n";
+    out << "  \"dpv_score_recomputations\": " << result.dpv_score_recomputations << ",\n";
+    out << "  \"dpv_marginal_scores_evaluated\": "
+        << result.dpv_marginal_scores_evaluated << ",\n";
+    out << "  \"dpv_overlap_value_removed\": "
+        << format_json_number(result.dpv_overlap_value_removed) << ",\n";
     out << "  \"risk_measure\": \"" << json_escape_local(result.risk_measure) << "\",\n";
     out << "  \"cvar_beta\": " << format_json_number(result.cvar_beta) << ",\n";
     out << "  \"cvar_lambda\": " << format_json_number(result.cvar_lambda) << ",\n";
@@ -1000,6 +1531,26 @@ void write_experiment_result_json(
         << format_json_number(result.test_empirical_var_burned_area) << ",\n";
     out << "  \"test_empirical_cvar_burned_area\": "
         << format_json_number(result.test_empirical_cvar_burned_area) << ",\n";
+    out << "  \"train_expected_weighted_burn_loss\": "
+        << format_json_number(result.train_expected_weighted_burn_loss) << ",\n";
+    out << "  \"test_expected_weighted_burn_loss\": "
+        << format_json_number(result.test_expected_weighted_burn_loss) << ",\n";
+    out << "  \"train_weighted_var\": "
+        << format_json_number(result.train_weighted_var) << ",\n";
+    out << "  \"test_weighted_var\": "
+        << format_json_number(result.test_weighted_var) << ",\n";
+    out << "  \"train_weighted_cvar\": "
+        << format_json_number(result.train_weighted_cvar) << ",\n";
+    out << "  \"test_weighted_cvar\": "
+        << format_json_number(result.test_weighted_cvar) << ",\n";
+    out << "  \"train_percentage_landscape_value_burned\": "
+        << format_json_number(result.train_percentage_landscape_value_burned) << ",\n";
+    out << "  \"test_percentage_landscape_value_burned\": "
+        << format_json_number(result.test_percentage_landscape_value_burned) << ",\n";
+    out << "  \"train_percentage_high_value_weight_burned\": "
+        << format_json_number(result.train_percentage_high_value_weight_burned) << ",\n";
+    out << "  \"test_percentage_high_value_weight_burned\": "
+        << format_json_number(result.test_percentage_high_value_weight_burned) << ",\n";
     out << "  \"validation_status\": \"" << json_escape_local(result.validation_status) << "\",\n";
     out << "  \"selected_firebreaks\": ";
     write_json_int_array(out, result.selected_firebreaks);
@@ -1048,14 +1599,28 @@ void append_experiment_result_csv(
         write_header || existing_csv_has_column(output_path, "benders_master_solve_time_sec");
     const bool include_lifted_lower_bound_summary =
         write_header || existing_csv_has_column(output_path, "benders_use_lifted_lower_bounds");
+    const bool include_lifted_lower_bound_extended =
+        write_header || existing_csv_has_column(output_path, "benders_lifted_lower_bound_weighted");
     const bool include_branch_benders_summary =
         write_header || existing_csv_has_column(output_path, "branch_benders_lazy_cuts_added");
     const bool include_branch_benders_timing_summary =
         write_header || existing_csv_has_column(output_path, "branch_benders_subproblems_attempted");
     const bool include_combinatorial_benders_summary =
         write_header || existing_csv_has_column(output_path, "combinatorial_benders_enabled");
+    const bool include_combinatorial_benders_extended =
+        write_header || existing_csv_has_column(output_path, "combinatorial_benders_weighted");
+    const bool include_combinatorial_lifting_extended =
+        write_header || existing_csv_has_column(output_path, "combinatorial_lifting_weighted");
     const bool include_fpp_strengthening_summary =
         write_header || existing_csv_has_column(output_path, "coverage_llbi_enabled");
+    const bool include_coverage_llbi_extended =
+        write_header || existing_csv_has_column(output_path, "coverage_llbi_weighted");
+    const bool include_path_llbi_extended =
+        write_header || existing_csv_has_column(output_path, "path_llbi_weighted");
+    const bool include_projected_coverage_llbi_extended =
+        write_header || existing_csv_has_column(output_path, "projected_coverage_llbi_weighted");
+    const bool include_projected_path_llbi_extended =
+        write_header || existing_csv_has_column(output_path, "projected_path_llbi_weighted");
     const bool include_branch_benders_root_user_cut_summary =
         write_header || existing_csv_has_column(output_path, "branch_benders_use_root_user_cuts");
     const bool include_restricted_candidate_summary =
@@ -1070,6 +1635,14 @@ void append_experiment_result_csv(
         write_header || existing_csv_has_column(output_path, "validation_status");
     const bool include_risk_reporting =
         write_header || existing_csv_has_column(output_path, "risk_measure");
+    const bool include_weight_reporting =
+        write_header || existing_csv_has_column(output_path, "weight_profile");
+    const bool include_weight_identity_reporting =
+        write_header || existing_csv_has_column(output_path, "canonical_landscape_id");
+    const bool include_dpv_reporting =
+        write_header || existing_csv_has_column(output_path, "dpv_weighted");
+    const bool include_dpv_model_reporting =
+        write_header || existing_csv_has_column(output_path, "dpv_model_weighted");
     const bool include_graph_ratios =
         write_header || existing_csv_has_column(output_path, "train_graph_classification_ratios");
     ensure_parent_directory(output_path);
@@ -1090,6 +1663,16 @@ void append_experiment_result_csv(
             << "benders_max_subproblem_time_sec,"
             << "benders_use_lifted_lower_bounds,benders_lifted_lower_bound_count,"
             << "benders_lifted_lower_bound_precompute_time_sec,"
+            << "benders_lifted_lower_bound_weighted,benders_lifted_lower_bound_weight_map_hash,"
+            << "benders_lifted_lower_bound_scenarios_precomputed,"
+            << "benders_lifted_lower_bound_singletons_evaluated,"
+            << "benders_lifted_lower_bound_no_firebreak_loss_min,"
+            << "benders_lifted_lower_bound_no_firebreak_loss_max,"
+            << "benders_lifted_lower_bound_singleton_benefit_min,"
+            << "benders_lifted_lower_bound_singleton_benefit_max,"
+            << "benders_lifted_lower_bound_constraints_added,"
+            << "benders_lifted_lower_bound_cache_hit,"
+            << "benders_lifted_lower_bound_validity_mode,"
             << "branch_benders_lazy_cuts_added,branch_benders_candidate_incumbents_checked,"
             << "branch_benders_max_cut_violation,"
             << "branch_benders_candidate_callback_calls,branch_benders_subproblems_attempted,"
@@ -1112,9 +1695,111 @@ void append_experiment_result_csv(
             << "combinatorial_benders_avg_paths_per_cut,"
             << "combinatorial_benders_avg_cut_nonzeros,"
             << "combinatorial_benders_num_violated_cuts,"
+            << "combinatorial_benders_weighted,combinatorial_benders_mode,"
+            << "combinatorial_benders_weight_map_hash,"
+            << "combinatorial_benders_weighted_recourse_evaluations,"
+            << "combinatorial_benders_duplicate_cuts,"
+            << "combinatorial_benders_cuts_tight_at_incumbent,"
+            << "combinatorial_benders_lifting_enabled,"
+            << "combinatorial_benders_scenario_sampling_enabled,"
+            << "combinatorial_benders_max_tightness_error,"
+            << "combinatorial_benders_max_violation,"
+            << "combinatorial_benders_propagation_time_sec,"
+            << "combinatorial_benders_cut_build_time_sec,"
+            << "combinatorial_benders_validity_mode,"
+            << "combinatorial_weighted,combinatorial_mode,"
+            << "combinatorial_weight_map_hash,"
+            << "combinatorial_scenario_order,"
+            << "combinatorial_cut_sampling_ratio,"
+            << "combinatorial_candidate_callbacks,"
+            << "combinatorial_scenarios_evaluated,"
+            << "combinatorial_weighted_recourse_evaluations,"
+            << "combinatorial_cuts_generated,"
+            << "combinatorial_cuts_added,"
+            << "combinatorial_duplicate_cuts,"
+            << "combinatorial_cuts_tight_at_incumbent,"
+            << "combinatorial_max_tightness_error,"
+            << "combinatorial_max_violation,"
+            << "combinatorial_propagation_time_sec,"
+            << "combinatorial_cut_build_time_sec,"
+            << "combinatorial_callback_time_sec,"
+            << "combinatorial_validity_mode,"
+            << "combinatorial_lifting_enabled,"
+            << "combinatorial_fractional_cuts_enabled,"
+            << "combinatorial_initial_cuts_enabled,"
+            << "combinatorial_scenario_sampling_enabled,"
+            << "combinatorial_lifting_weighted,"
+            << "combinatorial_lifting_mode,"
+            << "combinatorial_lifting_weight_map_hash,"
+            << "combinatorial_lifting_attempts,"
+            << "combinatorial_lifting_successes,"
+            << "combinatorial_lifting_failures,"
+            << "combinatorial_candidates_considered_for_lifting,"
+            << "combinatorial_coefficients_changed,"
+            << "combinatorial_propagation_evaluations_for_lifting,"
+            << "combinatorial_baseline_cut_nonzeros,"
+            << "combinatorial_lifted_cut_nonzeros,"
+            << "combinatorial_max_coefficient_change,"
+            << "combinatorial_max_baseline_tightness_error,"
+            << "combinatorial_max_lifted_tightness_error,"
+            << "combinatorial_lifted_cuts_dominating_baseline,"
+            << "combinatorial_lifting_time_sec,"
+            << "combinatorial_lifting_validity_mode,"
+            << "combinatorial_initial_solutions_evaluated,"
+            << "combinatorial_initial_cuts_generated,"
+            << "combinatorial_initial_duplicate_cuts,"
+            << "combinatorial_initial_cut_time_sec,"
+            << "combinatorial_root_cuts_enabled,"
+            << "combinatorial_root_rounds,"
+            << "combinatorial_root_integer_points_evaluated,"
+            << "combinatorial_root_fractional_points_evaluated,"
+            << "combinatorial_root_cuts_generated,"
+            << "combinatorial_root_cuts_added,"
+            << "combinatorial_root_duplicate_cuts,"
+            << "combinatorial_root_cut_time_sec,"
+            << "combinatorial_root_skipped_reason,"
+            << "combinatorial_fractional_validity_mode,"
+            << "combinatorial_fractional_separation_calls,"
+            << "combinatorial_fractional_scenarios_evaluated,"
+            << "combinatorial_fractional_cuts_generated,"
+            << "combinatorial_fractional_duplicate_cuts,"
+            << "combinatorial_fractional_max_violation,"
+            << "combinatorial_fractional_max_tightness_error,"
+            << "combinatorial_fractional_separation_time_sec,"
+            << "combinatorial_realized_sample_size,"
+            << "combinatorial_sampling_exact_fallback,"
+            << "combinatorial_scenario_policy_exact,"
+            << "combinatorial_scenario_policy_heuristic,"
+            << "combinatorial_full_verification_before_acceptance,"
+            << "combinatorial_candidate_initial_sample_scenarios_evaluated,"
+            << "combinatorial_candidate_fallback_scenarios_evaluated,"
+            << "combinatorial_candidate_full_sweeps,"
+            << "combinatorial_candidates_rejected_in_initial_sample,"
+            << "combinatorial_candidates_rejected_in_fallback,"
+            << "combinatorial_candidates_fully_verified,"
+            << "combinatorial_sampled_violations,"
+            << "combinatorial_fallback_violations,"
+            << "combinatorial_scenarios_skipped_after_candidate_rejection,"
+            << "combinatorial_sampling_time_sec,"
+            << "combinatorial_ordering_time_sec,"
             << "coverage_llbi_enabled,coverage_llbi_num_zeta_vars,coverage_llbi_num_constraints,"
-            << "coverage_llbi_precompute_time_sec,path_llbi_enabled,path_llbi_num_b_vars,"
-            << "path_llbi_num_path_constraints,path_llbi_num_paths_used,path_llbi_precompute_time_sec,"
+            << "coverage_llbi_precompute_time_sec,"
+            << "coverage_llbi_weighted,coverage_llbi_weight_map_hash,"
+            << "coverage_llbi_scenarios_precomputed,coverage_llbi_baseline_cells,"
+            << "coverage_llbi_auxiliary_variables,coverage_llbi_linking_constraints,"
+            << "coverage_llbi_loss_constraints,coverage_llbi_nonempty_coverage_sets,"
+            << "coverage_llbi_total_incidence_terms,coverage_llbi_build_time_sec,"
+            << "coverage_llbi_validity_mode,"
+            << "path_llbi_enabled,path_llbi_num_b_vars,"
+            << "path_llbi_num_path_constraints,path_llbi_num_paths_used,"
+            << "path_llbi_precompute_time_sec,"
+            << "path_llbi_weighted,path_llbi_weight_map_hash,"
+            << "path_llbi_scenarios_precomputed,path_llbi_baseline_nodes,"
+            << "path_llbi_auxiliary_variables,path_llbi_path_constraints,"
+            << "path_llbi_loss_constraints,path_llbi_total_paths,"
+            << "path_llbi_total_candidate_incidence_terms,path_llbi_nodes_without_paths,"
+            << "path_llbi_path_enumeration_complete,path_llbi_paths_truncated,"
+            << "path_llbi_build_time_sec,path_llbi_validity_mode,"
             << "projected_coverage_llbi_enabled,projected_path_llbi_enabled,"
             << "projected_llbi_family,projected_llbi_strategy,projected_llbi_mode,"
             << "projected_llbi_root_rounds,projected_llbi_cuts_added,"
@@ -1130,11 +1815,55 @@ void append_experiment_result_csv(
             << "projected_poly_enumeration_truncated,projected_poly_enumeration_limit,"
             << "projected_exp_separated_cuts_added,projected_exp_separation_rounds,"
             << "projected_exp_candidate_cuts_generated,projected_exp_candidate_cuts_added,"
-            << "projected_exp_enumeration_truncated,projected_exp_enumeration_limit,"
-            << "global_dominance_enabled,global_dominance_candidates_removed,"
-            << "global_dominance_equivalence_classes,global_dominance_precompute_time_sec,"
-            << "conditional_zero_benefit_enabled,conditional_zero_benefit_fixings_attempted,"
-            << "conditional_zero_benefit_fixings_applied,conditional_zero_benefit_time_sec,"
+            << "projected_exp_enumeration_truncated,projected_exp_enumeration_limit,";
+        if (include_projected_coverage_llbi_extended) {
+            out
+                << "projected_coverage_llbi_weighted,projected_coverage_llbi_mode,"
+            << "projected_coverage_llbi_weight_map_hash,"
+            << "projected_coverage_llbi_scenarios_precomputed,"
+            << "projected_coverage_llbi_baseline_cells,"
+            << "projected_coverage_llbi_nonempty_coverage_sets,"
+            << "projected_coverage_llbi_total_incidence_terms,"
+            << "projected_coverage_llbi_separation_calls,"
+            << "projected_coverage_llbi_cuts_generated,"
+            << "projected_coverage_llbi_cuts_added,"
+            << "projected_coverage_llbi_duplicate_cuts,"
+            << "projected_coverage_llbi_max_violation,"
+            << "projected_coverage_llbi_precompute_time_sec,"
+                << "projected_coverage_llbi_separation_time_sec,"
+                << "projected_coverage_llbi_validity_mode,";
+        }
+        if (include_projected_path_llbi_extended) {
+            out
+                << "projected_path_llbi_weighted,projected_path_llbi_mode,"
+                << "projected_path_llbi_weight_map_hash,"
+                << "projected_path_llbi_scenarios_precomputed,"
+                << "projected_path_llbi_destination_nodes,"
+                << "projected_path_llbi_total_paths,"
+                << "projected_path_llbi_total_incidence_terms,"
+                << "projected_path_llbi_nodes_without_paths,"
+                << "projected_path_llbi_enumeration_complete,"
+                << "projected_path_llbi_paths_truncated,"
+                << "projected_path_llbi_separation_calls,"
+                << "projected_path_llbi_cuts_generated,"
+                << "projected_path_llbi_cuts_added,"
+                << "projected_path_llbi_duplicate_cuts,"
+                << "projected_path_llbi_max_violation,"
+                << "projected_path_llbi_precompute_time_sec,"
+                << "projected_path_llbi_separation_time_sec,"
+                << "projected_path_llbi_validity_mode,";
+        }
+        if (include_fpp_strengthening_summary) {
+            out
+            << "global_dominance_enabled,global_dominance_structural_weight_safe,"
+            << "global_dominance_original_candidate_count,global_dominance_candidates_removed,"
+            << "global_dominance_equivalence_classes,global_dominance_post_candidate_count,"
+            << "global_dominance_warm_start_replacements,global_dominance_precompute_time_sec,"
+            << "conditional_zero_benefit_enabled,conditional_zero_benefit_structural_weight_safe,"
+            << "conditional_zero_benefit_callback_calls,conditional_zero_benefit_nodes_checked,"
+            << "conditional_zero_benefit_candidates_checked,conditional_zero_benefit_fixings_attempted,"
+            << "conditional_zero_benefit_fixings_applied,conditional_zero_benefit_variables_fixed_zero,"
+            << "conditional_zero_benefit_scenarios_reachability_computed,conditional_zero_benefit_time_sec,"
             << "branch_benders_use_root_user_cuts,branch_benders_root_user_cuts_added,"
             << "branch_benders_root_user_cut_rounds,branch_benders_root_user_cut_max_violation,"
             << "restricted_candidate_enabled,restricted_candidate_exact_mode,"
@@ -1150,8 +1879,39 @@ void append_experiment_result_csv(
             << "dominator_cuts_added,dominator_aggregate_cuts_added,dominator_individual_cuts_added,"
             << "dominator_dag_scenarios,dominator_fallback_scenarios,dominator_preprocessing_time_sec,"
             << "heuristic_time_sec,heuristic_objective,heuristic_exact_evaluations,heuristic_selected_count,"
-            << "evaluator_objective,evaluator_abs_diff,evaluator_rel_diff,validation_status,"
+            << "evaluator_objective,evaluator_abs_diff,evaluator_rel_diff,"
+            << "weight_profile,weight_map_file,weight_map_hash,weight_normalized,"
+            << "weight_replicate,weight_generation_seed,weight_generator_version,"
+            << "canonical_landscape_id,paired_landscape_id,weight_source_universe_hash,"
+            << "weight_mapping_method,weight_mapping_hash,weight_mapped_cell_count,"
+            << "weight_missing_cell_count,paired_reburn_instance_id,paired_evaluation_enabled,"
+            << "weight_mean,weight_min,weight_max,weight_total,"
+            << "solver_weighted_objective,evaluator_weighted_objective,"
+            << "objective_validation_abs_difference,objective_validation_rel_difference,"
+            << "objective_validation_passed,"
+            << "dpv_weighted,dpv_model_weighted,dpv_model_type,"
+            << "dpv_variant,dpv_structural_definition,dpv_ignition_policy,"
+            << "dpv_weight_profile,dpv_weight_map_hash,dpv_scenario_aggregation,dpv_normalization,"
+            << "dpv_risk_measure,"
+            << "dpv_candidates_scored,dpv_candidates_selected,"
+            << "dpv_score_min,dpv_score_max,dpv_score_mean,dpv_selected_score_sum,"
+            << "dpv_structural_cache_hit,dpv_weighted_cache_hit,"
+            << "dpv_score_precompute_time_sec,dpv_selection_time_sec,dpv_surrogate_objective,"
+            << "dpv_surrogate_best_bound,dpv_surrogate_gap,"
+            << "dpv_benders_iterations,dpv_benders_subproblems_solved,"
+            << "dpv_benders_cuts_generated,dpv_benders_cuts_added,dpv_benders_duplicate_cuts,"
+            << "dpv_benders_max_cut_violation,dpv_benders_max_tightness_error,"
+            << "dpv_benders_subproblem_time_sec,dpv_benders_cut_time_sec,"
+            << "dpv_llbi_enabled,dpv_llbi_weighted,dpv_llbi_type,"
+            << "dpv_llbi_constraints_added,dpv_llbi_precompute_time_sec,dpv_llbi_validity_mode,"
+            << "dpv_greedy_iterations,dpv_score_recomputations,dpv_marginal_scores_evaluated,"
+            << "dpv_overlap_value_removed,"
+            << "validation_status,"
             << "risk_measure,cvar_beta,cvar_lambda,train_cvar_burned_area,test_cvar_burned_area,"
+            << "train_expected_weighted_burn_loss,test_expected_weighted_burn_loss,"
+            << "train_weighted_var,test_weighted_var,train_weighted_cvar,test_weighted_cvar,"
+            << "train_percentage_landscape_value_burned,test_percentage_landscape_value_burned,"
+            << "train_percentage_high_value_weight_burned,test_percentage_high_value_weight_burned,"
             << "selected_firebreaks,"
             << "warm_start_used,mip_start_accepted,warm_start_source,warm_start_valid_nodes,warm_start_ignored_nodes,warm_start_notes,"
             << "train_expected_burned_area,train_worst_10pct_burned_area,"
@@ -1159,6 +1919,7 @@ void append_experiment_result_csv(
             << "train_evaluation_runtime_seconds,test_evaluation_runtime_seconds,test_scenario_loading_runtime_seconds,"
             << "train_graph_classification_ratios,test_graph_classification_ratios,"
             << "graph_type_note,notes\n";
+        }
     }
 
     if (include_batch_metadata) {
@@ -1213,6 +1974,19 @@ void append_experiment_result_csv(
             << result.benders_lifted_lower_bound_count << ","
             << format_csv_number(result.benders_lifted_lower_bound_precompute_time_sec) << ",";
     }
+    if (include_lifted_lower_bound_extended) {
+        out << (result.benders_lifted_lower_bound_weighted ? "true" : "false") << ","
+            << csv_escape(result.benders_lifted_lower_bound_weight_map_hash) << ","
+            << result.benders_lifted_lower_bound_scenarios_precomputed << ","
+            << result.benders_lifted_lower_bound_singletons_evaluated << ","
+            << format_csv_number(result.benders_lifted_lower_bound_no_firebreak_loss_min) << ","
+            << format_csv_number(result.benders_lifted_lower_bound_no_firebreak_loss_max) << ","
+            << format_csv_number(result.benders_lifted_lower_bound_singleton_benefit_min) << ","
+            << format_csv_number(result.benders_lifted_lower_bound_singleton_benefit_max) << ","
+            << result.benders_lifted_lower_bound_constraints_added << ","
+            << (result.benders_lifted_lower_bound_cache_hit ? "true" : "false") << ","
+            << csv_escape(result.benders_lifted_lower_bound_validity_mode) << ",";
+    }
     if (include_branch_benders_summary) {
         out << result.branch_benders_lazy_cuts_added << ","
             << result.branch_benders_candidate_incumbents_checked << ","
@@ -1249,16 +2023,145 @@ void append_experiment_result_csv(
             << format_csv_number(result.combinatorial_benders_avg_cut_nonzeros) << ","
             << result.combinatorial_benders_num_violated_cuts << ",";
     }
+    if (include_combinatorial_benders_extended) {
+        out << (result.combinatorial_benders_weighted ? "true" : "false") << ","
+            << csv_escape(result.combinatorial_benders_mode) << ","
+            << csv_escape(result.combinatorial_benders_weight_map_hash) << ","
+            << result.combinatorial_benders_weighted_recourse_evaluations << ","
+            << result.combinatorial_benders_duplicate_cuts << ","
+            << result.combinatorial_benders_cuts_tight_at_incumbent << ","
+            << (result.combinatorial_benders_lifting_enabled ? "true" : "false") << ","
+            << (result.combinatorial_benders_scenario_sampling_enabled ? "true" : "false") << ","
+            << format_csv_number(result.combinatorial_benders_max_tightness_error) << ","
+            << format_csv_number(result.combinatorial_benders_max_violation) << ","
+            << format_csv_number(result.combinatorial_benders_propagation_time_sec) << ","
+            << format_csv_number(result.combinatorial_benders_cut_build_time_sec) << ","
+            << csv_escape(result.combinatorial_benders_validity_mode) << ","
+            << (result.combinatorial_weighted ? "true" : "false") << ","
+            << csv_escape(result.combinatorial_mode) << ","
+            << csv_escape(result.combinatorial_weight_map_hash) << ","
+            << csv_escape(result.combinatorial_scenario_order) << ","
+            << format_csv_number(result.combinatorial_cut_sampling_ratio) << ","
+            << result.combinatorial_candidate_callbacks << ","
+            << result.combinatorial_scenarios_evaluated << ","
+            << result.combinatorial_weighted_recourse_evaluations << ","
+            << result.combinatorial_cuts_generated << ","
+            << result.combinatorial_cuts_added << ","
+            << result.combinatorial_duplicate_cuts << ","
+            << result.combinatorial_cuts_tight_at_incumbent << ","
+            << format_csv_number(result.combinatorial_max_tightness_error) << ","
+            << format_csv_number(result.combinatorial_max_violation) << ","
+            << format_csv_number(result.combinatorial_propagation_time_sec) << ","
+            << format_csv_number(result.combinatorial_cut_build_time_sec) << ","
+            << format_csv_number(result.combinatorial_callback_time_sec) << ","
+            << csv_escape(result.combinatorial_validity_mode) << ","
+            << (result.combinatorial_lifting_enabled ? "true" : "false") << ","
+            << (result.combinatorial_fractional_cuts_enabled ? "true" : "false") << ","
+            << (result.combinatorial_initial_cuts_enabled ? "true" : "false") << ","
+            << (result.combinatorial_scenario_sampling_enabled ? "true" : "false") << ",";
+    }
+    if (include_combinatorial_lifting_extended) {
+        out
+            << (result.combinatorial_lifting_weighted ? "true" : "false") << ","
+            << csv_escape(result.combinatorial_lifting_mode) << ","
+            << csv_escape(result.combinatorial_lifting_weight_map_hash) << ","
+            << result.combinatorial_lifting_attempts << ","
+            << result.combinatorial_lifting_successes << ","
+            << result.combinatorial_lifting_failures << ","
+            << result.combinatorial_candidates_considered_for_lifting << ","
+            << result.combinatorial_coefficients_changed << ","
+            << result.combinatorial_propagation_evaluations_for_lifting << ","
+            << result.combinatorial_baseline_cut_nonzeros << ","
+            << result.combinatorial_lifted_cut_nonzeros << ","
+            << format_csv_number(result.combinatorial_max_coefficient_change) << ","
+            << format_csv_number(result.combinatorial_max_baseline_tightness_error) << ","
+            << format_csv_number(result.combinatorial_max_lifted_tightness_error) << ","
+            << result.combinatorial_lifted_cuts_dominating_baseline << ","
+            << format_csv_number(result.combinatorial_lifting_time_sec) << ","
+            << csv_escape(result.combinatorial_lifting_validity_mode) << ","
+            << result.combinatorial_initial_solutions_evaluated << ","
+            << result.combinatorial_initial_cuts_generated << ","
+            << result.combinatorial_initial_duplicate_cuts << ","
+            << format_csv_number(result.combinatorial_initial_cut_time_sec) << ","
+            << (result.combinatorial_root_cuts_enabled ? "true" : "false") << ","
+            << result.combinatorial_root_rounds << ","
+            << result.combinatorial_root_integer_points_evaluated << ","
+            << result.combinatorial_root_fractional_points_evaluated << ","
+            << result.combinatorial_root_cuts_generated << ","
+            << result.combinatorial_root_cuts_added << ","
+            << result.combinatorial_root_duplicate_cuts << ","
+            << format_csv_number(result.combinatorial_root_cut_time_sec) << ","
+            << csv_escape(result.combinatorial_root_skipped_reason) << ","
+            << csv_escape(result.combinatorial_fractional_validity_mode) << ","
+            << result.combinatorial_fractional_separation_calls << ","
+            << result.combinatorial_fractional_scenarios_evaluated << ","
+            << result.combinatorial_fractional_cuts_generated << ","
+            << result.combinatorial_fractional_duplicate_cuts << ","
+            << format_csv_number(result.combinatorial_fractional_max_violation) << ","
+            << format_csv_number(result.combinatorial_fractional_max_tightness_error) << ","
+            << format_csv_number(result.combinatorial_fractional_separation_time_sec) << ","
+            << result.combinatorial_realized_sample_size << ","
+            << (result.combinatorial_sampling_exact_fallback ? "true" : "false") << ","
+            << (result.combinatorial_scenario_policy_exact ? "true" : "false") << ","
+            << (result.combinatorial_scenario_policy_heuristic ? "true" : "false") << ","
+            << (result.combinatorial_full_verification_before_acceptance ? "true" : "false") << ","
+            << result.combinatorial_candidate_initial_sample_scenarios_evaluated << ","
+            << result.combinatorial_candidate_fallback_scenarios_evaluated << ","
+            << result.combinatorial_candidate_full_sweeps << ","
+            << result.combinatorial_candidates_rejected_in_initial_sample << ","
+            << result.combinatorial_candidates_rejected_in_fallback << ","
+            << result.combinatorial_candidates_fully_verified << ","
+            << result.combinatorial_sampled_violations << ","
+            << result.combinatorial_fallback_violations << ","
+            << result.combinatorial_scenarios_skipped_after_candidate_rejection << ","
+            << format_csv_number(result.combinatorial_sampling_time_sec) << ","
+            << format_csv_number(result.combinatorial_ordering_time_sec) << ",";
+    }
     if (include_fpp_strengthening_summary) {
         out << (result.coverage_llbi_enabled ? "true" : "false") << ","
             << result.coverage_llbi_num_zeta_vars << ","
             << result.coverage_llbi_num_constraints << ","
-            << format_csv_number(result.coverage_llbi_precompute_time_sec) << ","
+            << format_csv_number(result.coverage_llbi_precompute_time_sec) << ",";
+    }
+    if (include_coverage_llbi_extended) {
+        out << (result.coverage_llbi_weighted ? "true" : "false") << ","
+            << csv_escape(result.coverage_llbi_weight_map_hash) << ","
+            << result.coverage_llbi_scenarios_precomputed << ","
+            << result.coverage_llbi_baseline_cells << ","
+            << result.coverage_llbi_auxiliary_variables << ","
+            << result.coverage_llbi_linking_constraints << ","
+            << result.coverage_llbi_loss_constraints << ","
+            << result.coverage_llbi_nonempty_coverage_sets << ","
+            << result.coverage_llbi_total_incidence_terms << ","
+            << format_csv_number(result.coverage_llbi_build_time_sec) << ","
+            << csv_escape(result.coverage_llbi_validity_mode) << ",";
+    }
+    if (include_fpp_strengthening_summary) {
+        out
             << (result.path_llbi_enabled ? "true" : "false") << ","
             << result.path_llbi_num_b_vars << ","
             << result.path_llbi_num_path_constraints << ","
             << result.path_llbi_num_paths_used << ","
-            << format_csv_number(result.path_llbi_precompute_time_sec) << ","
+            << format_csv_number(result.path_llbi_precompute_time_sec) << ",";
+    }
+    if (include_path_llbi_extended) {
+        out << (result.path_llbi_weighted ? "true" : "false") << ","
+            << csv_escape(result.path_llbi_weight_map_hash) << ","
+            << result.path_llbi_scenarios_precomputed << ","
+            << result.path_llbi_baseline_nodes << ","
+            << result.path_llbi_auxiliary_variables << ","
+            << result.path_llbi_path_constraints << ","
+            << result.path_llbi_loss_constraints << ","
+            << result.path_llbi_total_paths << ","
+            << result.path_llbi_total_candidate_incidence_terms << ","
+            << result.path_llbi_nodes_without_paths << ","
+            << (result.path_llbi_path_enumeration_complete ? "true" : "false") << ","
+            << result.path_llbi_paths_truncated << ","
+            << format_csv_number(result.path_llbi_build_time_sec) << ","
+            << csv_escape(result.path_llbi_validity_mode) << ",";
+    }
+    if (include_fpp_strengthening_summary) {
+        out
             << (result.projected_coverage_llbi_enabled ? "true" : "false") << ","
             << (result.projected_path_llbi_enabled ? "true" : "false") << ","
             << csv_escape(result.projected_llbi_family) << ","
@@ -1291,14 +2194,66 @@ void append_experiment_result_csv(
             << result.projected_exp_candidate_cuts_generated << ","
             << result.projected_exp_candidate_cuts_added << ","
             << (result.projected_exp_enumeration_truncated ? "true" : "false") << ","
-            << result.projected_exp_enumeration_limit << ","
+            << result.projected_exp_enumeration_limit << ",";
+    }
+    if (include_projected_coverage_llbi_extended) {
+        out
+            << (result.projected_coverage_llbi_weighted ? "true" : "false") << ","
+            << csv_escape(result.projected_coverage_llbi_mode) << ","
+            << csv_escape(result.projected_coverage_llbi_weight_map_hash) << ","
+            << result.projected_coverage_llbi_scenarios_precomputed << ","
+            << result.projected_coverage_llbi_baseline_cells << ","
+            << result.projected_coverage_llbi_nonempty_coverage_sets << ","
+            << result.projected_coverage_llbi_total_incidence_terms << ","
+            << result.projected_coverage_llbi_separation_calls << ","
+            << result.projected_coverage_llbi_cuts_generated << ","
+            << result.projected_coverage_llbi_cuts_added << ","
+            << result.projected_coverage_llbi_duplicate_cuts << ","
+            << format_csv_number(result.projected_coverage_llbi_max_violation) << ","
+            << format_csv_number(result.projected_coverage_llbi_precompute_time_sec) << ","
+            << format_csv_number(result.projected_coverage_llbi_separation_time_sec) << ","
+            << csv_escape(result.projected_coverage_llbi_validity_mode) << ",";
+    }
+    if (include_projected_path_llbi_extended) {
+        out
+            << (result.projected_path_llbi_weighted ? "true" : "false") << ","
+            << csv_escape(result.projected_path_llbi_mode) << ","
+            << csv_escape(result.projected_path_llbi_weight_map_hash) << ","
+            << result.projected_path_llbi_scenarios_precomputed << ","
+            << result.projected_path_llbi_destination_nodes << ","
+            << result.projected_path_llbi_total_paths << ","
+            << result.projected_path_llbi_total_incidence_terms << ","
+            << result.projected_path_llbi_nodes_without_paths << ","
+            << (result.projected_path_llbi_enumeration_complete ? "true" : "false") << ","
+            << result.projected_path_llbi_paths_truncated << ","
+            << result.projected_path_llbi_separation_calls << ","
+            << result.projected_path_llbi_cuts_generated << ","
+            << result.projected_path_llbi_cuts_added << ","
+            << result.projected_path_llbi_duplicate_cuts << ","
+            << format_csv_number(result.projected_path_llbi_max_violation) << ","
+            << format_csv_number(result.projected_path_llbi_precompute_time_sec) << ","
+            << format_csv_number(result.projected_path_llbi_separation_time_sec) << ","
+            << csv_escape(result.projected_path_llbi_validity_mode) << ",";
+    }
+    if (include_fpp_strengthening_summary) {
+        out
             << (result.global_dominance_enabled ? "true" : "false") << ","
+            << (result.global_dominance_structural_weight_safe ? "true" : "false") << ","
+            << result.global_dominance_original_candidate_count << ","
             << result.global_dominance_candidates_removed << ","
             << result.global_dominance_equivalence_classes << ","
+            << result.global_dominance_post_candidate_count << ","
+            << result.global_dominance_warm_start_replacements << ","
             << format_csv_number(result.global_dominance_precompute_time_sec) << ","
             << (result.conditional_zero_benefit_enabled ? "true" : "false") << ","
+            << (result.conditional_zero_benefit_structural_weight_safe ? "true" : "false") << ","
+            << result.conditional_zero_benefit_callback_calls << ","
+            << result.conditional_zero_benefit_nodes_checked << ","
+            << result.conditional_zero_benefit_candidates_checked << ","
             << result.conditional_zero_benefit_fixings_attempted << ","
             << result.conditional_zero_benefit_fixings_applied << ","
+            << result.conditional_zero_benefit_variables_fixed_zero << ","
+            << result.conditional_zero_benefit_scenarios_reachability_computed << ","
             << format_csv_number(result.conditional_zero_benefit_time_sec) << ",";
     }
     if (include_branch_benders_root_user_cut_summary) {
@@ -1365,6 +2320,87 @@ void append_experiment_result_csv(
                 << format_csv_number(result.heuristic_objective) << ",";
         }
     }
+    if (include_weight_reporting) {
+        out << csv_escape(result.weight_profile) << ","
+            << csv_escape(result.weight_map_file) << ","
+            << csv_escape(result.weight_map_hash) << ","
+            << (result.weight_normalized ? "true" : "false") << ",";
+        if (include_weight_identity_reporting) {
+            out << result.weight_replicate << ","
+                << result.weight_generation_seed << ","
+                << result.weight_generator_version << ","
+                << csv_escape(result.canonical_landscape_id) << ","
+                << csv_escape(result.paired_landscape_id) << ","
+                << csv_escape(result.weight_source_universe_hash) << ","
+                << csv_escape(result.weight_mapping_method) << ","
+                << csv_escape(result.weight_mapping_hash) << ","
+                << result.weight_mapped_cell_count << ","
+                << result.weight_missing_cell_count << ","
+                << csv_escape(result.paired_reburn_instance_id) << ","
+                << (result.paired_evaluation_enabled ? "true" : "false") << ",";
+        }
+        out << format_csv_number(result.weight_mean) << ","
+            << format_csv_number(result.weight_min) << ","
+            << format_csv_number(result.weight_max) << ","
+            << format_csv_number(result.weight_total) << ","
+            << format_csv_number(result.solver_weighted_objective) << ","
+            << format_csv_number(result.evaluator_weighted_objective) << ","
+            << format_csv_number(result.objective_validation_abs_difference) << ","
+            << format_csv_number(result.objective_validation_rel_difference) << ","
+            << (result.objective_validation_passed ? "true" : "false") << ",";
+    }
+    if (include_dpv_reporting) {
+        out << (result.dpv_weighted ? "true" : "false") << ",";
+        if (include_dpv_model_reporting) {
+            out << (result.dpv_model_weighted ? "true" : "false") << ","
+                << csv_escape(result.dpv_model_type) << ",";
+        }
+        out << csv_escape(result.dpv_variant) << ","
+            << csv_escape(result.dpv_structural_definition) << ","
+            << csv_escape(result.dpv_ignition_policy) << ","
+            << csv_escape(result.dpv_weight_profile) << ","
+            << csv_escape(result.dpv_weight_map_hash) << ","
+            << csv_escape(result.dpv_scenario_aggregation) << ","
+            << csv_escape(result.dpv_normalization) << ",";
+        if (include_dpv_model_reporting) {
+            out << csv_escape(result.dpv_risk_measure) << ",";
+        }
+        out
+            << result.dpv_candidates_scored << ","
+            << result.dpv_candidates_selected << ","
+            << format_csv_number(result.dpv_score_min) << ","
+            << format_csv_number(result.dpv_score_max) << ","
+            << format_csv_number(result.dpv_score_mean) << ","
+            << format_csv_number(result.dpv_selected_score_sum) << ","
+            << (result.dpv_structural_cache_hit ? "true" : "false") << ","
+            << (result.dpv_weighted_cache_hit ? "true" : "false") << ","
+            << format_csv_number(result.dpv_score_precompute_time_sec) << ","
+            << format_csv_number(result.dpv_selection_time_sec) << ","
+            << format_csv_number(result.dpv_surrogate_objective) << ",";
+        if (include_dpv_model_reporting) {
+            out << format_csv_number(result.dpv_surrogate_best_bound) << ","
+                << format_csv_number(result.dpv_surrogate_gap) << ","
+                << result.dpv_benders_iterations << ","
+                << result.dpv_benders_subproblems_solved << ","
+                << result.dpv_benders_cuts_generated << ","
+                << result.dpv_benders_cuts_added << ","
+                << result.dpv_benders_duplicate_cuts << ","
+                << format_csv_number(result.dpv_benders_max_cut_violation) << ","
+                << format_csv_number(result.dpv_benders_max_tightness_error) << ","
+                << format_csv_number(result.dpv_benders_subproblem_time_sec) << ","
+                << format_csv_number(result.dpv_benders_cut_time_sec) << ","
+                << (result.dpv_llbi_enabled ? "true" : "false") << ","
+                << (result.dpv_llbi_weighted ? "true" : "false") << ","
+                << csv_escape(result.dpv_llbi_type) << ","
+                << result.dpv_llbi_constraints_added << ","
+                << format_csv_number(result.dpv_llbi_precompute_time_sec) << ","
+                << csv_escape(result.dpv_llbi_validity_mode) << ",";
+        }
+        out << result.dpv_greedy_iterations << ","
+            << result.dpv_score_recomputations << ","
+            << result.dpv_marginal_scores_evaluated << ","
+            << format_csv_number(result.dpv_overlap_value_removed) << ",";
+    }
     if (include_validation_status) {
         out << csv_escape(result.validation_status) << ",";
     }
@@ -1374,6 +2410,18 @@ void append_experiment_result_csv(
             << format_csv_number(result.cvar_lambda) << ","
             << format_csv_number(result.train_empirical_cvar_burned_area) << ","
             << format_csv_number(result.test_empirical_cvar_burned_area) << ",";
+    }
+    if (include_weight_reporting) {
+        out << format_csv_number(result.train_expected_weighted_burn_loss) << ","
+            << format_csv_number(result.test_expected_weighted_burn_loss) << ","
+            << format_csv_number(result.train_weighted_var) << ","
+            << format_csv_number(result.test_weighted_var) << ","
+            << format_csv_number(result.train_weighted_cvar) << ","
+            << format_csv_number(result.test_weighted_cvar) << ","
+            << format_csv_number(result.train_percentage_landscape_value_burned) << ","
+            << format_csv_number(result.test_percentage_landscape_value_burned) << ","
+            << format_csv_number(result.train_percentage_high_value_weight_burned) << ","
+            << format_csv_number(result.test_percentage_high_value_weight_burned) << ",";
     }
     out << csv_escape(join_ints(result.selected_firebreaks, ";")) << ",";
     if (include_warm_start) {

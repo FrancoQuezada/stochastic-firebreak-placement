@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <filesystem>
 #include <limits>
 #include <string>
@@ -20,6 +21,7 @@ struct MethodDispatchRequest {
     std::string landscape;
     std::filesystem::path forest_path;
     std::filesystem::path results_path;
+    std::filesystem::path weight_map_file;
     std::filesystem::path output_dir;
     std::filesystem::path output_csv;
     double alpha = 0.0;
@@ -30,6 +32,7 @@ struct MethodDispatchRequest {
     int threads = 0;
     std::string warm_start_policy = "none";
     bool verbose = false;
+    std::string dpv_ignition_policy = "fpp-safe";
 
     std::string fpp_mode;
     std::string fpp_formulation = "base";
@@ -68,6 +71,19 @@ struct MethodDispatchRequest {
     bool risk_measure_specified = false;
     bool cvar_beta_specified = false;
     bool cvar_lambda_specified = false;
+
+    // Phase 8B: canonical weight-map registry metadata (see BatchExperimentConfig).
+    // weight_map_hash, when nonempty, is verified against the loaded map before solving.
+    std::string weight_profile;
+    int weight_replicate = 0;
+    std::uint64_t weight_generation_seed = 0;
+    int weight_generator_version = 0;
+    std::string canonical_landscape_id;
+    std::string paired_landscape_id;
+    std::string weight_map_hash;
+    std::string weight_source_universe_hash;
+    std::string paired_reburn_instance_id;
+    bool paired_evaluation_enabled = false;
 };
 
 class MethodDispatcher {

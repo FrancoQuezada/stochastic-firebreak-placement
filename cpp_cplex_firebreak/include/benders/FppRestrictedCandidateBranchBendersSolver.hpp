@@ -112,6 +112,16 @@ struct FppRestrictedCandidateRoundLog {
 struct FppRestrictedCandidateBranchBendersResult {
     bool restricted_candidate_enabled = true;
     bool restricted_candidate_exact_mode = true;
+    bool candidate_bounds_enabled = false;
+    bool candidate_bounds_weighted = false;
+    std::string candidate_bound_type = "none";
+    std::string candidate_bound_map_hash;
+    int candidates_evaluated_by_bound = 0;
+    int candidates_permanently_pruned = 0;
+    int candidates_not_pruned_due_to_safety = 0;
+    bool early_exactness_certificate_used = false;
+    bool full_activation_avoided = false;
+    bool unvalidated_bound_rejected = false;
     bool full_activation_performed = false;
     bool eventually_activated_all = false;
     bool restricted_lower_bound_is_global = false;
@@ -156,8 +166,16 @@ struct FppRestrictedCandidateBranchBendersResult {
     std::string initial_candidate_policy;
     std::string activation_policy;
     std::string candidate_maintenance_policy = "none";
+    bool maintenance_weighted = false;
+    std::string maintenance_map_hash;
     bool deactivation_enabled = false;
     int deactivation_rounds = 0;
+    int active_candidate_target = 0;
+    int candidates_considered_for_deactivation = 0;
+    int candidates_deactivated = 0;
+    int candidates_reactivated = 0;
+    int candidates_protected_from_deactivation = 0;
+    bool full_activation_overrode_maintenance = false;
     int candidate_min_active_size = 0;
     int candidate_max_active_size = 0;
     int candidate_deactivation_batch_size = 0;
@@ -167,6 +185,14 @@ struct FppRestrictedCandidateBranchBendersResult {
     std::string candidate_score_mode = "generic";
     double candidate_tail_score_gamma = 0.5;
     int candidate_tail_protection_size = 0;
+    std::string candidate_scorer = "none";
+    bool candidate_scorer_weighted = false;
+    std::string candidate_score_map_hash;
+    std::vector<int> initial_candidate_ids;
+    std::vector<std::pair<int, double>> initial_candidate_scores;
+    int score_recomputations = 0;
+    std::vector<int> candidates_activated_by_score;
+    std::vector<int> candidates_activated_by_full_fallback;
     std::vector<std::vector<int>> tail_protected_candidates_by_round;
     std::vector<int> tail_protected_count_by_round;
     int protected_tail_count = 0;
@@ -202,6 +228,9 @@ struct FppRestrictedCandidateBranchBendersResult {
     double avg_benders_coefficient_score = std::numeric_limits<double>::quiet_NaN();
     std::vector<BendersCut> accumulated_benders_cuts;
     int cut_pool_size = 0;
+    int cut_pool_peak_size = 0;
+    int cut_pool_evictions = 0;
+    int cut_pool_reinstantiations = 0;
     int cuts_reused_in_full_stage = 0;
     int restricted_stage_cuts_reused = 0;
     int duplicate_cuts_skipped = 0;

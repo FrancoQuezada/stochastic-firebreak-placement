@@ -14,6 +14,7 @@
 #include "eval/FppRecourseEvaluator.hpp"
 #include "risk/RiskMeasure.hpp"
 #include "solver/CplexEnvironment.hpp"
+#include "solver/FppWeightedLossUtils.hpp"
 
 #ifdef FIREBREAK_WITH_CPLEX
 #include <ilcplex/ilocplex.h>
@@ -53,6 +54,9 @@ void validate_opt_for_fpp_cut(const opt::OptimizationInstance& opt) {
     if (opt.budget > static_cast<int>(opt.eligible_indices.size())) {
         throw std::runtime_error(
             "FPP cut/reachability formulation budget exceeds the number of eligible firebreak nodes.");
+    }
+    if (!opt.compact_cell_weights.empty()) {
+        (void)direct_fpp_compact_weights(opt);
     }
 
     const int node_count = opt.node_mapper.size();
@@ -94,7 +98,6 @@ std::vector<std::pair<int, int>> unique_arcs(const opt::OptimizationScenario& sc
     return arcs;
 }
 
-#ifdef FIREBREAK_WITH_CPLEX
 double scenario_probability_at(
     const opt::OptimizationInstance& opt,
     std::size_t scenario_index) {
@@ -109,6 +112,7 @@ double scenario_probability_at(
     throw std::runtime_error("FPP cut/reachability formulation found a nonfinite scenario probability.");
 }
 
+#ifdef FIREBREAK_WITH_CPLEX
 std::vector<std::vector<int>> build_scenario_nodes_by_position(const opt::OptimizationInstance& opt) {
     std::vector<std::vector<int>> nodes_by_scenario;
     nodes_by_scenario.reserve(opt.scenarios.size());
@@ -236,10 +240,20 @@ bool FppCutReachabilityModelStructure::has_y_for_node_index(int node_index) cons
 }
 
 FppCutReachabilityModelStructure analyze_fpp_cut_reachability_model_structure(
-    const opt::OptimizationInstance& opt) {
+    const opt::OptimizationInstance& opt,
+    const risk::RiskMeasureConfig& risk_config) {
     validate_opt_for_fpp_cut(opt);
+    risk::validate_risk_measure_config(risk_config);
 
     FppCutReachabilityModelStructure structure;
+    const auto compact_weights = direct_fpp_compact_weights_or_unit(opt);
+    const bool uses_cvar =
+        risk_config.type == risk::RiskMeasureType::CVaR ||
+        risk_config.type == risk::RiskMeasureType::MeanCVaR;
+    const double expected_objective_weight =
+        risk_config.type == risk::RiskMeasureType::MeanCVaR
+            ? (1.0 - risk_config.cvarLambda)
+            : (uses_cvar ? 0.0 : 1.0);
     structure.y_variable_count = opt.eligible_indices.size();
     structure.budget_constraint_count = 1;
     structure.root_constraint_count = 2 * opt.scenarios.size();
@@ -254,6 +268,8 @@ FppCutReachabilityModelStructure analyze_fpp_cut_reachability_model_structure(
         structure.x_variable_count += nodes.size();
         structure.q_variable_count += nodes.size();
         structure.propagation_entrance_constraint_count += arcs.size();
+        const double probability =
+            scenario_probability_at(opt, structure.observed_node_count_by_scenario.size() - 1);
 
         for (const auto& arc : arcs) {
             structure.propagation_constraints.push_back(CutPropagationConstraintDescriptor{
@@ -264,6 +280,29 @@ FppCutReachabilityModelStructure analyze_fpp_cut_reachability_model_structure(
         }
 
         for (const int compact_node : nodes) {
+            const double weight = compact_weights[static_cast<std::size_t>(compact_node)];
+            structure.scenario_loss_coefficients.push_back({
+                scenario.scenario_id,
+                compact_node,
+                weight,
+            });
+            structure.objective_x_coefficients.push_back({
+                scenario.scenario_id,
+                compact_node,
+                expected_objective_weight * probability * weight,
+            });
+            structure.objective_q_coefficients.push_back({
+                scenario.scenario_id,
+                compact_node,
+                0.0,
+            });
+            if (uses_cvar) {
+                structure.cvar_loss_coefficients.push_back({
+                    scenario.scenario_id,
+                    compact_node,
+                    weight,
+                });
+            }
             if (compact_node == scenario.ignition_index) {
                 continue;
             }
@@ -300,6 +339,11 @@ FppCutReachabilityModelStructure analyze_fpp_cut_reachability_model_structure(
         structure.pass_through_constraint_count +
         structure.firebreak_upper_bound_constraint_count;
     return structure;
+}
+
+FppCutReachabilityModelStructure analyze_fpp_cut_reachability_model_structure(
+    const opt::OptimizationInstance& opt) {
+    return analyze_fpp_cut_reachability_model_structure(opt, risk::RiskMeasureConfig());
 }
 
 FppCutReachabilityMipStartValues build_fpp_cut_reachability_mip_start_values(
@@ -349,7 +393,7 @@ FppCutReachabilityMipStartValues build_fpp_cut_reachability_mip_start_values(
 
     eval::FppRecourseEvaluator evaluator(opt);
     const auto recourse = evaluator.evaluateFromBinaryVector(values.y_selected_by_compact_node, false);
-    values.recourse_objective = recourse.expected_burned_area;
+    values.recourse_objective = recourse.expected_weighted_burn_loss;
     values.notes.insert(values.notes.end(), recourse.warnings.begin(), recourse.warnings.end());
 
     // Reuse the canonical FPP traversal to populate the cut formulation state:
@@ -487,8 +531,10 @@ ModelResult FppCutReachabilityCplexModel::solve(
         effective_risk_config.cvarLambda = 1.0;
     }
     risk::validate_risk_measure_config(effective_risk_config);
-    const auto structure = analyze_fpp_cut_reachability_model_structure(opt);
+    const auto structure = analyze_fpp_cut_reachability_model_structure(opt, effective_risk_config);
     const int node_count = opt.node_mapper.size();
+    const auto compact_weights = direct_fpp_compact_weights_or_unit(opt);
+    const double max_scenario_loss = direct_fpp_max_scenario_loss_bound(opt);
     const auto nodes_by_scenario = build_scenario_nodes_by_position(opt);
     const auto position_by_scenario = build_node_position_by_scenario(opt, nodes_by_scenario);
     const bool uses_cvar =
@@ -502,6 +548,7 @@ ModelResult FppCutReachabilityCplexModel::solve(
     result.risk_measure = risk::to_string(effective_risk_config.type);
     result.cvar_beta = effective_risk_config.cvarBeta;
     result.cvar_lambda = effective_risk_config.cvarLambda;
+    result.objective_metric = weighted_objective_metric_label(effective_risk_config);
     result.num_variables = structure.total_variable_count + (uses_cvar ? 1 + opt.scenarios.size() : 0);
     result.num_constraints = structure.total_constraint_count + (uses_cvar ? opt.scenarios.size() : 0);
 
@@ -542,7 +589,6 @@ ModelResult FppCutReachabilityCplexModel::solve(
         IloNumVar risk_threshold;
         IloNumVarArray cvar_excess(env);
         if (uses_cvar) {
-            const double max_scenario_loss = static_cast<double>(node_count);
             risk_threshold = IloNumVar(env, 0.0, max_scenario_loss, ILOFLOAT);
             risk_threshold.setName("risk_threshold");
             cvar_excess = IloNumVarArray(env, static_cast<IloInt>(opt.scenarios.size()));
@@ -560,7 +606,11 @@ ModelResult FppCutReachabilityCplexModel::solve(
             for (std::size_t s = 0; s < opt.scenarios.size(); ++s) {
                 const double probability = scenario_probability_at(opt, s);
                 for (std::size_t local_pos = 0; local_pos < nodes_by_scenario[s].size(); ++local_pos) {
-                    objective += probability * x[s][static_cast<IloInt>(local_pos)];
+                    const int compact_node = nodes_by_scenario[s][local_pos];
+                    objective +=
+                        probability *
+                        compact_weights[static_cast<std::size_t>(compact_node)] *
+                        x[s][static_cast<IloInt>(local_pos)];
                 }
             }
         } else {
@@ -574,7 +624,11 @@ ModelResult FppCutReachabilityCplexModel::solve(
                 const double probability = scenario_probability_at(opt, s);
                 if (include_expected_term && expected_weight != 0.0) {
                     for (std::size_t local_pos = 0; local_pos < nodes_by_scenario[s].size(); ++local_pos) {
-                        objective += expected_weight * probability * x[s][static_cast<IloInt>(local_pos)];
+                        const int compact_node = nodes_by_scenario[s][local_pos];
+                        objective += expected_weight *
+                            probability *
+                            compact_weights[static_cast<std::size_t>(compact_node)] *
+                            x[s][static_cast<IloInt>(local_pos)];
                     }
                 }
                 cvar_tail += probability * cvar_excess[static_cast<IloInt>(s)];
@@ -591,7 +645,10 @@ ModelResult FppCutReachabilityCplexModel::solve(
             for (std::size_t s = 0; s < opt.scenarios.size(); ++s) {
                 IloExpr loss_minus_threshold(env);
                 for (std::size_t local_pos = 0; local_pos < nodes_by_scenario[s].size(); ++local_pos) {
-                    loss_minus_threshold += x[s][static_cast<IloInt>(local_pos)];
+                    const int compact_node = nodes_by_scenario[s][local_pos];
+                    loss_minus_threshold +=
+                        compact_weights[static_cast<std::size_t>(compact_node)] *
+                        x[s][static_cast<IloInt>(local_pos)];
                 }
                 loss_minus_threshold -= risk_threshold;
                 model.add(cvar_excess[static_cast<IloInt>(s)] >= loss_minus_threshold);
@@ -795,7 +852,10 @@ ModelResult FppCutReachabilityCplexModel::solve(
             for (std::size_t s = 0; s < opt.scenarios.size(); ++s) {
                 double scenario_loss = 0.0;
                 for (std::size_t local_pos = 0; local_pos < nodes_by_scenario[s].size(); ++local_pos) {
-                    scenario_loss += cplex.getValue(x[s][static_cast<IloInt>(local_pos)]);
+                    const int compact_node = nodes_by_scenario[s][local_pos];
+                    scenario_loss +=
+                        compact_weights[static_cast<std::size_t>(compact_node)] *
+                        cplex.getValue(x[s][static_cast<IloInt>(local_pos)]);
                 }
                 const double probability = scenario_probability_at(opt, s);
                 expected_loss_component += probability * scenario_loss;
@@ -823,35 +883,35 @@ ModelResult FppCutReachabilityCplexModel::solve(
             }
 
             eval::FppRecourseEvaluator evaluator(opt);
-            const auto recourse = evaluator.evaluate(result.selected_firebreak_indices, false);
-            const double validation_reference =
-                effective_risk_config.type == risk::RiskMeasureType::Expected
-                    ? result.objective_value
-                    : result.expected_loss_component;
-            const double abs_diff = std::fabs(recourse.expected_burned_area - validation_reference);
-            const double scale = std::max(1.0, std::fabs(validation_reference));
-            const double rel_diff = abs_diff / scale;
-            if (abs_diff > 1.0e-5 && rel_diff > 1.0e-6) {
+            const auto recourse = evaluator.evaluate(
+                result.selected_firebreak_indices,
+                false,
+                effective_risk_config.cvarBeta);
+            const double evaluator_objective =
+                weighted_objective_from_recourse(recourse, effective_risk_config);
+            attach_direct_fpp_validation(result, evaluator_objective);
+            if (!result.objective_validation_passed) {
                 std::ostringstream warning;
-                warning << "Warning: FPP cut/reachability expected loss "
-                        << validation_reference
-                        << " differs from FppRecourseEvaluator expected loss "
-                        << recourse.expected_burned_area
+                warning << "Warning: FPP cut/reachability weighted objective "
+                        << result.objective_value
+                        << " differs from FppRecourseEvaluator weighted objective "
+                        << evaluator_objective
                         << " after solve.";
                 result.notes.push_back(warning.str());
             } else {
                 result.notes.push_back(
-                    "FPP cut/reachability post-solve recourse validation matched the solver objective.");
+                    "FPP cut/reachability post-solve weighted recourse validation matched the solver objective.");
             }
         }
 
         if (effective_risk_config.type == risk::RiskMeasureType::Expected) {
-            result.notes.push_back("FPP cut/reachability objective is expected burned area over observed scenario nodes.");
+            result.notes.push_back("FPP cut/reachability objective is expected weighted burned-node loss over observed scenario nodes.");
         } else if (effective_risk_config.type == risk::RiskMeasureType::CVaR) {
-            result.notes.push_back("FPP cut/reachability objective is pure CVaR of burned area over observed scenario nodes.");
+            result.notes.push_back("FPP cut/reachability objective is pure CVaR of weighted burned-node loss over observed scenario nodes.");
         } else {
-            result.notes.push_back("FPP cut/reachability objective is a mean-CVaR blend of burned area over observed scenario nodes.");
+            result.notes.push_back("FPP cut/reachability objective is a mean-CVaR blend of weighted burned-node loss over observed scenario nodes.");
         }
+        attach_direct_fpp_weight_metadata(result, opt);
         result.notes.push_back("x and q variables are continuous in [0,1]; y variables are binary for eligible nodes.");
         result.notes.push_back("Root nodes are forced to burn and propagate even if selected as firebreaks.");
         result.notes.push_back("Non-eligible non-root nodes use x_v >= q_v because no y_v variable exists.");

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "benders/FppScenarioSubproblem.hpp"
@@ -20,6 +21,7 @@ struct FppPersistentScenarioSubproblemDiagnostics {
     double subproblem_total_solve_time = 0.0;
     double subproblem_average_update_time = 0.0;
     double subproblem_average_solve_time = 0.0;
+    std::string weight_map_hash;
 };
 
 class FppPersistentScenarioSubproblemManager {

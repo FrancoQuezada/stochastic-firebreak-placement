@@ -24,6 +24,7 @@
 #include "opt/OptimizationInstance.hpp"
 #include "opt/OptimizationInstanceBuilder.hpp"
 #include "solver/CplexEnvironment.hpp"
+#include "solver/FppWeightedLossUtils.hpp"
 
 namespace firebreak::experiments {
 
@@ -86,16 +87,44 @@ std::string method_label_for_options(
 }
 
 std::string objective_metric_for_risk(const risk::RiskMeasureConfig& config) {
+    const std::string base = firebreak::solver::weighted_objective_metric_label(config);
     if (config.type == risk::RiskMeasureType::Expected) {
-        return "expected_burned_area_restricted_branch_benders";
+        return base;
     }
     if (config.type == risk::RiskMeasureType::CVaR) {
-        return "cvar_burned_area_beta_" + format_compact_double(config.cvarBeta);
+        return base + "_beta_" + format_compact_double(config.cvarBeta);
     }
-    return "mean_cvar_burned_area_beta_" +
+    return base + "_beta_" +
         format_compact_double(config.cvarBeta) +
         "_lambda_" +
         format_compact_double(config.cvarLambda);
+}
+
+bool has_nonunit_compact_weights(const opt::OptimizationInstance& opt) {
+    if (opt.compact_cell_weights.empty()) {
+        return false;
+    }
+    const auto& weights = firebreak::solver::direct_fpp_compact_weights(opt);
+    for (const double weight : weights) {
+        if (std::fabs(weight - 1.0) > 1.0e-9) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool uses_unconverted_weighted_restricted_module(
+    bool use_lifted_lower_bounds,
+    const benders::FppCombinatorialBendersOptions& combinatorial_options,
+    const benders::FppStrengtheningOptions& strengthening_options) {
+    return use_lifted_lower_bounds ||
+           combinatorial_options.enabled ||
+           strengthening_options.use_coverage_llbi ||
+           strengthening_options.use_path_llbi ||
+           strengthening_options.use_projected_coverage_llbi_exp ||
+           strengthening_options.use_projected_path_llbi_exp ||
+           strengthening_options.use_projected_coverage_llbi_poly ||
+           strengthening_options.use_projected_path_llbi_poly;
 }
 
 std::filesystem::path default_forest_path(const std::string& landscape) {
@@ -237,18 +266,53 @@ std::vector<std::pair<std::string, std::string>> strengthening_summary_fields(
         {"coverage_llbi_num_zeta_vars", std::to_string(result.coverage_llbi_num_zeta_vars)},
         {"coverage_llbi_num_constraints", std::to_string(result.coverage_llbi_num_constraints)},
         {"coverage_llbi_precompute_time_sec", format_compact_double(result.coverage_llbi_precompute_time_sec)},
+        {"coverage_llbi_weighted", result.coverage_llbi_weighted ? "true" : "false"},
+        {"coverage_llbi_weight_map_hash", result.coverage_llbi_weight_map_hash},
+        {"coverage_llbi_scenarios_precomputed", std::to_string(result.coverage_llbi_scenarios_precomputed)},
+        {"coverage_llbi_baseline_cells", std::to_string(result.coverage_llbi_baseline_cells)},
+        {"coverage_llbi_auxiliary_variables", std::to_string(result.coverage_llbi_auxiliary_variables)},
+        {"coverage_llbi_linking_constraints", std::to_string(result.coverage_llbi_linking_constraints)},
+        {"coverage_llbi_loss_constraints", std::to_string(result.coverage_llbi_loss_constraints)},
+        {"coverage_llbi_nonempty_coverage_sets", std::to_string(result.coverage_llbi_nonempty_coverage_sets)},
+        {"coverage_llbi_total_incidence_terms", std::to_string(result.coverage_llbi_total_incidence_terms)},
+        {"coverage_llbi_build_time_sec", format_compact_double(result.coverage_llbi_build_time_sec)},
+        {"coverage_llbi_validity_mode", result.coverage_llbi_validity_mode},
         {"path_llbi_enabled", result.path_llbi_enabled ? "true" : "false"},
         {"path_llbi_num_b_vars", std::to_string(result.path_llbi_num_b_vars)},
         {"path_llbi_num_path_constraints", std::to_string(result.path_llbi_num_path_constraints)},
         {"path_llbi_num_paths_used", std::to_string(result.path_llbi_num_paths_used)},
+        {"path_llbi_weighted", result.path_llbi_weighted ? "true" : "false"},
+        {"path_llbi_weight_map_hash", result.path_llbi_weight_map_hash},
+        {"path_llbi_scenarios_precomputed", std::to_string(result.path_llbi_scenarios_precomputed)},
+        {"path_llbi_baseline_nodes", std::to_string(result.path_llbi_baseline_nodes)},
+        {"path_llbi_auxiliary_variables", std::to_string(result.path_llbi_auxiliary_variables)},
+        {"path_llbi_path_constraints", std::to_string(result.path_llbi_path_constraints)},
+        {"path_llbi_loss_constraints", std::to_string(result.path_llbi_loss_constraints)},
+        {"path_llbi_total_paths", std::to_string(result.path_llbi_total_paths)},
+        {"path_llbi_total_candidate_incidence_terms", std::to_string(result.path_llbi_total_candidate_incidence_terms)},
+        {"path_llbi_nodes_without_paths", std::to_string(result.path_llbi_nodes_without_paths)},
+        {"path_llbi_path_enumeration_complete", result.path_llbi_path_enumeration_complete ? "true" : "false"},
+        {"path_llbi_paths_truncated", std::to_string(result.path_llbi_paths_truncated)},
         {"path_llbi_precompute_time_sec", format_compact_double(result.path_llbi_precompute_time_sec)},
+        {"path_llbi_build_time_sec", format_compact_double(result.path_llbi_build_time_sec)},
+        {"path_llbi_validity_mode", result.path_llbi_validity_mode},
         {"global_dominance_enabled", result.global_dominance_enabled ? "true" : "false"},
+        {"global_dominance_structural_weight_safe", result.global_dominance_structural_weight_safe ? "true" : "false"},
+        {"global_dominance_original_candidate_count", std::to_string(result.global_dominance_original_candidate_count)},
         {"global_dominance_candidates_removed", std::to_string(result.global_dominance_candidates_removed)},
         {"global_dominance_equivalence_classes", std::to_string(result.global_dominance_equivalence_classes)},
+        {"global_dominance_post_candidate_count", std::to_string(result.global_dominance_post_candidate_count)},
+        {"global_dominance_warm_start_replacements", std::to_string(result.global_dominance_warm_start_replacements)},
         {"global_dominance_precompute_time_sec", format_compact_double(result.global_dominance_precompute_time_sec)},
         {"conditional_zero_benefit_enabled", result.conditional_zero_benefit_enabled ? "true" : "false"},
+        {"conditional_zero_benefit_structural_weight_safe", result.conditional_zero_benefit_structural_weight_safe ? "true" : "false"},
+        {"conditional_zero_benefit_callback_calls", std::to_string(result.conditional_zero_benefit_callback_calls)},
+        {"conditional_zero_benefit_nodes_checked", std::to_string(result.conditional_zero_benefit_nodes_checked)},
+        {"conditional_zero_benefit_candidates_checked", std::to_string(result.conditional_zero_benefit_candidates_checked)},
         {"conditional_zero_benefit_fixings_attempted", std::to_string(result.conditional_zero_benefit_fixings_attempted)},
         {"conditional_zero_benefit_fixings_applied", std::to_string(result.conditional_zero_benefit_fixings_applied)},
+        {"conditional_zero_benefit_variables_fixed_zero", std::to_string(result.conditional_zero_benefit_variables_fixed_zero)},
+        {"conditional_zero_benefit_scenarios_reachability_computed", std::to_string(result.conditional_zero_benefit_scenarios_reachability_computed)},
         {"conditional_zero_benefit_time_sec", format_compact_double(result.conditional_zero_benefit_time_sec)},
     };
 }
@@ -268,6 +332,26 @@ void attach_restricted_diagnostics(
     io::StandardExperimentResult& result) {
     result.restricted_candidate_enabled = solve_result.restricted_candidate_enabled;
     result.restricted_candidate_exact_mode = solve_result.restricted_candidate_exact_mode;
+    result.restricted_candidate_bounds_enabled =
+        solve_result.candidate_bounds_enabled;
+    result.restricted_candidate_bounds_weighted =
+        solve_result.candidate_bounds_weighted;
+    result.restricted_candidate_bound_type =
+        solve_result.candidate_bound_type;
+    result.restricted_candidate_bound_map_hash =
+        solve_result.candidate_bound_map_hash;
+    result.restricted_candidates_evaluated_by_bound =
+        solve_result.candidates_evaluated_by_bound;
+    result.restricted_candidates_permanently_pruned =
+        solve_result.candidates_permanently_pruned;
+    result.restricted_candidates_not_pruned_due_to_safety =
+        solve_result.candidates_not_pruned_due_to_safety;
+    result.restricted_candidate_early_exactness_certificate_used =
+        solve_result.early_exactness_certificate_used;
+    result.restricted_candidate_full_activation_avoided =
+        solve_result.full_activation_avoided;
+    result.restricted_candidate_unvalidated_bound_rejected =
+        solve_result.unvalidated_bound_rejected;
     result.restricted_candidate_initial_policy = solve_result.initial_candidate_policy;
     result.restricted_candidate_activation_policy = solve_result.activation_policy;
     result.restricted_candidate_initial_active_count =
@@ -286,6 +370,10 @@ void attach_restricted_diagnostics(
         solve_result.final_lower_bound_is_global;
     result.restricted_candidate_cut_reuse_enabled = solve_result.cut_reuse_enabled;
     result.restricted_candidate_cut_pool_size = solve_result.cut_pool_size;
+    result.restricted_candidate_cut_pool_peak_size = solve_result.cut_pool_peak_size;
+    result.restricted_candidate_cut_pool_evictions = solve_result.cut_pool_evictions;
+    result.restricted_candidate_cut_pool_reinstantiations =
+        solve_result.cut_pool_reinstantiations;
     result.restricted_candidate_rounds = solve_result.candidate_rounds;
     result.restricted_candidate_cuts_reused_in_full_stage =
         solve_result.cuts_reused_in_full_stage;
@@ -325,10 +413,26 @@ void attach_restricted_diagnostics(
         solve_result.active_candidate_fraction_at_stop;
     result.restricted_candidate_maintenance_policy =
         solve_result.candidate_maintenance_policy;
+    result.restricted_candidate_maintenance_weighted =
+        solve_result.maintenance_weighted;
+    result.restricted_candidate_maintenance_map_hash =
+        solve_result.maintenance_map_hash;
     result.restricted_candidate_deactivation_enabled =
         solve_result.deactivation_enabled;
     result.restricted_candidate_deactivation_rounds =
         solve_result.deactivation_rounds;
+    result.restricted_candidate_active_target =
+        solve_result.active_candidate_target;
+    result.restricted_candidate_considered_for_deactivation =
+        solve_result.candidates_considered_for_deactivation;
+    result.restricted_candidate_deactivated_total =
+        solve_result.candidates_deactivated;
+    result.restricted_candidate_reactivated_total =
+        solve_result.candidates_reactivated;
+    result.restricted_candidate_protected_from_deactivation_total =
+        solve_result.candidates_protected_from_deactivation;
+    result.restricted_candidate_full_activation_overrode_maintenance =
+        solve_result.full_activation_overrode_maintenance;
     result.restricted_candidate_min_active_size =
         solve_result.candidate_min_active_size;
     result.restricted_candidate_max_active_size =
@@ -356,6 +460,21 @@ void attach_restricted_diagnostics(
         solve_result.candidate_tail_score_gamma;
     result.restricted_candidate_tail_protection_size =
         solve_result.candidate_tail_protection_size;
+    result.restricted_candidate_scorer = solve_result.candidate_scorer;
+    result.restricted_candidate_scorer_weighted =
+        solve_result.candidate_scorer_weighted;
+    result.restricted_candidate_score_map_hash =
+        solve_result.candidate_score_map_hash;
+    result.restricted_initial_candidate_ids =
+        solve_result.initial_candidate_ids;
+    result.restricted_initial_candidate_scores =
+        solve_result.initial_candidate_scores;
+    result.restricted_score_recomputations =
+        solve_result.score_recomputations;
+    result.restricted_candidates_activated_by_score =
+        solve_result.candidates_activated_by_score;
+    result.restricted_candidates_activated_by_full_fallback =
+        solve_result.candidates_activated_by_full_fallback;
     result.restricted_candidate_deactivation_blocked_by_tail_protection_count =
         solve_result.deactivation_blocked_by_tail_protection_count;
     result.restricted_candidate_activated_by_tail_blend_count =
@@ -435,9 +554,15 @@ void print_summary(
     std::cout << "Run ID: " << result.run_id << "\n";
     std::cout << "Landscape: " << result.landscape << "\n";
     std::cout << "Method: " << result.method << "\n";
+    std::cout << "Objective metric: " << result.objective_metric << "\n";
     std::cout << "Solver status: " << result.solver_status << "\n";
     std::cout << std::fixed << std::setprecision(6);
     std::cout << "Objective in-sample: " << result.objective_in_sample << "\n";
+    std::cout << "Weight profile: " << result.weight_profile << "\n";
+    std::cout << "Weight map hash: " << result.weight_map_hash << "\n";
+    std::cout << "Evaluator weighted objective: " << result.evaluator_weighted_objective << "\n";
+    std::cout << "Objective validation diff: "
+              << result.objective_validation_abs_difference << "\n";
     std::cout << "Risk measure: " << result.risk_measure << "\n";
     std::cout << "Expected loss component: " << result.expected_loss_component << "\n";
     if (result.risk_measure != "expected") {
@@ -456,6 +581,10 @@ void print_summary(
     std::cout << "\n";
     std::cout << "Train expected burned area: " << result.train_expected_burned_area << "\n";
     std::cout << "Test expected burned area: " << result.test_expected_burned_area << "\n";
+    std::cout << "Train expected weighted burn loss: "
+              << result.train_expected_weighted_burn_loss << "\n";
+    std::cout << "Test expected weighted burn loss: "
+              << result.test_expected_weighted_burn_loss << "\n";
     std::cout << "Solution JSON: " << firebreak::io::path_to_string(solution_json_path) << "\n";
     std::cout << "Solution CSV: " << firebreak::io::path_to_string(solution_csv_path) << "\n";
 }
@@ -564,6 +693,20 @@ int FppRestrictedCandidateBranchBendersOutOfSampleRunner::run(
 
     opt::OptimizationInstanceBuilder builder;
     auto opt_instance = builder.build(train_instance, options.alpha, false);
+    const auto resolved_weight_map_path = options.weight_map_file.empty()
+        ? std::filesystem::path()
+        : firebreak::io::resolve_input_path(options.weight_map_file.string());
+    firebreak::solver::attach_weight_map_to_optimization_instance(
+        opt_instance,
+        resolved_weight_map_path);
+    if (has_nonunit_compact_weights(opt_instance) &&
+        uses_unconverted_weighted_restricted_module(
+            options.use_lifted_lower_bounds,
+            options.combinatorial_options,
+            options.strengthening_options)) {
+        throw std::runtime_error(
+            "Non-homogeneous weighted run-fpp-restricted-branch-benders-oos Phase 6B2B allows structural global dominance and conditional zero-benefit diagnostics; restricted standard LLBI, restricted CoverageLLBI, and restricted PathLLBI remain disabled because inactive candidate coefficients are not retained safely. Projected LLBI and combinatorial Benders remain unconverted.");
+    }
     const auto dominance_preprocess = benders::apply_fpp_global_dominance_preprocessing(
         opt_instance,
         options.strengthening_options.use_global_dominance_preprocessing);
@@ -635,19 +778,36 @@ int FppRestrictedCandidateBranchBendersOutOfSampleRunner::run(
             ? restricted_result.restricted_stage_result
             : restricted_result.last_restricted_stage_result)
         : restricted_result.final_stage_result;
+    auto reported_stage_for_validation = reported_stage;
+    firebreak::solver::attach_direct_fpp_weight_metadata(
+        reported_stage_for_validation,
+        opt_instance,
+        resolved_weight_map_path);
+    reported_stage_for_validation.solver_weighted_objective =
+        reported_stage_for_validation.objective_value;
 
     eval::FppRecourseEvaluator recourse_evaluator(opt_instance);
     const auto recourse_validation =
-        recourse_evaluator.evaluate(reported_stage.selected_firebreak_indices, false);
-    const double validation_reference = std::isfinite(reported_stage.expected_loss_component)
-        ? reported_stage.expected_loss_component
-        : reported_stage.objective_value;
+        recourse_evaluator.evaluate(
+            reported_stage.selected_firebreak_indices,
+            false,
+            effective_risk_config.cvarBeta);
+    const double evaluator_weighted_objective =
+        firebreak::solver::weighted_objective_from_recourse(
+            recourse_validation,
+            effective_risk_config);
+    firebreak::solver::attach_direct_fpp_validation(
+        reported_stage_for_validation,
+        evaluator_weighted_objective);
+    if (reported_stage_for_validation.weight_map_hash != recourse_validation.weight_map_hash) {
+        throw std::runtime_error(
+            "Optimization and train evaluation weight map hashes differ in run-fpp-restricted-branch-benders-oos.");
+    }
     const double evaluator_abs_diff =
-        std::fabs(recourse_validation.expected_burned_area - validation_reference);
+        reported_stage_for_validation.objective_validation_abs_difference;
     const double evaluator_rel_diff =
-        evaluator_abs_diff / std::max(1.0, std::fabs(validation_reference));
-    const std::string validation_status =
-        (evaluator_abs_diff > 1.0e-5 && evaluator_rel_diff > 1.0e-6) ? "warn" : "pass";
+        reported_stage_for_validation.objective_validation_rel_difference;
+    const std::string validation_status = reported_stage_for_validation.validation_status;
 
     io::FirebreakSolutionRecord solution_record;
     solution_record.method = method_label;
@@ -678,6 +838,25 @@ int FppRestrictedCandidateBranchBendersOutOfSampleRunner::run(
     const double test_loading_seconds =
         std::chrono::duration<double>(test_load_end - test_load_start).count();
     const auto test_eval = eval::evaluate_instance_burned_area(test_instance, firebreaks);
+    auto test_opt_instance = builder.build(test_instance, options.alpha, false);
+    firebreak::solver::attach_weight_map_to_optimization_instance(
+        test_opt_instance,
+        resolved_weight_map_path);
+    std::vector<int> selected_test_compact_indices;
+    selected_test_compact_indices.reserve(reported_stage.selected_firebreak_original_nodes.size());
+    for (const int original_node : reported_stage.selected_firebreak_original_nodes) {
+        selected_test_compact_indices.push_back(
+            test_opt_instance.node_mapper.to_index(original_node));
+    }
+    eval::FppRecourseEvaluator test_recourse_evaluator(test_opt_instance);
+    const auto test_weighted_eval = test_recourse_evaluator.evaluate(
+        selected_test_compact_indices,
+        false,
+        effective_risk_config.cvarBeta);
+    if (reported_stage_for_validation.weight_map_hash != test_weighted_eval.weight_map_hash) {
+        throw std::runtime_error(
+            "Optimization and test evaluation weight map hashes differ in run-fpp-restricted-branch-benders-oos.");
+    }
 
     io::StandardExperimentResult result;
     result.run_id = options.run_id;
@@ -721,8 +900,51 @@ int FppRestrictedCandidateBranchBendersOutOfSampleRunner::run(
         reported_stage.benders_lifted_lower_bound_min_rhs;
     result.benders_lifted_lower_bound_max_rhs =
         reported_stage.benders_lifted_lower_bound_max_rhs;
+    result.benders_lifted_lower_bound_weighted =
+        reported_stage.benders_lifted_lower_bound_weighted;
+    result.benders_lifted_lower_bound_weight_map_hash =
+        reported_stage.benders_lifted_lower_bound_weight_map_hash;
+    result.benders_lifted_lower_bound_scenarios_precomputed =
+        reported_stage.benders_lifted_lower_bound_scenarios_precomputed;
+    result.benders_lifted_lower_bound_singletons_evaluated =
+        reported_stage.benders_lifted_lower_bound_singletons_evaluated;
+    result.benders_lifted_lower_bound_no_firebreak_loss_min =
+        reported_stage.benders_lifted_lower_bound_no_firebreak_loss_min;
+    result.benders_lifted_lower_bound_no_firebreak_loss_max =
+        reported_stage.benders_lifted_lower_bound_no_firebreak_loss_max;
+    result.benders_lifted_lower_bound_singleton_benefit_min =
+        reported_stage.benders_lifted_lower_bound_singleton_benefit_min;
+    result.benders_lifted_lower_bound_singleton_benefit_max =
+        reported_stage.benders_lifted_lower_bound_singleton_benefit_max;
+    result.benders_lifted_lower_bound_constraints_added =
+        reported_stage.benders_lifted_lower_bound_constraints_added;
+    result.benders_lifted_lower_bound_cache_hit =
+        reported_stage.benders_lifted_lower_bound_cache_hit;
+    result.benders_lifted_lower_bound_validity_mode =
+        reported_stage.benders_lifted_lower_bound_validity_mode;
     result.benders_lifted_lower_bound_notes =
         reported_stage.benders_lifted_lower_bound_notes;
+    result.coverage_llbi_enabled = reported_stage.coverage_llbi_enabled;
+    result.coverage_llbi_num_zeta_vars = reported_stage.coverage_llbi_num_zeta_vars;
+    result.coverage_llbi_num_constraints = reported_stage.coverage_llbi_num_constraints;
+    result.coverage_llbi_precompute_time_sec =
+        reported_stage.coverage_llbi_precompute_time_sec;
+    result.coverage_llbi_weighted = reported_stage.coverage_llbi_weighted;
+    result.coverage_llbi_weight_map_hash = reported_stage.coverage_llbi_weight_map_hash;
+    result.coverage_llbi_scenarios_precomputed =
+        reported_stage.coverage_llbi_scenarios_precomputed;
+    result.coverage_llbi_baseline_cells = reported_stage.coverage_llbi_baseline_cells;
+    result.coverage_llbi_auxiliary_variables =
+        reported_stage.coverage_llbi_auxiliary_variables;
+    result.coverage_llbi_linking_constraints =
+        reported_stage.coverage_llbi_linking_constraints;
+    result.coverage_llbi_loss_constraints = reported_stage.coverage_llbi_loss_constraints;
+    result.coverage_llbi_nonempty_coverage_sets =
+        reported_stage.coverage_llbi_nonempty_coverage_sets;
+    result.coverage_llbi_total_incidence_terms =
+        reported_stage.coverage_llbi_total_incidence_terms;
+    result.coverage_llbi_build_time_sec = reported_stage.coverage_llbi_build_time_sec;
+    result.coverage_llbi_validity_mode = reported_stage.coverage_llbi_validity_mode;
     result.branch_benders_enabled = reported_stage.branch_benders_enabled;
     result.branch_benders_callback_calls = reported_stage.branch_benders_callback_calls;
     result.branch_benders_candidate_callback_calls =
@@ -818,28 +1040,73 @@ int FppRestrictedCandidateBranchBendersOutOfSampleRunner::run(
     result.path_llbi_num_b_vars = reported_stage.path_llbi_num_b_vars;
     result.path_llbi_num_path_constraints = reported_stage.path_llbi_num_path_constraints;
     result.path_llbi_num_paths_used = reported_stage.path_llbi_num_paths_used;
+    result.path_llbi_weighted = reported_stage.path_llbi_weighted;
+    result.path_llbi_weight_map_hash = reported_stage.path_llbi_weight_map_hash;
+    result.path_llbi_scenarios_precomputed =
+        reported_stage.path_llbi_scenarios_precomputed;
+    result.path_llbi_baseline_nodes = reported_stage.path_llbi_baseline_nodes;
+    result.path_llbi_auxiliary_variables = reported_stage.path_llbi_auxiliary_variables;
+    result.path_llbi_path_constraints = reported_stage.path_llbi_path_constraints;
+    result.path_llbi_loss_constraints = reported_stage.path_llbi_loss_constraints;
+    result.path_llbi_total_paths = reported_stage.path_llbi_total_paths;
+    result.path_llbi_total_candidate_incidence_terms =
+        reported_stage.path_llbi_total_candidate_incidence_terms;
+    result.path_llbi_nodes_without_paths = reported_stage.path_llbi_nodes_without_paths;
+    result.path_llbi_path_enumeration_complete =
+        reported_stage.path_llbi_path_enumeration_complete;
+    result.path_llbi_paths_truncated = reported_stage.path_llbi_paths_truncated;
     result.path_llbi_precompute_time_sec = reported_stage.path_llbi_precompute_time_sec;
+    result.path_llbi_build_time_sec = reported_stage.path_llbi_build_time_sec;
+    result.path_llbi_validity_mode = reported_stage.path_llbi_validity_mode;
     result.global_dominance_enabled = reported_stage.global_dominance_enabled;
+    result.global_dominance_structural_weight_safe =
+        reported_stage.global_dominance_structural_weight_safe;
+    result.global_dominance_original_candidate_count =
+        reported_stage.global_dominance_original_candidate_count;
     result.global_dominance_candidates_removed =
         reported_stage.global_dominance_candidates_removed;
     result.global_dominance_equivalence_classes =
         reported_stage.global_dominance_equivalence_classes;
+    result.global_dominance_post_candidate_count =
+        reported_stage.global_dominance_post_candidate_count;
+    result.global_dominance_warm_start_replacements =
+        reported_stage.global_dominance_warm_start_replacements;
     result.global_dominance_precompute_time_sec =
         reported_stage.global_dominance_precompute_time_sec;
     result.conditional_zero_benefit_enabled =
         reported_stage.conditional_zero_benefit_enabled;
+    result.conditional_zero_benefit_structural_weight_safe =
+        reported_stage.conditional_zero_benefit_structural_weight_safe;
+    result.conditional_zero_benefit_callback_calls =
+        reported_stage.conditional_zero_benefit_callback_calls;
+    result.conditional_zero_benefit_nodes_checked =
+        reported_stage.conditional_zero_benefit_nodes_checked;
+    result.conditional_zero_benefit_candidates_checked =
+        reported_stage.conditional_zero_benefit_candidates_checked;
     result.conditional_zero_benefit_fixings_attempted =
         reported_stage.conditional_zero_benefit_fixings_attempted;
     result.conditional_zero_benefit_fixings_applied =
         reported_stage.conditional_zero_benefit_fixings_applied;
+    result.conditional_zero_benefit_variables_fixed_zero =
+        reported_stage.conditional_zero_benefit_variables_fixed_zero;
+    result.conditional_zero_benefit_scenarios_reachability_computed =
+        reported_stage.conditional_zero_benefit_scenarios_reachability_computed;
     result.conditional_zero_benefit_time_sec =
         reported_stage.conditional_zero_benefit_time_sec;
     if (options.strengthening_options.use_global_dominance_preprocessing) {
         result.global_dominance_enabled = true;
+        result.global_dominance_structural_weight_safe =
+            dominance_preprocess.structural_weight_safe;
+        result.global_dominance_original_candidate_count =
+            dominance_preprocess.original_candidate_count;
         result.global_dominance_candidates_removed =
             dominance_preprocess.candidates_removed;
         result.global_dominance_equivalence_classes =
             dominance_preprocess.equivalence_classes;
+        result.global_dominance_post_candidate_count =
+            dominance_preprocess.post_candidate_count;
+        result.global_dominance_warm_start_replacements =
+            dominance_preprocess.warm_start_replacements;
         result.global_dominance_precompute_time_sec =
             dominance_preprocess.precompute_time_sec;
     }
@@ -851,10 +1118,28 @@ int FppRestrictedCandidateBranchBendersOutOfSampleRunner::run(
         result.total_observed_scenario_nodes += static_cast<int>(scenario.observed_node_indices.size());
     }
     result.total_scenario_arcs = static_cast<int>(opt_instance.total_arcs);
-    result.evaluator_objective = recourse_validation.expected_burned_area;
+    result.evaluator_objective = reported_stage_for_validation.evaluator_objective;
     result.evaluator_abs_diff = evaluator_abs_diff;
     result.evaluator_rel_diff = evaluator_rel_diff;
     result.validation_status = validation_status;
+    result.weight_profile = reported_stage_for_validation.weight_profile;
+    result.weight_map_file = reported_stage_for_validation.weight_map_file;
+    result.weight_map_hash = reported_stage_for_validation.weight_map_hash;
+    result.weight_normalized = reported_stage_for_validation.weight_normalized;
+    result.weight_mean = reported_stage_for_validation.weight_mean;
+    result.weight_min = reported_stage_for_validation.weight_min;
+    result.weight_max = reported_stage_for_validation.weight_max;
+    result.weight_total = reported_stage_for_validation.weight_total;
+    result.solver_weighted_objective =
+        reported_stage_for_validation.solver_weighted_objective;
+    result.evaluator_weighted_objective =
+        reported_stage_for_validation.evaluator_weighted_objective;
+    result.objective_validation_abs_difference =
+        reported_stage_for_validation.objective_validation_abs_difference;
+    result.objective_validation_rel_difference =
+        reported_stage_for_validation.objective_validation_rel_difference;
+    result.objective_validation_passed =
+        reported_stage_for_validation.objective_validation_passed;
     result.selected_firebreaks = reported_stage.selected_firebreak_original_nodes;
     result.train_expected_burned_area = train_eval.expected_burned_area;
     result.train_worst_10pct_burned_area = train_eval.worst_10pct_burned_area;
@@ -864,6 +1149,22 @@ int FppRestrictedCandidateBranchBendersOutOfSampleRunner::run(
     result.train_empirical_cvar_burned_area = train_eval.empirical_cvar_90pct_burned_area;
     result.test_empirical_var_burned_area = test_eval.empirical_var_90pct_burned_area;
     result.test_empirical_cvar_burned_area = test_eval.empirical_cvar_90pct_burned_area;
+    result.train_expected_weighted_burn_loss =
+        recourse_validation.expected_weighted_burn_loss;
+    result.test_expected_weighted_burn_loss =
+        test_weighted_eval.expected_weighted_burn_loss;
+    result.train_weighted_var = recourse_validation.weighted_loss_statistics.var;
+    result.test_weighted_var = test_weighted_eval.weighted_loss_statistics.var;
+    result.train_weighted_cvar = recourse_validation.weighted_loss_statistics.cvar;
+    result.test_weighted_cvar = test_weighted_eval.weighted_loss_statistics.cvar;
+    result.train_percentage_landscape_value_burned =
+        recourse_validation.expected_percentage_landscape_value_burned;
+    result.test_percentage_landscape_value_burned =
+        test_weighted_eval.expected_percentage_landscape_value_burned;
+    result.train_percentage_high_value_weight_burned =
+        recourse_validation.expected_percentage_high_value_weight_burned;
+    result.test_percentage_high_value_weight_burned =
+        test_weighted_eval.expected_percentage_high_value_weight_burned;
     result.risk_measure = reported_stage.risk_measure;
     result.cvar_beta = reported_stage.cvar_beta;
     result.cvar_lambda = reported_stage.cvar_lambda;
@@ -886,8 +1187,8 @@ int FppRestrictedCandidateBranchBendersOutOfSampleRunner::run(
     }
     result.notes.push_back(
         validation_status == "pass"
-            ? "FppRecourseEvaluator validation passed for final selected firebreaks."
-            : "FppRecourseEvaluator validation warning for final selected firebreaks.");
+            ? "Weighted FppRecourseEvaluator objective validation passed for final selected firebreaks."
+            : "Weighted FppRecourseEvaluator objective validation warning for final selected firebreaks.");
     result.notes.insert(result.notes.end(), notes.begin(), notes.end());
     result.notes.push_back("Restricted-candidate method label: " + method_label + ".");
     if (effective_risk_config.type == risk::RiskMeasureType::Expected) {

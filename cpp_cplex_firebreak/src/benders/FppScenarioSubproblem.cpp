@@ -1,11 +1,13 @@
 #include "benders/FppScenarioSubproblem.hpp"
 
 #include <chrono>
+#include <cmath>
 #include <sstream>
 #include <stdexcept>
 #include <unordered_map>
 
 #include "solver/CplexEnvironment.hpp"
+#include "solver/FppWeightedLossUtils.hpp"
 
 #ifdef FIREBREAK_WITH_CPLEX
 #include <ilcplex/ilocplex.h>
@@ -24,6 +26,9 @@ void validate_scenario_position(const opt::OptimizationInstance& opt, int scenar
     }
     if (scenario_position < 0 || scenario_position >= static_cast<int>(opt.scenarios.size())) {
         throw std::runtime_error("FPP Benders subproblem scenario position is out of range.");
+    }
+    if (!opt.compact_cell_weights.empty()) {
+        (void)solver::direct_fpp_compact_weights(opt);
     }
 }
 
@@ -65,6 +70,7 @@ FppScenarioSubproblemStructure analyze_fpp_scenario_subproblem_structure(
     validate_scenario_position(opt, scenario_position);
     const auto& scenario = opt.scenarios[static_cast<std::size_t>(scenario_position)];
     const auto y_position_by_node = build_y_position_by_node_index(opt);
+    const auto compact_weights = solver::direct_fpp_compact_weights_or_unit(opt);
 
     FppScenarioSubproblemStructure structure;
     structure.scenario_id = scenario.scenario_id;
@@ -79,6 +85,14 @@ FppScenarioSubproblemStructure analyze_fpp_scenario_subproblem_structure(
         structure.y_fix_constraint_count +
         structure.ignition_constraint_count +
         structure.propagation_constraint_count;
+    structure.objective_x_coefficients.reserve(static_cast<std::size_t>(opt.node_mapper.size()));
+    for (int i = 0; i < opt.node_mapper.size(); ++i) {
+        structure.objective_x_coefficients.push_back({
+            scenario.scenario_id,
+            i,
+            compact_weights[static_cast<std::size_t>(i)],
+        });
+    }
     structure.propagation_constraints.reserve(scenario.arcs.size());
     for (const auto& arc : scenario.arcs) {
         const auto y_it = y_position_by_node.find(arc.v_index);
@@ -128,6 +142,7 @@ FppSubproblemResult solve_fpp_scenario_subproblem_impl(
     validate_fractional_ybar(opt, ybar_values);
     const auto& scenario = opt.scenarios[static_cast<std::size_t>(scenario_position)];
     const int node_count = opt.node_mapper.size();
+    const auto compact_weights = solver::direct_fpp_compact_weights_or_unit(opt);
     const auto y_position_by_node = build_y_position_by_node_index(opt);
 
     FppSubproblemResult result;
@@ -165,7 +180,7 @@ FppSubproblemResult solve_fpp_scenario_subproblem_impl(
 
         IloExpr objective(env);
         for (int i = 0; i < node_count; ++i) {
-            objective += x[i];
+            objective += compact_weights[static_cast<std::size_t>(i)] * x[i];
         }
         model.add(IloMinimize(env, objective));
         objective.end();
@@ -227,6 +242,8 @@ FppSubproblemResult solve_fpp_scenario_subproblem_impl(
             "CPLEX getDual values from equality rows y_copy_i = ybar_i are used directly as FPP Benders coefficients.");
         cut.notes.push_back(
             "The resulting cut is eta_s >= Q_s(ybar) + sum_i pi_i * (y_i - ybar_i).");
+        cut.notes.push_back(
+            "Q_s(ybar) is expressed in weighted burned-node loss units.");
         result.benders_cut = cut;
         result.notes = cut.notes;
 

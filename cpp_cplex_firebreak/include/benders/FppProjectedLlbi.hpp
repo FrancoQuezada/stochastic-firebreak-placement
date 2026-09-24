@@ -33,6 +33,7 @@ struct FppProjectedLlbiOptions {
     double violation_tolerance = 1.0e-6;
     int cut_density_limit = 0;
     int poly_max_cuts = 100000;
+    int path_max_paths_per_node = 8;
     std::filesystem::path export_cuts_path;
 };
 
@@ -51,6 +52,27 @@ struct FppProjectedLlbiSeparationResult {
     double min_violation = std::numeric_limits<double>::quiet_NaN();
     double max_violation = 0.0;
     double sum_violation = 0.0;
+    bool projected_coverage_llbi_weighted = false;
+    std::string projected_coverage_llbi_mode;
+    std::string projected_coverage_llbi_weight_map_hash;
+    int projected_coverage_llbi_scenarios_precomputed = 0;
+    int projected_coverage_llbi_baseline_cells = 0;
+    int projected_coverage_llbi_nonempty_coverage_sets = 0;
+    int projected_coverage_llbi_total_incidence_terms = 0;
+    double projected_coverage_llbi_precompute_time_sec = 0.0;
+    std::string projected_coverage_llbi_validity_mode;
+    bool projected_path_llbi_weighted = false;
+    std::string projected_path_llbi_mode;
+    std::string projected_path_llbi_weight_map_hash;
+    int projected_path_llbi_scenarios_precomputed = 0;
+    int projected_path_llbi_destination_nodes = 0;
+    int projected_path_llbi_total_paths = 0;
+    int projected_path_llbi_total_incidence_terms = 0;
+    int projected_path_llbi_nodes_without_paths = 0;
+    bool projected_path_llbi_enumeration_complete = true;
+    int projected_path_llbi_paths_truncated = 0;
+    double projected_path_llbi_precompute_time_sec = 0.0;
+    std::string projected_path_llbi_validity_mode;
 };
 
 struct FppProjectedLlbiStats {
@@ -87,6 +109,39 @@ struct FppProjectedLlbiStats {
     int projected_exp_candidate_cuts_added = 0;
     bool projected_exp_enumeration_truncated = false;
     int projected_exp_enumeration_limit = 0;
+    bool projected_coverage_llbi_weighted = false;
+    std::string projected_coverage_llbi_mode;
+    std::string projected_coverage_llbi_weight_map_hash;
+    int projected_coverage_llbi_scenarios_precomputed = 0;
+    int projected_coverage_llbi_baseline_cells = 0;
+    int projected_coverage_llbi_nonempty_coverage_sets = 0;
+    int projected_coverage_llbi_total_incidence_terms = 0;
+    int projected_coverage_llbi_separation_calls = 0;
+    int projected_coverage_llbi_cuts_generated = 0;
+    int projected_coverage_llbi_cuts_added = 0;
+    int projected_coverage_llbi_duplicate_cuts = 0;
+    double projected_coverage_llbi_max_violation = 0.0;
+    double projected_coverage_llbi_precompute_time_sec = 0.0;
+    double projected_coverage_llbi_separation_time_sec = 0.0;
+    std::string projected_coverage_llbi_validity_mode;
+    bool projected_path_llbi_weighted = false;
+    std::string projected_path_llbi_mode;
+    std::string projected_path_llbi_weight_map_hash;
+    int projected_path_llbi_scenarios_precomputed = 0;
+    int projected_path_llbi_destination_nodes = 0;
+    int projected_path_llbi_total_paths = 0;
+    int projected_path_llbi_total_incidence_terms = 0;
+    int projected_path_llbi_nodes_without_paths = 0;
+    bool projected_path_llbi_enumeration_complete = true;
+    int projected_path_llbi_paths_truncated = 0;
+    int projected_path_llbi_separation_calls = 0;
+    int projected_path_llbi_cuts_generated = 0;
+    int projected_path_llbi_cuts_added = 0;
+    int projected_path_llbi_duplicate_cuts = 0;
+    double projected_path_llbi_max_violation = 0.0;
+    double projected_path_llbi_precompute_time_sec = 0.0;
+    double projected_path_llbi_separation_time_sec = 0.0;
+    std::string projected_path_llbi_validity_mode;
 };
 
 FppProjectedLlbiMode active_projected_llbi_mode(const FppProjectedLlbiOptions& options);

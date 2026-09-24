@@ -9,6 +9,7 @@
 #include "opt/OptimizationInstance.hpp"
 #include "risk/RiskMeasure.hpp"
 #include "solver/ModelResult.hpp"
+#include "solver/FppWeightedLossUtils.hpp"
 #include "solver/WarmStart.hpp"
 
 namespace firebreak::solver {
@@ -34,6 +35,9 @@ struct FppSaaModelStructure {
     std::size_t total_constraint_count = 0;
     std::vector<int> y_indices;
     std::vector<PropagationConstraintDescriptor> propagation_constraints;
+    std::vector<ScenarioLossCoefficientDescriptor> scenario_loss_coefficients;
+    std::vector<ScenarioLossCoefficientDescriptor> objective_x_coefficients;
+    std::vector<ScenarioLossCoefficientDescriptor> cvar_loss_coefficients;
 
     bool has_y_for_node_index(int node_index) const;
 };

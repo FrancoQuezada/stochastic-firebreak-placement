@@ -37,6 +37,7 @@ struct FppBendersOutOfSampleOptions {
     std::filesystem::path solution_csv_path;
     std::filesystem::path benders_cut_export_path;
     std::filesystem::path lifted_lower_bound_export_path;
+    std::filesystem::path weight_map_file;
 
     risk::RiskMeasureConfig risk_config;
 };

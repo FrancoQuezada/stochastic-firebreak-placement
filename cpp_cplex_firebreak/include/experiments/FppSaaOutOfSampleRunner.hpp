@@ -35,6 +35,7 @@ struct FppSaaOutOfSampleOptions {
     std::filesystem::path solution_json_path;
     std::filesystem::path solution_csv_path;
     std::filesystem::path warm_start_solution_path;
+    std::filesystem::path weight_map_file;
 
     std::string fpp_formulation = "base";
     risk::RiskMeasureConfig risk_config;

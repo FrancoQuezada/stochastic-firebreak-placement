@@ -10,6 +10,7 @@
 #include "analysis/GraphDiagnostics.hpp"
 #include "core/FirebreakSolution.hpp"
 #include "eval/BurnedAreaEvaluator.hpp"
+#include "eval/FppRecourseEvaluator.hpp"
 #include "heuristics/GreedyHeuristic.hpp"
 #include "io/Cell2FireReader.hpp"
 #include "io/ExperimentResultWriter.hpp"
@@ -18,6 +19,8 @@
 #include "io/ScenarioSplitUtils.hpp"
 #include "io/SolutionIO.hpp"
 #include "opt/OptimizationInstanceBuilder.hpp"
+#include "opt/WeightedDpvScoring.hpp"
+#include "solver/FppWeightedLossUtils.hpp"
 
 namespace firebreak::experiments {
 
@@ -89,6 +92,83 @@ void print_summary(
     std::cout << "Solution CSV: " << firebreak::io::path_to_string(solution_csv_path) << "\n";
 }
 
+bool is_dpv_metric(heuristics::GreedyMetricType metric) {
+    return metric == heuristics::GreedyMetricType::DPV2 ||
+           metric == heuristics::GreedyMetricType::DPV3;
+}
+
+void attach_weighted_eval_fields(
+    io::StandardExperimentResult& result,
+    const opt::OptimizationInstance& train_opt,
+    const eval::FppRecourseResult& train_weighted_eval,
+    const eval::FppRecourseResult& test_weighted_eval,
+    const std::filesystem::path& weight_map_file) {
+    if (train_weighted_eval.weight_map_hash != test_weighted_eval.weight_map_hash) {
+        throw std::runtime_error("Train/test weighted evaluation hash mismatch.");
+    }
+    result.weight_profile = train_weighted_eval.weight_profile;
+    result.weight_map_file = weight_map_file.empty() ? "" : weight_map_file.string();
+    result.weight_map_hash = train_weighted_eval.weight_map_hash;
+    result.weight_normalized =
+        !train_opt.cell_weight_map.weight_by_original_cell_id.empty() &&
+        train_opt.cell_weight_map.normalized;
+    result.weight_mean = train_opt.cell_weight_map.weight_by_original_cell_id.empty()
+        ? 1.0
+        : train_opt.cell_weight_map.normalized_mean;
+    result.weight_min = train_opt.cell_weight_map.weight_by_original_cell_id.empty()
+        ? 1.0
+        : train_opt.cell_weight_map.minimum_weight;
+    result.weight_max = train_opt.cell_weight_map.weight_by_original_cell_id.empty()
+        ? 1.0
+        : train_opt.cell_weight_map.maximum_weight;
+    result.weight_total = train_weighted_eval.total_landscape_weight;
+    result.solver_weighted_objective = std::numeric_limits<double>::quiet_NaN();
+    result.evaluator_weighted_objective = train_weighted_eval.expected_weighted_burn_loss;
+    result.train_expected_weighted_burn_loss = train_weighted_eval.expected_weighted_burn_loss;
+    result.test_expected_weighted_burn_loss = test_weighted_eval.expected_weighted_burn_loss;
+    result.train_weighted_var = train_weighted_eval.weighted_loss_statistics.var;
+    result.test_weighted_var = test_weighted_eval.weighted_loss_statistics.var;
+    result.train_weighted_cvar = train_weighted_eval.weighted_loss_statistics.cvar;
+    result.test_weighted_cvar = test_weighted_eval.weighted_loss_statistics.cvar;
+    result.train_percentage_landscape_value_burned =
+        train_weighted_eval.expected_percentage_landscape_value_burned;
+    result.test_percentage_landscape_value_burned =
+        test_weighted_eval.expected_percentage_landscape_value_burned;
+    result.train_percentage_high_value_weight_burned =
+        train_weighted_eval.expected_percentage_high_value_weight_burned;
+    result.test_percentage_high_value_weight_burned =
+        test_weighted_eval.expected_percentage_high_value_weight_burned;
+    result.validation_status = "not_applicable_dpv_surrogate";
+}
+
+void attach_greedy_dpv_fields(
+    io::StandardExperimentResult& result,
+    const heuristics::GreedyResult& greedy_result) {
+    result.dpv_weighted = greedy_result.dpv_weighted;
+    result.dpv_variant = greedy_result.dpv_variant;
+    result.dpv_structural_definition = greedy_result.dpv_structural_definition;
+    result.dpv_ignition_policy = greedy_result.dpv_ignition_policy;
+    result.dpv_weight_profile = greedy_result.dpv_weight_profile;
+    result.dpv_weight_map_hash = greedy_result.dpv_weight_map_hash;
+    result.dpv_scenario_aggregation = greedy_result.dpv_scenario_aggregation;
+    result.dpv_normalization = greedy_result.dpv_normalization;
+    result.dpv_candidates_scored = greedy_result.dpv_candidates_scored;
+    result.dpv_candidates_selected = greedy_result.dpv_candidates_selected;
+    result.dpv_score_min = greedy_result.dpv_score_min;
+    result.dpv_score_max = greedy_result.dpv_score_max;
+    result.dpv_score_mean = greedy_result.dpv_score_mean;
+    result.dpv_selected_score_sum = greedy_result.dpv_selected_score_sum;
+    result.dpv_structural_cache_hit = greedy_result.dpv_structural_cache_hit;
+    result.dpv_weighted_cache_hit = greedy_result.dpv_weighted_cache_hit;
+    result.dpv_score_precompute_time_sec = greedy_result.dpv_score_precompute_time_sec;
+    result.dpv_selection_time_sec = greedy_result.dpv_selection_time_sec;
+    result.dpv_surrogate_objective = greedy_result.dpv_surrogate_objective;
+    result.dpv_greedy_iterations = greedy_result.dpv_greedy_iterations;
+    result.dpv_score_recomputations = greedy_result.dpv_score_recomputations;
+    result.dpv_marginal_scores_evaluated = greedy_result.dpv_marginal_scores_evaluated;
+    result.dpv_overlap_value_removed = greedy_result.dpv_overlap_value_removed;
+}
+
 }  // namespace
 
 int GreedyOutOfSampleRunner::run(const GreedyOutOfSampleOptions& options) const {
@@ -136,6 +216,11 @@ int GreedyOutOfSampleRunner::run(const GreedyOutOfSampleOptions& options) const 
     const auto solution_csv_path = options.solution_csv_path.empty()
         ? default_solution_csv_path(options.run_id)
         : firebreak::io::resolve_output_path(options.solution_csv_path.string());
+    const auto resolved_weight_map_path = options.weight_map_file.empty()
+        ? std::filesystem::path{}
+        : firebreak::io::resolve_input_path(options.weight_map_file.string());
+    const auto dpv_ignition_policy =
+        opt::parse_weighted_dpv_ignition_policy(options.dpv_ignition_policy);
 
     const auto inventory = firebreak::io::detect_message_files(results_path);
 
@@ -176,9 +261,14 @@ int GreedyOutOfSampleRunner::run(const GreedyOutOfSampleOptions& options) const 
 
     opt::OptimizationInstanceBuilder builder;
     auto opt_instance = builder.build(train_instance, options.alpha, true);
+    solver::attach_weight_map_to_optimization_instance(opt_instance, resolved_weight_map_path);
 
     heuristics::GreedyHeuristic greedy;
-    const auto greedy_result = greedy.runGreedy(opt_instance, metric, true, options.verbose);
+    heuristics::GreedyHeuristicOptions greedy_options;
+    greedy_options.dpv_ignition_policy = dpv_ignition_policy;
+    const auto greedy_result = is_dpv_metric(metric)
+        ? greedy.runGreedy(opt_instance, metric, true, options.verbose, greedy_options)
+        : greedy.runGreedy(opt_instance, metric, true, options.verbose);
 
     io::FirebreakSolutionRecord solution_record;
     solution_record.method = greedy_result.method_name;
@@ -208,6 +298,21 @@ int GreedyOutOfSampleRunner::run(const GreedyOutOfSampleOptions& options) const 
     const auto test_load_end = std::chrono::steady_clock::now();
     const double test_loading_seconds = std::chrono::duration<double>(test_load_end - test_load_start).count();
     const auto test_eval = eval::evaluate_instance_burned_area(test_instance, firebreaks);
+    auto test_opt_instance = builder.build(test_instance, options.alpha, false);
+    solver::attach_weight_map_to_optimization_instance(test_opt_instance, resolved_weight_map_path);
+    std::vector<int> selected_test_compact_indices;
+    selected_test_compact_indices.reserve(greedy_result.selected_firebreak_original_nodes.size());
+    for (const int original_node : greedy_result.selected_firebreak_original_nodes) {
+        selected_test_compact_indices.push_back(test_opt_instance.node_mapper.to_index(original_node));
+    }
+    const auto train_weighted_eval = eval::FppRecourseEvaluator(opt_instance).evaluate(
+        greedy_result.selected_firebreak_indices,
+        false,
+        0.9);
+    const auto test_weighted_eval = eval::FppRecourseEvaluator(test_opt_instance).evaluate(
+        selected_test_compact_indices,
+        false,
+        0.9);
 
     io::StandardExperimentResult result;
     result.run_id = options.run_id;
@@ -245,6 +350,18 @@ int GreedyOutOfSampleRunner::run(const GreedyOutOfSampleOptions& options) const 
         analysis::graph_classification_ratio_summary(train_instance.scenarios);
     result.test_graph_classification_ratios =
         analysis::graph_classification_ratio_summary(test_instance.scenarios);
+    attach_weighted_eval_fields(
+        result,
+        opt_instance,
+        train_weighted_eval,
+        test_weighted_eval,
+        resolved_weight_map_path);
+    if (is_dpv_metric(metric)) {
+        attach_greedy_dpv_fields(result, greedy_result);
+        result.notes.push_back(
+            "DPV ignition policy: " + opt::weighted_dpv_ignition_policy_name(dpv_ignition_policy) + ".");
+        result.notes.push_back("Final weighted evaluation uses FppRecourseEvaluator, not the DPV surrogate.");
+    }
     result.notes = greedy_result.metric_notes;
     result.notes.push_back("Greedy scores are computed from training scenarios only.");
     result.notes.push_back("Tie-breaking uses larger score first, then smaller original Cell2Fire node ID.");

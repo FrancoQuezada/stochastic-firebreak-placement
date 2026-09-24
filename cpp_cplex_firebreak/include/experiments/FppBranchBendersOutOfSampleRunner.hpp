@@ -43,6 +43,7 @@ struct FppBranchBendersOutOfSampleOptions {
     std::filesystem::path output_csv_path;
     std::filesystem::path solution_json_path;
     std::filesystem::path solution_csv_path;
+    std::filesystem::path weight_map_file;
 };
 
 class FppBranchBendersOutOfSampleRunner {

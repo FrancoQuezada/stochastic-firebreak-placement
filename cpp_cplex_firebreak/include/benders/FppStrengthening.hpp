@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstddef>
 #include <filesystem>
 #include <fstream>
@@ -45,6 +46,8 @@ struct FppStrengtheningOptions {
 
 struct FppCoverageLlbiNodeRecord {
     int compact_node = -1;
+    int original_node = -1;
+    double cell_weight = 1.0;
     std::vector<int> covering_candidate_compact_nodes;
 };
 
@@ -52,6 +55,7 @@ struct FppCoverageLlbiScenarioRecord {
     int scenario_index = -1;
     int scenario_id = 0;
     double empty_burned_area = 0.0;
+    int baseline_burned_cell_count = 0;
     std::vector<FppCoverageLlbiNodeRecord> nodes;
 };
 
@@ -59,8 +63,20 @@ struct FppCoverageLlbiData {
     bool enabled = false;
     int num_zeta_vars = 0;
     int num_constraints = 0;
+    bool weighted = false;
+    std::string weight_map_hash;
+    int scenarios_precomputed = 0;
+    int baseline_cells = 0;
+    int auxiliary_variables = 0;
+    int linking_constraints = 0;
+    int loss_constraints = 0;
+    int nonempty_coverage_sets = 0;
+    int total_incidence_terms = 0;
     double precompute_time_sec = 0.0;
+    double build_time_sec = 0.0;
+    std::string validity_mode;
     std::vector<FppCoverageLlbiScenarioRecord> scenarios;
+    std::vector<std::string> notes;
 };
 
 struct FppPathLlbiPathRecord {
@@ -69,12 +85,18 @@ struct FppPathLlbiPathRecord {
 
 struct FppPathLlbiNodeRecord {
     int compact_node = -1;
+    int original_node = -1;
+    double cell_weight = 1.0;
+    bool path_enumeration_complete = true;
     std::vector<FppPathLlbiPathRecord> paths;
 };
 
 struct FppPathLlbiScenarioRecord {
     int scenario_index = -1;
     int scenario_id = 0;
+    int baseline_reachable_node_count = 0;
+    int nodes_without_paths = 0;
+    bool path_enumeration_complete = true;
     std::vector<FppPathLlbiNodeRecord> nodes;
 };
 
@@ -83,16 +105,34 @@ struct FppPathLlbiData {
     int num_b_vars = 0;
     int num_path_constraints = 0;
     int num_paths_used = 0;
+    bool weighted = false;
+    std::string weight_map_hash;
+    int scenarios_precomputed = 0;
+    int baseline_nodes = 0;
+    int auxiliary_variables = 0;
+    int path_constraints = 0;
+    int loss_constraints = 0;
+    int total_paths = 0;
+    int total_candidate_incidence_terms = 0;
+    int nodes_without_paths = 0;
+    bool path_enumeration_complete = true;
+    int paths_truncated = 0;
     double precompute_time_sec = 0.0;
+    double build_time_sec = 0.0;
+    std::string validity_mode;
     std::vector<FppPathLlbiScenarioRecord> scenarios;
     std::vector<std::string> notes;
 };
 
 struct FppDominancePreprocessingResult {
     bool enabled = false;
+    bool structural_weight_safe = false;
     opt::OptimizationInstance reduced_instance;
+    int original_candidate_count = 0;
     int candidates_removed = 0;
     int equivalence_classes = 0;
+    int post_candidate_count = 0;
+    int warm_start_replacements = 0;
     double precompute_time_sec = 0.0;
     std::vector<int> kept_candidate_compact_nodes;
     std::vector<int> removed_candidate_compact_nodes;
@@ -102,8 +142,14 @@ struct FppDominancePreprocessingResult {
 
 struct FppConditionalZeroBenefitResult {
     bool enabled = false;
+    bool structural_weight_safe = false;
+    int callback_calls = 0;
+    int nodes_checked = 0;
+    int candidates_checked = 0;
     int fixings_attempted = 0;
     int fixings_applied = 0;
+    int variables_fixed_zero = 0;
+    int scenarios_reachability_computed = 0;
     double time_sec = 0.0;
     std::vector<int> zero_benefit_candidate_compact_nodes;
     std::vector<std::string> notes;
@@ -257,8 +303,12 @@ inline std::vector<FppPathLlbiPathRecord> enumerate_capped_paths(
     const std::vector<char>& eligible,
     int root,
     int target,
-    int max_paths) {
+    int max_paths,
+    bool* truncated = nullptr) {
     std::vector<FppPathLlbiPathRecord> paths;
+    if (truncated != nullptr) {
+        *truncated = false;
+    }
     if (max_paths <= 0) {
         return paths;
     }
@@ -274,10 +324,36 @@ inline std::vector<FppPathLlbiPathRecord> enumerate_capped_paths(
         successors,
         eligible,
         root,
-        max_paths,
+        max_paths + 1,
         on_path,
         current_blockers,
         paths);
+    const bool raw_path_limit_exceeded = static_cast<int>(paths.size()) > max_paths;
+    std::set<std::vector<int>> seen_blocker_sets;
+    std::vector<FppPathLlbiPathRecord> deduplicated;
+    deduplicated.reserve(paths.size());
+    for (auto& path : paths) {
+        std::sort(
+            path.blocking_candidate_compact_nodes.begin(),
+            path.blocking_candidate_compact_nodes.end());
+        path.blocking_candidate_compact_nodes.erase(
+            std::unique(
+                path.blocking_candidate_compact_nodes.begin(),
+                path.blocking_candidate_compact_nodes.end()),
+            path.blocking_candidate_compact_nodes.end());
+        if (seen_blocker_sets.insert(path.blocking_candidate_compact_nodes).second) {
+            deduplicated.push_back(std::move(path));
+        }
+    }
+    paths = std::move(deduplicated);
+    if (raw_path_limit_exceeded || static_cast<int>(paths.size()) > max_paths) {
+        if (truncated != nullptr) {
+            *truncated = true;
+        }
+    }
+    if (static_cast<int>(paths.size()) > max_paths) {
+        paths.resize(static_cast<std::size_t>(max_paths));
+    }
     return paths;
 }
 
@@ -368,6 +444,25 @@ inline bool subset_of(const std::set<int>& lhs, const std::set<int>& rhs) {
     return std::includes(rhs.begin(), rhs.end(), lhs.begin(), lhs.end());
 }
 
+inline int original_node_for_compact(
+    const opt::OptimizationInstance& opt,
+    int compact_node) {
+    ensure_node_in_range(compact_node, opt.node_mapper.size(), "Dominance candidate");
+    return opt.node_mapper.to_node(compact_node);
+}
+
+inline bool candidate_identity_less(
+    const opt::OptimizationInstance& opt,
+    int lhs,
+    int rhs) {
+    const int lhs_original = original_node_for_compact(opt, lhs);
+    const int rhs_original = original_node_for_compact(opt, rhs);
+    if (lhs_original != rhs_original) {
+        return lhs_original < rhs_original;
+    }
+    return lhs < rhs;
+}
+
 inline std::string set_signature(const std::set<int>& values) {
     std::ostringstream out;
     bool first = true;
@@ -378,6 +473,55 @@ inline std::string set_signature(const std::set<int>& values) {
         first = false;
         out << value;
     }
+    return out.str();
+}
+
+inline std::vector<double> compact_weights_or_unit(
+    const opt::OptimizationInstance& opt,
+    const std::string& context) {
+    const int node_count = opt.node_mapper.size();
+    if (opt.compact_cell_weights.empty()) {
+        return std::vector<double>(static_cast<std::size_t>(node_count), 1.0);
+    }
+    if (opt.compact_cell_weights.size() != static_cast<std::size_t>(node_count)) {
+        throw std::runtime_error(
+            context + " compact weight vector does not cover the optimization node universe.");
+    }
+    for (const double weight : opt.compact_cell_weights) {
+        if (!std::isfinite(weight) || weight <= 0.0) {
+            throw std::runtime_error(context + " compact weights must be finite and positive.");
+        }
+    }
+    return opt.compact_cell_weights;
+}
+
+inline bool has_nonunit_weights(const std::vector<double>& compact_weights) {
+    for (const double weight : compact_weights) {
+        if (std::fabs(weight - 1.0) > 1.0e-9) {
+            return true;
+        }
+    }
+    return false;
+}
+
+inline std::string weight_map_hash_for_strengthening(
+    const opt::OptimizationInstance& opt,
+    const std::vector<double>& compact_weights) {
+    if (!opt.cell_weight_map.deterministic_hash.empty()) {
+        return opt.cell_weight_map.deterministic_hash;
+    }
+    if (compact_weights.empty() || !has_nonunit_weights(compact_weights)) {
+        return "homogeneous-unit";
+    }
+    std::ostringstream out;
+    out << "compact-weights:n=" << compact_weights.size();
+    double total = 0.0;
+    double weighted_index_sum = 0.0;
+    for (std::size_t i = 0; i < compact_weights.size(); ++i) {
+        total += compact_weights[i];
+        weighted_index_sum += static_cast<double>(i + 1) * compact_weights[i];
+    }
+    out << ":sum=" << total << ":idxsum=" << weighted_index_sum;
     return out.str();
 }
 
@@ -393,6 +537,11 @@ inline FppCoverageLlbiData build_fpp_coverage_llbi_data(
     }
     const auto start = std::chrono::steady_clock::now();
     const int node_count = opt.node_mapper.size();
+    const auto compact_weights = detail::compact_weights_or_unit(opt, "CoverageLLBI");
+    data.weighted = detail::has_nonunit_weights(compact_weights);
+    data.weight_map_hash = detail::weight_map_hash_for_strengthening(opt, compact_weights);
+    data.scenarios_precomputed = static_cast<int>(opt.scenarios.size());
+    data.validity_mode = "per-cell-capped-downstream-coverage-bound";
     const auto eligible = detail::eligible_mask(opt);
     for (std::size_t s = 0; s < opt.scenarios.size(); ++s) {
         const auto& scenario = opt.scenarios[s];
@@ -412,8 +561,13 @@ inline FppCoverageLlbiData build_fpp_coverage_llbi_data(
         FppCoverageLlbiScenarioRecord scenario_record;
         scenario_record.scenario_index = static_cast<int>(s);
         scenario_record.scenario_id = scenario.scenario_id;
-        scenario_record.empty_burned_area = static_cast<double>(root_reachable.size());
-        const auto nodes = detail::unique_nodes_from_scenario(scenario, root_reachable);
+        scenario_record.baseline_burned_cell_count = static_cast<int>(root_reachable.size());
+        data.baseline_cells += scenario_record.baseline_burned_cell_count;
+        for (const int node : root_reachable) {
+            scenario_record.empty_burned_area +=
+                compact_weights[static_cast<std::size_t>(node)];
+        }
+        const auto nodes = root_reachable;
         for (const int node : nodes) {
             auto candidates = covering_candidates[static_cast<std::size_t>(node)];
             candidates.erase(
@@ -431,15 +585,28 @@ inline FppCoverageLlbiData build_fpp_coverage_llbi_data(
             if (candidates.empty()) {
                 continue;
             }
-            scenario_record.nodes.push_back(FppCoverageLlbiNodeRecord{node, std::move(candidates)});
+            data.total_incidence_terms += static_cast<int>(candidates.size());
+            scenario_record.nodes.push_back(FppCoverageLlbiNodeRecord{
+                node,
+                opt.node_mapper.to_node(node),
+                compact_weights[static_cast<std::size_t>(node)],
+                std::move(candidates)});
             ++data.num_zeta_vars;
+            ++data.auxiliary_variables;
             ++data.num_constraints;
+            ++data.linking_constraints;
+            ++data.nonempty_coverage_sets;
         }
         if (!scenario_record.nodes.empty()) {
             ++data.num_constraints;
+            ++data.loss_constraints;
         }
         data.scenarios.push_back(std::move(scenario_record));
     }
+    data.notes.push_back(
+        "CoverageLLBI uses structural closed-downstream coverage sets and weighted baseline-burned cell coefficients.");
+    data.notes.push_back(
+        "Coverage incidence is not weighted; each covered baseline-burned cell is capped by one zeta variable.");
     data.precompute_time_sec =
         std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
     return data;
@@ -459,6 +626,11 @@ inline FppPathLlbiData build_fpp_path_llbi_data(
     }
     const auto start = std::chrono::steady_clock::now();
     const int node_count = opt.node_mapper.size();
+    const auto compact_weights = detail::compact_weights_or_unit(opt, "PathLLBI");
+    data.weighted = detail::has_nonunit_weights(compact_weights);
+    data.weight_map_hash = detail::weight_map_hash_for_strengthening(opt, compact_weights);
+    data.scenarios_precomputed = static_cast<int>(opt.scenarios.size());
+    data.validity_mode = "directed-simple-path-burning-lower-bound";
     const auto eligible = detail::eligible_mask(opt);
     for (std::size_t s = 0; s < opt.scenarios.size(); ++s) {
         const auto& scenario = opt.scenarios[s];
@@ -467,21 +639,50 @@ inline FppPathLlbiData build_fpp_path_llbi_data(
         FppPathLlbiScenarioRecord scenario_record;
         scenario_record.scenario_index = static_cast<int>(s);
         scenario_record.scenario_id = scenario.scenario_id;
-        const auto nodes = detail::unique_nodes_from_scenario(scenario, root_reachable);
+        scenario_record.baseline_reachable_node_count =
+            static_cast<int>(root_reachable.size());
+        data.baseline_nodes += scenario_record.baseline_reachable_node_count;
+        const auto nodes = root_reachable;
         for (const int node : nodes) {
+            bool truncated = false;
             auto paths = detail::enumerate_capped_paths(
                 successors,
                 eligible,
                 scenario.ignition_index,
                 node,
-                max_paths_per_node);
+                max_paths_per_node,
+                &truncated);
             if (paths.empty()) {
+                ++scenario_record.nodes_without_paths;
+                ++data.nodes_without_paths;
                 continue;
             }
+            int incidence_terms = 0;
+            for (const auto& path : paths) {
+                incidence_terms +=
+                    static_cast<int>(path.blocking_candidate_compact_nodes.size());
+            }
             data.num_paths_used += static_cast<int>(paths.size());
+            data.total_paths += static_cast<int>(paths.size());
             data.num_path_constraints += static_cast<int>(paths.size());
+            data.path_constraints += static_cast<int>(paths.size());
+            data.total_candidate_incidence_terms += incidence_terms;
             ++data.num_b_vars;
-            scenario_record.nodes.push_back(FppPathLlbiNodeRecord{node, std::move(paths)});
+            ++data.auxiliary_variables;
+            if (truncated) {
+                ++data.paths_truncated;
+                data.path_enumeration_complete = false;
+                scenario_record.path_enumeration_complete = false;
+            }
+            scenario_record.nodes.push_back(FppPathLlbiNodeRecord{
+                node,
+                opt.node_mapper.to_node(node),
+                compact_weights[static_cast<std::size_t>(node)],
+                !truncated,
+                std::move(paths)});
+        }
+        if (!scenario_record.nodes.empty()) {
+            ++data.loss_constraints;
         }
         data.scenarios.push_back(std::move(scenario_record));
     }
@@ -490,6 +691,10 @@ inline FppPathLlbiData build_fpp_path_llbi_data(
     if (data.num_paths_used == 0) {
         data.notes.push_back("Path LLBI generated no paths for the loaded FPP scenarios.");
     }
+    data.notes.push_back(
+        "PathLLBI uses directed simple ignition-to-node paths with structural, unweighted candidate incidence.");
+    data.notes.push_back(
+        "PathLLBI coefficients are destination-node weights; truncation keeps only real paths and weakens the lower bound.");
     return data;
 }
 
@@ -498,7 +703,10 @@ inline FppDominancePreprocessingResult apply_fpp_global_dominance_preprocessing(
     bool enabled) {
     FppDominancePreprocessingResult result;
     result.enabled = enabled;
+    result.structural_weight_safe = enabled;
     result.reduced_instance = opt;
+    result.original_candidate_count = static_cast<int>(opt.eligible_indices.size());
+    result.post_candidate_count = result.original_candidate_count;
     if (!enabled) {
         result.kept_candidate_compact_nodes = opt.eligible_indices;
         return result;
@@ -521,6 +729,12 @@ inline FppDominancePreprocessingResult apply_fpp_global_dominance_preprocessing(
             duplicate_classes.insert(candidate);
         }
     }
+    std::sort(
+        unique_candidates.begin(),
+        unique_candidates.end(),
+        [&opt](int lhs, int rhs) {
+            return detail::candidate_identity_less(opt, lhs, rhs);
+        });
     result.equivalence_classes += static_cast<int>(duplicate_classes.size());
 
     std::map<int, std::vector<std::set<int>>> dominated_by_candidate;
@@ -563,7 +777,12 @@ inline FppDominancePreprocessingResult apply_fpp_global_dominance_preprocessing(
     std::set<int> removed_compact_nodes;
     std::map<int, int> removed_by;
     for (auto& [_, cls] : classes_by_signature) {
-        std::sort(cls.begin(), cls.end());
+        std::sort(
+            cls.begin(),
+            cls.end(),
+            [&opt](int lhs, int rhs) {
+                return detail::candidate_identity_less(opt, lhs, rhs);
+            });
         if (cls.size() <= 1) {
             continue;
         }
@@ -579,15 +798,21 @@ inline FppDominancePreprocessingResult apply_fpp_global_dominance_preprocessing(
         if (removed_compact_nodes.find(j) != removed_compact_nodes.end()) {
             continue;
         }
+        int best_dominator = -1;
         for (const int i : unique_candidates) {
             if (i == j || removed_compact_nodes.find(i) != removed_compact_nodes.end()) {
                 continue;
             }
             if (dominates(i, j) && !dominates(j, i)) {
-                removed_compact_nodes.insert(j);
-                removed_by[j] = i;
-                break;
+                if (best_dominator < 0 ||
+                    detail::candidate_identity_less(opt, i, best_dominator)) {
+                    best_dominator = i;
+                }
             }
+        }
+        if (best_dominator >= 0) {
+            removed_compact_nodes.insert(j);
+            removed_by[j] = best_dominator;
         }
     }
 
@@ -618,6 +843,7 @@ inline FppDominancePreprocessingResult apply_fpp_global_dominance_preprocessing(
         result.removed_by_dominator.clear();
         result.candidates_removed = 0;
         result.equivalence_classes = 0;
+        result.post_candidate_count = result.original_candidate_count;
         result.precompute_time_sec =
             std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
         result.notes.push_back(
@@ -628,6 +854,7 @@ inline FppDominancePreprocessingResult apply_fpp_global_dominance_preprocessing(
     result.reduced_instance.eligible_original_nodes = kept_original_nodes;
     result.kept_candidate_compact_nodes = kept_indices;
     result.candidates_removed = static_cast<int>(result.removed_candidate_compact_nodes.size());
+    result.post_candidate_count = static_cast<int>(result.kept_candidate_compact_nodes.size());
     result.precompute_time_sec =
         std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
     result.notes.push_back(
@@ -644,6 +871,7 @@ inline FppConditionalZeroBenefitResult detect_fpp_conditional_zero_benefit_candi
     bool enabled) {
     FppConditionalZeroBenefitResult result;
     result.enabled = enabled;
+    result.structural_weight_safe = enabled;
     if (!enabled) {
         return result;
     }
@@ -654,11 +882,13 @@ inline FppConditionalZeroBenefitResult detect_fpp_conditional_zero_benefit_candi
         detail::ensure_node_in_range(node, node_count, "Fixed firebreak");
         fixed_selected[static_cast<std::size_t>(node)] = 1;
     }
+    result.nodes_checked = 1;
 
     for (const int candidate : opt.eligible_indices) {
         if (fixed_selected[static_cast<std::size_t>(candidate)]) {
             continue;
         }
+        ++result.candidates_checked;
         bool zero_benefit_all_scenarios = true;
         for (const auto& scenario : opt.scenarios) {
             if (candidate == scenario.ignition_index) {
@@ -669,6 +899,7 @@ inline FppConditionalZeroBenefitResult detect_fpp_conditional_zero_benefit_candi
                 successors,
                 scenario.ignition_index,
                 fixed_selected);
+            ++result.scenarios_reachability_computed;
             if (reached[static_cast<std::size_t>(candidate)]) {
                 zero_benefit_all_scenarios = false;
                 break;
@@ -679,6 +910,7 @@ inline FppConditionalZeroBenefitResult detect_fpp_conditional_zero_benefit_candi
             result.zero_benefit_candidate_compact_nodes.push_back(candidate);
         }
     }
+    result.variables_fixed_zero = result.fixings_applied;
     result.time_sec =
         std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
     result.notes.push_back(

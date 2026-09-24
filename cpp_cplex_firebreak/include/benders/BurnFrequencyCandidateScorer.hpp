@@ -1,5 +1,6 @@
 #pragma once
 
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -12,7 +13,11 @@ struct BurnFrequencyCandidateScore {
     int compact_index = -1;
     int original_node = 0;
     double score = 0.0;
+    double burn_frequency = 0.0;
+    double cell_weight = 1.0;
     int scenarios_burned = 0;
+    bool weighted = false;
+    std::string weight_map_hash;
 };
 
 class BurnFrequencyCandidateScorer {

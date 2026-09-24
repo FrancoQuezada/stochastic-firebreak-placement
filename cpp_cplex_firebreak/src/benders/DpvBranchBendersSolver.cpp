@@ -17,6 +17,7 @@
 #include "benders/BendersCut.hpp"
 #include "benders/DpvLiftedLowerBound.hpp"
 #include "benders/DpvPersistentScenarioSubproblemManager.hpp"
+#include "opt/WeightedDpvScoring.hpp"
 #include "solver/CplexEnvironment.hpp"
 
 #ifdef FIREBREAK_WITH_CPLEX
@@ -148,6 +149,50 @@ void attach_warm_start_metadata(solver::ModelResult& result, const solver::WarmS
     if (!warm_start.status.empty()) {
         result.warm_start_notes.push_back("Warm start status: " + warm_start.status + ".");
     }
+}
+
+void attach_dpv_branch_benders_metadata(
+    solver::ModelResult& result,
+    const opt::OptimizationInstance& opt,
+    const DpvBranchBendersOptions& options) {
+    const auto weights = opt::canonical_compact_dpv_weights_or_unit(opt);
+    result.dpv_model_weighted = true;
+    result.dpv_model_type = "callback_dpv_branch_benders";
+    result.dpv_variant = "solution_dependent_product_pair_loss";
+    result.dpv_structural_definition =
+        "product pairs (source, successor, closed descendant); destination descendant weights; multiplicity preserved";
+    result.dpv_ignition_policy =
+        opt::weighted_dpv_ignition_policy_name(options.dpv_ignition_policy);
+    result.dpv_weight_profile = opt::weighted_dpv_weight_profile(opt, weights);
+    result.dpv_weight_map_hash = opt::weighted_dpv_weight_map_hash(opt, weights);
+    result.dpv_scenario_aggregation = "scenario_probability_weighted_sum";
+    result.dpv_normalization = "none";
+    result.dpv_risk_measure = "expected";
+    result.dpv_surrogate_objective = result.objective_value;
+    result.dpv_surrogate_best_bound = result.best_bound;
+    result.dpv_surrogate_gap = result.mip_gap;
+    result.dpv_benders_iterations = result.iterations;
+    result.dpv_benders_subproblems_solved = result.branch_benders_subproblems_solved;
+    result.dpv_benders_cuts_generated =
+        result.branch_benders_lazy_cuts_added + result.branch_benders_root_user_cuts_added;
+    result.dpv_benders_cuts_added =
+        result.branch_benders_lazy_cuts_added + result.branch_benders_root_user_cuts_added;
+    result.dpv_benders_duplicate_cuts = result.branch_benders_duplicate_cuts;
+    result.dpv_benders_max_cut_violation = result.branch_benders_max_cut_violation;
+    result.dpv_benders_subproblem_time_sec = result.branch_benders_subproblem_time_sec;
+    result.dpv_benders_cut_time_sec =
+        result.branch_benders_cut_construction_time_sec +
+        result.branch_benders_root_user_cut_total_time_sec;
+    result.dpv_llbi_enabled = options.use_lifted_lower_bounds;
+    result.dpv_llbi_weighted = options.use_lifted_lower_bounds;
+    result.dpv_llbi_type =
+        options.use_lifted_lower_bounds ? "weighted_optimistic_downstream_product_pair_llbi" : "";
+    result.dpv_llbi_constraints_added = result.benders_lifted_lower_bound_count;
+    result.dpv_llbi_precompute_time_sec =
+        result.benders_lifted_lower_bound_precompute_time_sec;
+    result.dpv_llbi_validity_mode = result.benders_lifted_lower_bound_validity_mode;
+    result.objective_metric = "weighted_solution_dependent_DPV_product_pair_loss_branch_benders";
+    result.solver_weighted_objective = result.objective_value;
 }
 
 std::string cut_signature(const BendersCut& cut) {
@@ -756,6 +801,23 @@ solver::ModelResult DpvBranchBendersSolver::solve(
                 llb_result.total_nonzero_coefficients;
             result.benders_lifted_lower_bound_min_rhs = llb_result.min_rhs;
             result.benders_lifted_lower_bound_max_rhs = llb_result.max_rhs;
+            result.benders_lifted_lower_bound_weighted = llb_result.weighted;
+            result.benders_lifted_lower_bound_weight_map_hash = llb_result.weight_map_hash;
+            result.benders_lifted_lower_bound_scenarios_precomputed =
+                llb_result.scenarios_precomputed;
+            result.benders_lifted_lower_bound_singletons_evaluated =
+                llb_result.singletons_evaluated;
+            result.benders_lifted_lower_bound_no_firebreak_loss_min =
+                llb_result.no_firebreak_loss_min;
+            result.benders_lifted_lower_bound_no_firebreak_loss_max =
+                llb_result.no_firebreak_loss_max;
+            result.benders_lifted_lower_bound_singleton_benefit_min =
+                llb_result.singleton_benefit_min;
+            result.benders_lifted_lower_bound_singleton_benefit_max =
+                llb_result.singleton_benefit_max;
+            result.benders_lifted_lower_bound_constraints_added =
+                result.benders_lifted_lower_bound_count;
+            result.benders_lifted_lower_bound_validity_mode = llb_result.validity_mode;
             result.benders_lifted_lower_bound_notes = llb_result.notes;
         }
 
@@ -944,6 +1006,7 @@ solver::ModelResult DpvBranchBendersSolver::solve(
             static_cast<std::size_t>(lifted_lower_bound_count);
 
         const auto subproblem_diagnostics = subproblem_manager.diagnostics();
+        attach_dpv_branch_benders_metadata(result, opt, options);
         result.notes.push_back("Callback-based DPV-SAA Branch-and-Benders-cut solver.");
         result.notes.push_back("Lazy Benders optimality cuts are generated only at integer candidate incumbents.");
         result.notes.push_back(
@@ -956,6 +1019,7 @@ solver::ModelResult DpvBranchBendersSolver::solve(
             result.notes.push_back("Fractional root user cuts were disabled.");
         }
         result.notes.push_back("Benders cuts preserve the Phase 13/14 CPLEX dual sign convention.");
+        result.notes.push_back("DPV subproblem objective uses weight(descendant) for each product pair; multiplicity is preserved.");
         if (options.use_lifted_lower_bounds) {
             result.notes.push_back("Optional lifted lower-bound inequalities were added to the callback master.");
         } else {

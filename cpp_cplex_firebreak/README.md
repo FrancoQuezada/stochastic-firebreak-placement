@@ -4,6 +4,67 @@ This checkout is trimmed to run the `new_instances` FPP scaling experiment.
 Historical experiment launchers, old config files, generated results, and logs
 are intentionally excluded from the active `scripts/` and `config/` folders.
 
+## Weighted Landscapes
+
+The solver, DPV heuristics, and result/analysis pipeline all support
+**non-uniform per-cell wildfire-loss weights** `w_k`, so the optimization
+objective and every evaluation metric reflect loss-weighted burned area
+(`sum_k w_k x_k^s(y)`), not raw burned-cell count. Three weight profiles are
+supported (`homogeneous`, `heterogeneous`, `clustered`), generated
+deterministically and stored in a content-addressed map registry so every
+result row is traceable back to the exact weight map that produced it.
+
+Principal entry points:
+
+```bash
+# Generate and register a weight map for one physical landscape (once, before any solve).
+./build_gpp/firebreak_cpp ensure-weight-map \
+    --landscape new20x20 --weight-profile heterogeneous --weight-replicate 0 \
+    --weight-registry weight_maps/
+
+# Direct exact FPP solve against that weight map.
+./build_gpp/firebreak_cpp run-fpp-saa-oos \
+    --landscape new20x20 --train-ids 1-8 --test-ids 21-24 --alpha 0.02 \
+    --risk-measure expected --weight-map-file weight_maps/.../weights.csv \
+    --output-json result.json --output-csv result.csv
+
+# DPV surrogate optimization against the same weight map.
+./build_gpp/firebreak_cpp run-dpv-saa-oos \
+    --landscape new20x20 --train-ids 1-8 --test-ids 21-24 --alpha 0.02 \
+    --weight-map-file weight_maps/.../weights.csv --dpv-ignition-policy fpp-safe \
+    --output-json dpv_result.json --output-csv dpv_result.csv
+
+# Full paired (reduced + reburn) manifest + worker experiment.
+python3 scripts/generate_fpp_new_instances_scaling_manifests.py \
+    --output-dir results/my_experiment --weight-profiles homogeneous,heterogeneous,clustered \
+    --weight-registry weight_maps/ --generate-missing-weight-maps --paired-reburn-evaluation
+python3 scripts/run_fpp_new_instances_scaling_manifest_worker.py \
+    --worker-id worker_000 --manifest results/my_experiment/manifests/worker_000_manifest.csv \
+    --binary ./build_gpp/firebreak_cpp
+
+# Merge (Phase 9A) and analyze (Phase 9B) the results.
+python3 scripts/merge_weighted_experiment_results.py \
+    --input-root results/my_experiment --output-dir results/my_experiment/merged --strict
+python3 scripts/analyze_weighted_experiment_results.py \
+    --merged-current-valid results/my_experiment/merged/merged_current_valid.csv \
+    --merged-all-attempts results/my_experiment/merged/merged_all_attempts.csv \
+    --output-dir results/my_experiment/analysis
+```
+
+Full conceptual model, supported method/risk/LLBI/combinatorial coverage,
+known unsupported combinations, and troubleshooting:
+**[`docs/WEIGHTED_LANDSCAPES.md`](docs/WEIGHTED_LANDSCAPES.md)** (staged with
+`git add -f` since `docs/` is gitignored). Legacy homogeneous experiments
+require no changes — omitting every `--weight-map-file`/`--weight-profile`
+flag resolves to the homogeneous profile automatically.
+
+Known limitations (see the guide for the full list): the restricted-candidate
+solver does not support LLBI/combinatorial/dominance strengthening for
+non-homogeneous maps; combinatorial Benders does not combine with LLBI,
+dominance, or root user cuts; conditional zero-benefit fixing is a diagnostic
+detector only (applies no actual variable fixings); DPV-CVaR optimization is
+not implemented.
+
 ## Required Files
 
 The experiment launcher is:
@@ -119,6 +180,38 @@ It includes, for each objective family, the root-cut baseline, lifted lower
 bound inequalities, projected coverage LLBI, projected path LLBI, and
 combinatorial Benders variants.
 
+Weighted landscape status:
+
+- Standard FPP LLBI is weight-aware for explicit-loop and callback
+  Branch-and-Benders (`docs/WEIGHTED_LANDSCAPES_PHASE6B1.md`).
+- The weighted standard LLBI formula uses downstream empty-burned weighted mass,
+  not exact singleton LP subproblem solves.
+- Extended CoverageLLBI is weight-aware for explicit-loop and callback
+  Branch-and-Benders using per-cell capped downstream coverage
+  (`docs/WEIGHTED_LANDSCAPES_PHASE6B2A.md`).
+- Extended PathLLBI is weight-aware for explicit-loop and callback
+  Branch-and-Benders using directed simple ignition-to-node path lower bounds
+  (`docs/WEIGHTED_LANDSCAPES_PHASE6B2B.md`).
+- Projected CoverageLLBI is weight-aware in callback Branch-and-Benders for
+  both `exp` root separation and the static `poly` subset
+  (`docs/WEIGHTED_LANDSCAPES_PHASE6B3A.md`).
+- Projected PathLLBI is weight-aware in callback Branch-and-Benders for both
+  `exp` root separation and the static `poly` first-stored-path subset
+  (`docs/WEIGHTED_LANDSCAPES_PHASE6B3B.md`).
+- Combinatorial Benders is weight-aware in callback Branch-and-Benders for
+  integer incumbents, binary initial cuts, and fractional path user cuts with
+  `lift_mode=none`, `heuristic`, or `posterior`. Scenario ordering
+  `eta-asc|eta-desc` and `cut_sampling_ratio in (0,1]` are exact for integer
+  candidates through sampling-first separation with full fallback before
+  candidate acceptance
+  (`docs/WEIGHTED_LANDSCAPES_PHASE6C1.md`,
+  `docs/WEIGHTED_LANDSCAPES_PHASE6C2A.md`,
+  `docs/WEIGHTED_LANDSCAPES_PHASE6C2B.md`,
+  `docs/WEIGHTED_LANDSCAPES_PHASE6C2C.md`).
+- LP-dual root user cuts combined with combinatorial Benders,
+  restricted-candidate combinatorial Benders, DPV, and Static-DPV remain
+  blocked for non-homogeneous weights until separately validated.
+
 Expected objective methods:
 
 ```text
@@ -169,29 +262,37 @@ The combinatorial Branch-and-Benders methods use:
 combinatorial_benders_cut_sampling_ratio = 0.10
 ```
 
-This ratio limits how many violated combinatorial Benders cuts are added each
-time the callback separates cuts. The limit is:
+For integer candidate callbacks this ratio controls the number of scenarios
+checked in the initial deterministic sample. The realized sample size is:
 
 ```text
 ceil(combinatorial_benders_cut_sampling_ratio * train_scenario_count)
 ```
 
-with a minimum of one cut. For common training counts this means:
+with a minimum of one scenario. If the initial sample contains a violated
+scenario, the candidate is rejected and the remaining scenarios may be deferred
+for that candidate. If the initial sample contains no violation, the callback
+performs a full deterministic fallback sweep over all remaining scenarios before
+allowing the candidate. Thus ratios below one change verification order and may
+reject some candidates earlier, but do not allow accepting an incumbent with
+unchecked scenarios.
+
+For common training counts this means:
 
 ```text
-train_count = 100 -> at most 10 violated cuts per callback
-train_count = 200 -> at most 20 violated cuts per callback
-train_count = 400 -> at most 40 violated cuts per callback
-train_count = 600 -> at most 60 violated cuts per callback
+train_count = 100 -> 10 initially sampled scenarios per callback
+train_count = 200 -> 20 initially sampled scenarios per callback
+train_count = 400 -> 40 initially sampled scenarios per callback
+train_count = 600 -> 60 initially sampled scenarios per callback
 ```
 
-The code does not sample these cuts randomly. It orders scenarios by increasing
-eta value and separates in that order until the limit of violated cuts is
-reached. The same ratio is used for lazy cuts at integer candidate solutions
-and, when `combinatorial_benders_separate_fractional=true`, for user cuts at
-fractional relaxations. For CVaR methods such as
-`FPP-Branch-Benders-Combinatorial-CVaR`, this parameter does not define the CVaR
-tail; it only controls callback cut aggressiveness.
+The code does not sample randomly. It first orders scenarios by the current
+master `eta_s` value, with deterministic tie-breaking by scenario ID, then uses
+the first `ceil(ratio * train_count)` scenarios as the initial sample. The
+ordered fallback list preserves every omitted scenario exactly once. For CVaR
+methods such as `FPP-Branch-Benders-Combinatorial-CVaR`, this parameter does
+not define the CVaR tail; all scenario recourse constraints remain subject to
+full verification before candidate acceptance.
 
 The scenario ordering is configurable with:
 
@@ -209,11 +310,11 @@ FPP-Branch-Benders-Combinatorial-MeanCVaR-EtaDesc
 ```
 
 Each one is identical to its corresponding base combinatorial method except
-that violated combinatorial cuts are searched after ordering scenarios by
-decreasing eta value. For the expected-value variant, this is an alternative
-cut-priority rule. For CVaR and mean-CVaR variants, it is a tail-oriented
-heuristic based on the master's current scenario-loss approximation; it does not
-change the risk objective or exactly identify the CVaR tail.
+that combinatorial cuts are searched after ordering scenarios by decreasing
+current `eta_s`. `eta-asc` checks smaller current recourse estimates first;
+`eta-desc` checks larger current recourse estimates first. Neither ordering
+changes the risk objective, scenario probabilities, cut coefficients, or the
+requirement that an accepted integer candidate be fully verified.
 
 ## Default Experiment Grid
 

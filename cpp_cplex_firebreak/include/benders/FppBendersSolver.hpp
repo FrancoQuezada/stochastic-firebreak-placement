@@ -1,5 +1,6 @@
 #pragma once
 
+#include "benders/FppStrengthening.hpp"
 #include "opt/OptimizationInstance.hpp"
 #include "risk/RiskMeasure.hpp"
 #include "solver/ModelResult.hpp"
@@ -15,6 +16,7 @@ struct FppBendersOptions {
     bool verbose = false;
     risk::RiskMeasureConfig risk_config;
     bool use_lifted_lower_bounds = false;
+    FppStrengtheningOptions strengthening_options;
 };
 
 class FppBendersSolver {

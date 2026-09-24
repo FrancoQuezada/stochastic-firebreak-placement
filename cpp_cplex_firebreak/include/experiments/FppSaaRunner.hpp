@@ -17,6 +17,7 @@ struct FppSaaOptions {
     int threads = 0;
     bool verbose = false;
     std::filesystem::path output_path;
+    std::filesystem::path weight_map_file;
 };
 
 class FppSaaRunner {
@@ -25,4 +26,3 @@ public:
 };
 
 }  // namespace firebreak::experiments
-

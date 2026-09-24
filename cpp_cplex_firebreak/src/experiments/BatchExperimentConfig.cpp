@@ -1226,6 +1226,14 @@ void validate_batch_experiment_config(const BatchExperimentConfig& config) {
     }
     (void)normalize_warm_start_policy(config.warm_start_policy);
     (void)normalize_fpp_formulation(config.fpp_formulation);
+    if (!config.weight_profile.empty() && config.weight_map_file.empty()) {
+        throw std::runtime_error(
+            "weight_profile is set but weight_map_file is empty; a weighted row must "
+            "name the canonical registry CSV it was resolved against.");
+    }
+    if (config.weight_replicate < 0) {
+        throw std::runtime_error("weight_replicate must be nonnegative.");
+    }
 }
 
 }  // namespace firebreak::experiments

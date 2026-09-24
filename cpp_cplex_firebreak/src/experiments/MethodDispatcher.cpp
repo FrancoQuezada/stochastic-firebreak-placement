@@ -27,10 +27,12 @@
 #include "io/PathUtils.hpp"
 #include "io/SolutionIO.hpp"
 #include "opt/OptimizationInstanceBuilder.hpp"
+#include "opt/WeightedDpvScoring.hpp"
 #include "solver/CplexEnvironment.hpp"
 #include "solver/DpvSaaCplexModel.hpp"
 #include "solver/FppCutReachabilityCplexModel.hpp"
 #include "solver/FppSaaCplexModel.hpp"
+#include "solver/FppWeightedLossUtils.hpp"
 #include "solver/WarmStart.hpp"
 
 namespace firebreak::experiments {
@@ -215,6 +217,25 @@ int total_observed_scenario_nodes(const opt::OptimizationInstance& opt) {
     return total;
 }
 
+std::vector<int> compact_indices_for_original_nodes(
+    const opt::OptimizationInstance& opt,
+    const std::vector<int>& original_nodes,
+    std::vector<std::string>& warnings,
+    const std::string& context) {
+    std::vector<int> compact_indices;
+    compact_indices.reserve(original_nodes.size());
+    for (const int original_node : original_nodes) {
+        if (!opt.node_mapper.contains_node(original_node)) {
+            warnings.push_back(
+                context + " selected original node is absent from evaluation node universe: " +
+                std::to_string(original_node) + ".");
+            continue;
+        }
+        compact_indices.push_back(opt.node_mapper.to_index(original_node));
+    }
+    return compact_indices;
+}
+
 void attach_fpp_recourse_validation(
     const opt::OptimizationInstance& opt,
     solver::ModelResult& solver_result) {
@@ -316,6 +337,26 @@ void attach_restricted_candidate_diagnostics(
     io::StandardExperimentResult& result) {
     result.restricted_candidate_enabled = restricted_result.restricted_candidate_enabled;
     result.restricted_candidate_exact_mode = restricted_result.restricted_candidate_exact_mode;
+    result.restricted_candidate_bounds_enabled =
+        restricted_result.candidate_bounds_enabled;
+    result.restricted_candidate_bounds_weighted =
+        restricted_result.candidate_bounds_weighted;
+    result.restricted_candidate_bound_type =
+        restricted_result.candidate_bound_type;
+    result.restricted_candidate_bound_map_hash =
+        restricted_result.candidate_bound_map_hash;
+    result.restricted_candidates_evaluated_by_bound =
+        restricted_result.candidates_evaluated_by_bound;
+    result.restricted_candidates_permanently_pruned =
+        restricted_result.candidates_permanently_pruned;
+    result.restricted_candidates_not_pruned_due_to_safety =
+        restricted_result.candidates_not_pruned_due_to_safety;
+    result.restricted_candidate_early_exactness_certificate_used =
+        restricted_result.early_exactness_certificate_used;
+    result.restricted_candidate_full_activation_avoided =
+        restricted_result.full_activation_avoided;
+    result.restricted_candidate_unvalidated_bound_rejected =
+        restricted_result.unvalidated_bound_rejected;
     result.restricted_candidate_initial_policy = restricted_result.initial_candidate_policy;
     result.restricted_candidate_activation_policy = restricted_result.activation_policy;
     result.restricted_candidate_initial_active_count =
@@ -334,6 +375,12 @@ void attach_restricted_candidate_diagnostics(
         restricted_result.final_lower_bound_is_global;
     result.restricted_candidate_cut_reuse_enabled = restricted_result.cut_reuse_enabled;
     result.restricted_candidate_cut_pool_size = restricted_result.cut_pool_size;
+    result.restricted_candidate_cut_pool_peak_size =
+        restricted_result.cut_pool_peak_size;
+    result.restricted_candidate_cut_pool_evictions =
+        restricted_result.cut_pool_evictions;
+    result.restricted_candidate_cut_pool_reinstantiations =
+        restricted_result.cut_pool_reinstantiations;
     result.restricted_candidate_rounds = restricted_result.candidate_rounds;
     result.restricted_candidate_cuts_reused_in_full_stage =
         restricted_result.cuts_reused_in_full_stage;
@@ -373,10 +420,26 @@ void attach_restricted_candidate_diagnostics(
         restricted_result.active_candidate_fraction_at_stop;
     result.restricted_candidate_maintenance_policy =
         restricted_result.candidate_maintenance_policy;
+    result.restricted_candidate_maintenance_weighted =
+        restricted_result.maintenance_weighted;
+    result.restricted_candidate_maintenance_map_hash =
+        restricted_result.maintenance_map_hash;
     result.restricted_candidate_deactivation_enabled =
         restricted_result.deactivation_enabled;
     result.restricted_candidate_deactivation_rounds =
         restricted_result.deactivation_rounds;
+    result.restricted_candidate_active_target =
+        restricted_result.active_candidate_target;
+    result.restricted_candidate_considered_for_deactivation =
+        restricted_result.candidates_considered_for_deactivation;
+    result.restricted_candidate_deactivated_total =
+        restricted_result.candidates_deactivated;
+    result.restricted_candidate_reactivated_total =
+        restricted_result.candidates_reactivated;
+    result.restricted_candidate_protected_from_deactivation_total =
+        restricted_result.candidates_protected_from_deactivation;
+    result.restricted_candidate_full_activation_overrode_maintenance =
+        restricted_result.full_activation_overrode_maintenance;
     result.restricted_candidate_min_active_size =
         restricted_result.candidate_min_active_size;
     result.restricted_candidate_max_active_size =
@@ -606,6 +669,13 @@ io::StandardExperimentResult MethodDispatcher::run_method(const MethodDispatchRe
     opt::OptimizationInstanceBuilder builder;
     const bool build_dpv_indices = method_needs_dpv_indices(method, warm_start_policy);
     auto opt_instance = builder.build(train_instance, request.alpha, build_dpv_indices);
+    solver::WeightMapAttachmentDiagnostics weight_attachment_diagnostics;
+    solver::attach_weight_map_to_optimization_instance(
+        opt_instance, request.weight_map_file, request.weight_map_hash,
+        &weight_attachment_diagnostics);
+    auto test_opt_instance = builder.build(test_instance, request.alpha, build_dpv_indices);
+    solver::attach_weight_map_to_optimization_instance(
+        test_opt_instance, request.weight_map_file, request.weight_map_hash);
     benders::FppStrengtheningOptions fpp_strengthening_options;
     if (fpp_variant.is_fpp_solver) {
         fpp_strengthening_options.use_coverage_llbi =
@@ -893,10 +963,11 @@ io::StandardExperimentResult MethodDispatcher::run_method(const MethodDispatchRe
             request.mip_gap,
             request.threads,
             request.verbose,
-            warm_start_ptr);
+            warm_start_ptr,
+            opt::parse_weighted_dpv_ignition_policy(request.dpv_ignition_policy));
         solver_result.method = "DPV-SAA";
         solver_result.formulation = "base";
-        objective_metric = "solution_dependent_DPV_unit_weights";
+        objective_metric = "weighted_solution_dependent_DPV_product_pair_loss";
     } else if (method == "DPV-Benders") {
         solver::WarmStart warm_start = build_policy_warm_start("DPV-SAA", warm_start_policy, opt_instance);
         const solver::WarmStart* warm_start_ptr = warm_start.enabled ? &warm_start : nullptr;
@@ -908,6 +979,8 @@ io::StandardExperimentResult MethodDispatcher::run_method(const MethodDispatchRe
         options.threads = request.threads;
         options.verbose = request.verbose;
         options.use_lifted_lower_bounds = false;
+        options.dpv_ignition_policy =
+            opt::parse_weighted_dpv_ignition_policy(request.dpv_ignition_policy);
         options.warm_start = warm_start_ptr;
 
         benders::DpvBendersSolver solver;
@@ -916,7 +989,7 @@ io::StandardExperimentResult MethodDispatcher::run_method(const MethodDispatchRe
         solver_result.formulation = "benders";
         solver_result.notes.push_back(
             "Batch method label DPV-Benders maps to explicit-loop DPV-SAA Benders with LLBI disabled.");
-        objective_metric = "solution_dependent_DPV_unit_weights_benders";
+        objective_metric = "weighted_solution_dependent_DPV_product_pair_loss_benders";
     } else if (is_dpv_branch_benders_method(method)) {
         const auto variant = dpv_branch_benders_variant_settings(method);
         solver::WarmStart warm_start = build_policy_warm_start("DPV-SAA", warm_start_policy, opt_instance);
@@ -931,6 +1004,8 @@ io::StandardExperimentResult MethodDispatcher::run_method(const MethodDispatchRe
         options.use_root_user_cuts = variant.use_root_user_cuts;
         options.root_user_cut_max_rounds = request.root_user_cut_max_rounds;
         options.root_user_cut_tolerance = request.root_user_cut_tolerance;
+        options.dpv_ignition_policy =
+            opt::parse_weighted_dpv_ignition_policy(request.dpv_ignition_policy);
         options.warm_start = warm_start_ptr;
 
         benders::DpvBranchBendersSolver solver;
@@ -943,7 +1018,7 @@ io::StandardExperimentResult MethodDispatcher::run_method(const MethodDispatchRe
             std::string(options.use_lifted_lower_bounds ? "true" : "false") +
             " and root_user_cuts=" +
             std::string(options.use_root_user_cuts ? "true" : "false") + ".");
-        objective_metric = "solution_dependent_DPV_unit_weights_branch_benders";
+        objective_metric = "weighted_solution_dependent_DPV_product_pair_loss_branch_benders";
     } else if (method == "Static-DPV") {
         benchmarks::StaticDpvBenchmark benchmark;
         const auto static_result = benchmark.run(opt_instance, opt_instance.budget);
@@ -1011,10 +1086,18 @@ io::StandardExperimentResult MethodDispatcher::run_method(const MethodDispatchRe
 
     if (fpp_strengthening_options.use_global_dominance_preprocessing) {
         solver_result.global_dominance_enabled = true;
+        solver_result.global_dominance_structural_weight_safe =
+            dominance_preprocess.structural_weight_safe;
+        solver_result.global_dominance_original_candidate_count =
+            dominance_preprocess.original_candidate_count;
         solver_result.global_dominance_candidates_removed =
             dominance_preprocess.candidates_removed;
         solver_result.global_dominance_equivalence_classes =
             dominance_preprocess.equivalence_classes;
+        solver_result.global_dominance_post_candidate_count =
+            dominance_preprocess.post_candidate_count;
+        solver_result.global_dominance_warm_start_replacements =
+            dominance_preprocess.warm_start_replacements;
         solver_result.global_dominance_precompute_time_sec =
             dominance_preprocess.precompute_time_sec;
         solver_result.notes.insert(
@@ -1034,6 +1117,22 @@ io::StandardExperimentResult MethodDispatcher::run_method(const MethodDispatchRe
     const core::FirebreakSolution firebreaks(solver_result.selected_firebreak_original_nodes);
     const auto train_eval = eval::evaluate_instance_burned_area(train_instance, firebreaks);
     const auto test_eval = eval::evaluate_instance_burned_area(test_instance, firebreaks);
+    std::vector<std::string> weighted_eval_warnings;
+    eval::FppRecourseEvaluator train_recourse_evaluator(opt_instance);
+    const auto train_recourse = train_recourse_evaluator.evaluate(
+        solver_result.selected_firebreak_indices,
+        false,
+        request.risk_config.cvarBeta);
+    eval::FppRecourseEvaluator test_recourse_evaluator(test_opt_instance);
+    const auto selected_test_compact_indices = compact_indices_for_original_nodes(
+        test_opt_instance,
+        solver_result.selected_firebreak_original_nodes,
+        weighted_eval_warnings,
+        "Test recourse");
+    const auto test_recourse = test_recourse_evaluator.evaluate(
+        selected_test_compact_indices,
+        false,
+        request.risk_config.cvarBeta);
 
     io::StandardExperimentResult result;
     result.experiment_id = request.experiment_id;
@@ -1084,9 +1183,52 @@ io::StandardExperimentResult MethodDispatcher::run_method(const MethodDispatchRe
         solver_result.benders_lifted_lower_bound_min_rhs;
     result.benders_lifted_lower_bound_max_rhs =
         solver_result.benders_lifted_lower_bound_max_rhs;
+    result.benders_lifted_lower_bound_weighted =
+        solver_result.benders_lifted_lower_bound_weighted;
+    result.benders_lifted_lower_bound_weight_map_hash =
+        solver_result.benders_lifted_lower_bound_weight_map_hash;
+    result.benders_lifted_lower_bound_scenarios_precomputed =
+        solver_result.benders_lifted_lower_bound_scenarios_precomputed;
+    result.benders_lifted_lower_bound_singletons_evaluated =
+        solver_result.benders_lifted_lower_bound_singletons_evaluated;
+    result.benders_lifted_lower_bound_no_firebreak_loss_min =
+        solver_result.benders_lifted_lower_bound_no_firebreak_loss_min;
+    result.benders_lifted_lower_bound_no_firebreak_loss_max =
+        solver_result.benders_lifted_lower_bound_no_firebreak_loss_max;
+    result.benders_lifted_lower_bound_singleton_benefit_min =
+        solver_result.benders_lifted_lower_bound_singleton_benefit_min;
+    result.benders_lifted_lower_bound_singleton_benefit_max =
+        solver_result.benders_lifted_lower_bound_singleton_benefit_max;
+    result.benders_lifted_lower_bound_constraints_added =
+        solver_result.benders_lifted_lower_bound_constraints_added;
+    result.benders_lifted_lower_bound_cache_hit =
+        solver_result.benders_lifted_lower_bound_cache_hit;
+    result.benders_lifted_lower_bound_validity_mode =
+        solver_result.benders_lifted_lower_bound_validity_mode;
     result.benders_lifted_lower_bound_notes =
         solver_result.benders_lifted_lower_bound_notes;
     result.benders_iteration_log = solver_result.benders_iteration_log;
+    result.coverage_llbi_enabled = solver_result.coverage_llbi_enabled;
+    result.coverage_llbi_num_zeta_vars = solver_result.coverage_llbi_num_zeta_vars;
+    result.coverage_llbi_num_constraints = solver_result.coverage_llbi_num_constraints;
+    result.coverage_llbi_precompute_time_sec =
+        solver_result.coverage_llbi_precompute_time_sec;
+    result.coverage_llbi_weighted = solver_result.coverage_llbi_weighted;
+    result.coverage_llbi_weight_map_hash = solver_result.coverage_llbi_weight_map_hash;
+    result.coverage_llbi_scenarios_precomputed =
+        solver_result.coverage_llbi_scenarios_precomputed;
+    result.coverage_llbi_baseline_cells = solver_result.coverage_llbi_baseline_cells;
+    result.coverage_llbi_auxiliary_variables =
+        solver_result.coverage_llbi_auxiliary_variables;
+    result.coverage_llbi_linking_constraints =
+        solver_result.coverage_llbi_linking_constraints;
+    result.coverage_llbi_loss_constraints = solver_result.coverage_llbi_loss_constraints;
+    result.coverage_llbi_nonempty_coverage_sets =
+        solver_result.coverage_llbi_nonempty_coverage_sets;
+    result.coverage_llbi_total_incidence_terms =
+        solver_result.coverage_llbi_total_incidence_terms;
+    result.coverage_llbi_build_time_sec = solver_result.coverage_llbi_build_time_sec;
+    result.coverage_llbi_validity_mode = solver_result.coverage_llbi_validity_mode;
     result.branch_benders_enabled = solver_result.branch_benders_enabled;
     result.branch_benders_callback_calls = solver_result.branch_benders_callback_calls;
     result.branch_benders_candidate_callback_calls =
@@ -1144,6 +1286,181 @@ io::StandardExperimentResult MethodDispatcher::run_method(const MethodDispatchRe
         solver_result.combinatorial_benders_avg_cut_nonzeros;
     result.combinatorial_benders_num_violated_cuts =
         solver_result.combinatorial_benders_num_violated_cuts;
+    result.combinatorial_benders_weighted =
+        solver_result.combinatorial_benders_weighted;
+    result.combinatorial_benders_mode =
+        solver_result.combinatorial_benders_mode;
+    result.combinatorial_benders_weight_map_hash =
+        solver_result.combinatorial_benders_weight_map_hash;
+    result.combinatorial_benders_weighted_recourse_evaluations =
+        solver_result.combinatorial_benders_weighted_recourse_evaluations;
+    result.combinatorial_benders_duplicate_cuts =
+        solver_result.combinatorial_benders_duplicate_cuts;
+    result.combinatorial_benders_cuts_tight_at_incumbent =
+        solver_result.combinatorial_benders_cuts_tight_at_incumbent;
+    result.combinatorial_benders_lifting_enabled =
+        solver_result.combinatorial_benders_lifting_enabled;
+    result.combinatorial_benders_scenario_sampling_enabled =
+        solver_result.combinatorial_benders_scenario_sampling_enabled;
+    result.combinatorial_benders_max_tightness_error =
+        solver_result.combinatorial_benders_max_tightness_error;
+    result.combinatorial_benders_max_violation =
+        solver_result.combinatorial_benders_max_violation;
+    result.combinatorial_benders_propagation_time_sec =
+        solver_result.combinatorial_benders_propagation_time_sec;
+    result.combinatorial_benders_cut_build_time_sec =
+        solver_result.combinatorial_benders_cut_build_time_sec;
+    result.combinatorial_benders_validity_mode =
+        solver_result.combinatorial_benders_validity_mode;
+    result.combinatorial_weighted = solver_result.combinatorial_weighted;
+    result.combinatorial_mode = solver_result.combinatorial_mode;
+    result.combinatorial_weight_map_hash =
+        solver_result.combinatorial_weight_map_hash;
+    result.combinatorial_scenario_order =
+        solver_result.combinatorial_scenario_order;
+    result.combinatorial_cut_sampling_ratio =
+        solver_result.combinatorial_cut_sampling_ratio;
+    result.combinatorial_candidate_callbacks =
+        solver_result.combinatorial_candidate_callbacks;
+    result.combinatorial_scenarios_evaluated =
+        solver_result.combinatorial_scenarios_evaluated;
+    result.combinatorial_weighted_recourse_evaluations =
+        solver_result.combinatorial_weighted_recourse_evaluations;
+    result.combinatorial_cuts_generated =
+        solver_result.combinatorial_cuts_generated;
+    result.combinatorial_cuts_added = solver_result.combinatorial_cuts_added;
+    result.combinatorial_duplicate_cuts =
+        solver_result.combinatorial_duplicate_cuts;
+    result.combinatorial_cuts_tight_at_incumbent =
+        solver_result.combinatorial_cuts_tight_at_incumbent;
+    result.combinatorial_max_tightness_error =
+        solver_result.combinatorial_max_tightness_error;
+    result.combinatorial_max_violation =
+        solver_result.combinatorial_max_violation;
+    result.combinatorial_propagation_time_sec =
+        solver_result.combinatorial_propagation_time_sec;
+    result.combinatorial_cut_build_time_sec =
+        solver_result.combinatorial_cut_build_time_sec;
+    result.combinatorial_callback_time_sec =
+        solver_result.combinatorial_callback_time_sec;
+    result.combinatorial_validity_mode =
+        solver_result.combinatorial_validity_mode;
+    result.combinatorial_lifting_enabled =
+        solver_result.combinatorial_lifting_enabled;
+    result.combinatorial_fractional_cuts_enabled =
+        solver_result.combinatorial_fractional_cuts_enabled;
+    result.combinatorial_initial_cuts_enabled =
+        solver_result.combinatorial_initial_cuts_enabled;
+    result.combinatorial_scenario_sampling_enabled =
+        solver_result.combinatorial_scenario_sampling_enabled;
+    result.combinatorial_lifting_weighted =
+        solver_result.combinatorial_lifting_weighted;
+    result.combinatorial_lifting_mode =
+        solver_result.combinatorial_lifting_mode;
+    result.combinatorial_lifting_weight_map_hash =
+        solver_result.combinatorial_lifting_weight_map_hash;
+    result.combinatorial_lifting_attempts =
+        solver_result.combinatorial_lifting_attempts;
+    result.combinatorial_lifting_successes =
+        solver_result.combinatorial_lifting_successes;
+    result.combinatorial_lifting_failures =
+        solver_result.combinatorial_lifting_failures;
+    result.combinatorial_candidates_considered_for_lifting =
+        solver_result.combinatorial_candidates_considered_for_lifting;
+    result.combinatorial_coefficients_changed =
+        solver_result.combinatorial_coefficients_changed;
+    result.combinatorial_propagation_evaluations_for_lifting =
+        solver_result.combinatorial_propagation_evaluations_for_lifting;
+    result.combinatorial_baseline_cut_nonzeros =
+        solver_result.combinatorial_baseline_cut_nonzeros;
+    result.combinatorial_lifted_cut_nonzeros =
+        solver_result.combinatorial_lifted_cut_nonzeros;
+    result.combinatorial_max_coefficient_change =
+        solver_result.combinatorial_max_coefficient_change;
+    result.combinatorial_max_baseline_tightness_error =
+        solver_result.combinatorial_max_baseline_tightness_error;
+    result.combinatorial_max_lifted_tightness_error =
+        solver_result.combinatorial_max_lifted_tightness_error;
+    result.combinatorial_lifted_cuts_dominating_baseline =
+        solver_result.combinatorial_lifted_cuts_dominating_baseline;
+    result.combinatorial_lifting_time_sec =
+        solver_result.combinatorial_lifting_time_sec;
+    result.combinatorial_lifting_validity_mode =
+        solver_result.combinatorial_lifting_validity_mode;
+    result.combinatorial_initial_solutions_evaluated =
+        solver_result.combinatorial_initial_solutions_evaluated;
+    result.combinatorial_initial_cuts_generated =
+        solver_result.combinatorial_initial_cuts_generated;
+    result.combinatorial_initial_duplicate_cuts =
+        solver_result.combinatorial_initial_duplicate_cuts;
+    result.combinatorial_initial_cut_time_sec =
+        solver_result.combinatorial_initial_cut_time_sec;
+    result.combinatorial_root_cuts_enabled =
+        solver_result.combinatorial_root_cuts_enabled;
+    result.combinatorial_root_rounds =
+        solver_result.combinatorial_root_rounds;
+    result.combinatorial_root_integer_points_evaluated =
+        solver_result.combinatorial_root_integer_points_evaluated;
+    result.combinatorial_root_fractional_points_evaluated =
+        solver_result.combinatorial_root_fractional_points_evaluated;
+    result.combinatorial_root_cuts_generated =
+        solver_result.combinatorial_root_cuts_generated;
+    result.combinatorial_root_cuts_added =
+        solver_result.combinatorial_root_cuts_added;
+    result.combinatorial_root_duplicate_cuts =
+        solver_result.combinatorial_root_duplicate_cuts;
+    result.combinatorial_root_cut_time_sec =
+        solver_result.combinatorial_root_cut_time_sec;
+    result.combinatorial_root_skipped_reason =
+        solver_result.combinatorial_root_skipped_reason;
+    result.combinatorial_fractional_validity_mode =
+        solver_result.combinatorial_fractional_validity_mode;
+    result.combinatorial_fractional_separation_calls =
+        solver_result.combinatorial_fractional_separation_calls;
+    result.combinatorial_fractional_scenarios_evaluated =
+        solver_result.combinatorial_fractional_scenarios_evaluated;
+    result.combinatorial_fractional_cuts_generated =
+        solver_result.combinatorial_fractional_cuts_generated;
+    result.combinatorial_fractional_duplicate_cuts =
+        solver_result.combinatorial_fractional_duplicate_cuts;
+    result.combinatorial_fractional_max_violation =
+        solver_result.combinatorial_fractional_max_violation;
+    result.combinatorial_fractional_max_tightness_error =
+        solver_result.combinatorial_fractional_max_tightness_error;
+    result.combinatorial_fractional_separation_time_sec =
+        solver_result.combinatorial_fractional_separation_time_sec;
+    result.combinatorial_realized_sample_size =
+        solver_result.combinatorial_realized_sample_size;
+    result.combinatorial_sampling_exact_fallback =
+        solver_result.combinatorial_sampling_exact_fallback;
+    result.combinatorial_scenario_policy_exact =
+        solver_result.combinatorial_scenario_policy_exact;
+    result.combinatorial_scenario_policy_heuristic =
+        solver_result.combinatorial_scenario_policy_heuristic;
+    result.combinatorial_full_verification_before_acceptance =
+        solver_result.combinatorial_full_verification_before_acceptance;
+    result.combinatorial_candidate_initial_sample_scenarios_evaluated =
+        solver_result.combinatorial_candidate_initial_sample_scenarios_evaluated;
+    result.combinatorial_candidate_fallback_scenarios_evaluated =
+        solver_result.combinatorial_candidate_fallback_scenarios_evaluated;
+    result.combinatorial_candidate_full_sweeps =
+        solver_result.combinatorial_candidate_full_sweeps;
+    result.combinatorial_candidates_rejected_in_initial_sample =
+        solver_result.combinatorial_candidates_rejected_in_initial_sample;
+    result.combinatorial_candidates_rejected_in_fallback =
+        solver_result.combinatorial_candidates_rejected_in_fallback;
+    result.combinatorial_candidates_fully_verified =
+        solver_result.combinatorial_candidates_fully_verified;
+    result.combinatorial_sampled_violations =
+        solver_result.combinatorial_sampled_violations;
+    result.combinatorial_fallback_violations =
+        solver_result.combinatorial_fallback_violations;
+    result.combinatorial_scenarios_skipped_after_candidate_rejection =
+        solver_result.combinatorial_scenarios_skipped_after_candidate_rejection;
+    result.combinatorial_sampling_time_sec =
+        solver_result.combinatorial_sampling_time_sec;
+    result.combinatorial_ordering_time_sec =
+        solver_result.combinatorial_ordering_time_sec;
     result.coverage_llbi_enabled = solver_result.coverage_llbi_enabled;
     result.coverage_llbi_num_zeta_vars = solver_result.coverage_llbi_num_zeta_vars;
     result.coverage_llbi_num_constraints = solver_result.coverage_llbi_num_constraints;
@@ -1152,7 +1469,23 @@ io::StandardExperimentResult MethodDispatcher::run_method(const MethodDispatchRe
     result.path_llbi_num_b_vars = solver_result.path_llbi_num_b_vars;
     result.path_llbi_num_path_constraints = solver_result.path_llbi_num_path_constraints;
     result.path_llbi_num_paths_used = solver_result.path_llbi_num_paths_used;
+    result.path_llbi_weighted = solver_result.path_llbi_weighted;
+    result.path_llbi_weight_map_hash = solver_result.path_llbi_weight_map_hash;
+    result.path_llbi_scenarios_precomputed = solver_result.path_llbi_scenarios_precomputed;
+    result.path_llbi_baseline_nodes = solver_result.path_llbi_baseline_nodes;
+    result.path_llbi_auxiliary_variables = solver_result.path_llbi_auxiliary_variables;
+    result.path_llbi_path_constraints = solver_result.path_llbi_path_constraints;
+    result.path_llbi_loss_constraints = solver_result.path_llbi_loss_constraints;
+    result.path_llbi_total_paths = solver_result.path_llbi_total_paths;
+    result.path_llbi_total_candidate_incidence_terms =
+        solver_result.path_llbi_total_candidate_incidence_terms;
+    result.path_llbi_nodes_without_paths = solver_result.path_llbi_nodes_without_paths;
+    result.path_llbi_path_enumeration_complete =
+        solver_result.path_llbi_path_enumeration_complete;
+    result.path_llbi_paths_truncated = solver_result.path_llbi_paths_truncated;
     result.path_llbi_precompute_time_sec = solver_result.path_llbi_precompute_time_sec;
+    result.path_llbi_build_time_sec = solver_result.path_llbi_build_time_sec;
+    result.path_llbi_validity_mode = solver_result.path_llbi_validity_mode;
     result.projected_coverage_llbi_enabled =
         solver_result.projected_coverage_llbi_enabled;
     result.projected_path_llbi_enabled =
@@ -1214,18 +1547,104 @@ io::StandardExperimentResult MethodDispatcher::run_method(const MethodDispatchRe
         solver_result.projected_exp_enumeration_truncated;
     result.projected_exp_enumeration_limit =
         solver_result.projected_exp_enumeration_limit;
+    result.projected_coverage_llbi_weighted =
+        solver_result.projected_coverage_llbi_weighted;
+    result.projected_coverage_llbi_mode =
+        solver_result.projected_coverage_llbi_mode;
+    result.projected_coverage_llbi_weight_map_hash =
+        solver_result.projected_coverage_llbi_weight_map_hash;
+    result.projected_coverage_llbi_scenarios_precomputed =
+        solver_result.projected_coverage_llbi_scenarios_precomputed;
+    result.projected_coverage_llbi_baseline_cells =
+        solver_result.projected_coverage_llbi_baseline_cells;
+    result.projected_coverage_llbi_nonempty_coverage_sets =
+        solver_result.projected_coverage_llbi_nonempty_coverage_sets;
+    result.projected_coverage_llbi_total_incidence_terms =
+        solver_result.projected_coverage_llbi_total_incidence_terms;
+    result.projected_coverage_llbi_separation_calls =
+        solver_result.projected_coverage_llbi_separation_calls;
+    result.projected_coverage_llbi_cuts_generated =
+        solver_result.projected_coverage_llbi_cuts_generated;
+    result.projected_coverage_llbi_cuts_added =
+        solver_result.projected_coverage_llbi_cuts_added;
+    result.projected_coverage_llbi_duplicate_cuts =
+        solver_result.projected_coverage_llbi_duplicate_cuts;
+    result.projected_coverage_llbi_max_violation =
+        solver_result.projected_coverage_llbi_max_violation;
+    result.projected_coverage_llbi_precompute_time_sec =
+        solver_result.projected_coverage_llbi_precompute_time_sec;
+    result.projected_coverage_llbi_separation_time_sec =
+        solver_result.projected_coverage_llbi_separation_time_sec;
+    result.projected_coverage_llbi_validity_mode =
+        solver_result.projected_coverage_llbi_validity_mode;
+    result.projected_path_llbi_weighted =
+        solver_result.projected_path_llbi_weighted;
+    result.projected_path_llbi_mode =
+        solver_result.projected_path_llbi_mode;
+    result.projected_path_llbi_weight_map_hash =
+        solver_result.projected_path_llbi_weight_map_hash;
+    result.projected_path_llbi_scenarios_precomputed =
+        solver_result.projected_path_llbi_scenarios_precomputed;
+    result.projected_path_llbi_destination_nodes =
+        solver_result.projected_path_llbi_destination_nodes;
+    result.projected_path_llbi_total_paths =
+        solver_result.projected_path_llbi_total_paths;
+    result.projected_path_llbi_total_incidence_terms =
+        solver_result.projected_path_llbi_total_incidence_terms;
+    result.projected_path_llbi_nodes_without_paths =
+        solver_result.projected_path_llbi_nodes_without_paths;
+    result.projected_path_llbi_enumeration_complete =
+        solver_result.projected_path_llbi_enumeration_complete;
+    result.projected_path_llbi_paths_truncated =
+        solver_result.projected_path_llbi_paths_truncated;
+    result.projected_path_llbi_separation_calls =
+        solver_result.projected_path_llbi_separation_calls;
+    result.projected_path_llbi_cuts_generated =
+        solver_result.projected_path_llbi_cuts_generated;
+    result.projected_path_llbi_cuts_added =
+        solver_result.projected_path_llbi_cuts_added;
+    result.projected_path_llbi_duplicate_cuts =
+        solver_result.projected_path_llbi_duplicate_cuts;
+    result.projected_path_llbi_max_violation =
+        solver_result.projected_path_llbi_max_violation;
+    result.projected_path_llbi_precompute_time_sec =
+        solver_result.projected_path_llbi_precompute_time_sec;
+    result.projected_path_llbi_separation_time_sec =
+        solver_result.projected_path_llbi_separation_time_sec;
+    result.projected_path_llbi_validity_mode =
+        solver_result.projected_path_llbi_validity_mode;
     result.global_dominance_enabled = solver_result.global_dominance_enabled;
+    result.global_dominance_structural_weight_safe =
+        solver_result.global_dominance_structural_weight_safe;
+    result.global_dominance_original_candidate_count =
+        solver_result.global_dominance_original_candidate_count;
     result.global_dominance_candidates_removed = solver_result.global_dominance_candidates_removed;
     result.global_dominance_equivalence_classes =
         solver_result.global_dominance_equivalence_classes;
+    result.global_dominance_post_candidate_count =
+        solver_result.global_dominance_post_candidate_count;
+    result.global_dominance_warm_start_replacements =
+        solver_result.global_dominance_warm_start_replacements;
     result.global_dominance_precompute_time_sec =
         solver_result.global_dominance_precompute_time_sec;
     result.conditional_zero_benefit_enabled =
         solver_result.conditional_zero_benefit_enabled;
+    result.conditional_zero_benefit_structural_weight_safe =
+        solver_result.conditional_zero_benefit_structural_weight_safe;
+    result.conditional_zero_benefit_callback_calls =
+        solver_result.conditional_zero_benefit_callback_calls;
+    result.conditional_zero_benefit_nodes_checked =
+        solver_result.conditional_zero_benefit_nodes_checked;
+    result.conditional_zero_benefit_candidates_checked =
+        solver_result.conditional_zero_benefit_candidates_checked;
     result.conditional_zero_benefit_fixings_attempted =
         solver_result.conditional_zero_benefit_fixings_attempted;
     result.conditional_zero_benefit_fixings_applied =
         solver_result.conditional_zero_benefit_fixings_applied;
+    result.conditional_zero_benefit_variables_fixed_zero =
+        solver_result.conditional_zero_benefit_variables_fixed_zero;
+    result.conditional_zero_benefit_scenarios_reachability_computed =
+        solver_result.conditional_zero_benefit_scenarios_reachability_computed;
     result.conditional_zero_benefit_time_sec =
         solver_result.conditional_zero_benefit_time_sec;
     result.branch_benders_use_root_user_cuts = solver_result.branch_benders_use_root_user_cuts;
@@ -1285,6 +1704,90 @@ io::StandardExperimentResult MethodDispatcher::run_method(const MethodDispatchRe
     result.evaluator_objective = solver_result.evaluator_objective;
     result.evaluator_abs_diff = solver_result.evaluator_abs_diff;
     result.evaluator_rel_diff = solver_result.evaluator_rel_diff;
+    result.weight_profile = train_recourse.weight_profile;
+    result.weight_map_file = request.weight_map_file.empty() ? "" : request.weight_map_file.string();
+    result.weight_map_hash = train_recourse.weight_map_hash;
+    result.weight_normalized =
+        !opt_instance.cell_weight_map.weight_by_original_cell_id.empty() &&
+        opt_instance.cell_weight_map.normalized;
+    result.weight_mean =
+        !opt_instance.cell_weight_map.weight_by_original_cell_id.empty()
+            ? opt_instance.cell_weight_map.normalized_mean
+            : 1.0;
+    result.weight_min =
+        !opt_instance.cell_weight_map.weight_by_original_cell_id.empty()
+            ? opt_instance.cell_weight_map.minimum_weight
+            : 1.0;
+    result.weight_max =
+        !opt_instance.cell_weight_map.weight_by_original_cell_id.empty()
+            ? opt_instance.cell_weight_map.maximum_weight
+            : 1.0;
+    result.weight_total = train_recourse.total_landscape_weight;
+    // This shared result-population block serves both exact-FPP and DPV
+    // dispatch branches. For DPV methods, solver_result.solver_weighted_objective
+    // mirrors the DPV surrogate objective, not the true weighted wildfire
+    // loss -- never copy it into the generic field for those rows (Phase 10
+    // section 10; matches the Greedy/Static-DPV convention of leaving this
+    // NaN). Detected via solver_result.dpv_surrogate_objective being finite,
+    // the same signal Phase 9A/9B already use to classify a row as
+    // DPV-surrogate rather than exact-FPP.
+    result.solver_weighted_objective = std::isfinite(solver_result.dpv_surrogate_objective)
+        ? std::numeric_limits<double>::quiet_NaN()
+        : solver_result.solver_weighted_objective;
+    result.evaluator_weighted_objective = train_recourse.expected_weighted_burn_loss;
+    result.objective_validation_abs_difference =
+        solver_result.objective_validation_abs_difference;
+    result.objective_validation_rel_difference =
+        solver_result.objective_validation_rel_difference;
+    result.objective_validation_passed = solver_result.objective_validation_passed;
+    result.train_expected_weighted_burn_loss = train_recourse.expected_weighted_burn_loss;
+    result.test_expected_weighted_burn_loss = test_recourse.expected_weighted_burn_loss;
+    result.train_weighted_var = train_recourse.weighted_loss_statistics.var;
+    result.test_weighted_var = test_recourse.weighted_loss_statistics.var;
+    result.train_weighted_cvar = train_recourse.weighted_loss_statistics.cvar;
+    result.test_weighted_cvar = test_recourse.weighted_loss_statistics.cvar;
+    result.train_percentage_landscape_value_burned =
+        train_recourse.expected_percentage_landscape_value_burned;
+    result.test_percentage_landscape_value_burned =
+        test_recourse.expected_percentage_landscape_value_burned;
+    result.train_percentage_high_value_weight_burned =
+        train_recourse.expected_percentage_high_value_weight_burned;
+    result.test_percentage_high_value_weight_burned =
+        test_recourse.expected_percentage_high_value_weight_burned;
+    result.dpv_weighted = solver_result.dpv_model_weighted;
+    result.dpv_model_weighted = solver_result.dpv_model_weighted;
+    result.dpv_model_type = solver_result.dpv_model_type;
+    result.dpv_variant = solver_result.dpv_variant;
+    result.dpv_structural_definition = solver_result.dpv_structural_definition;
+    result.dpv_ignition_policy = solver_result.dpv_ignition_policy;
+    result.dpv_weight_profile = solver_result.dpv_weight_profile;
+    result.dpv_weight_map_hash = solver_result.dpv_weight_map_hash;
+    result.dpv_scenario_aggregation = solver_result.dpv_scenario_aggregation;
+    result.dpv_normalization = solver_result.dpv_normalization;
+    result.dpv_risk_measure = solver_result.dpv_risk_measure;
+    result.dpv_surrogate_objective = solver_result.dpv_surrogate_objective;
+    result.dpv_surrogate_best_bound = solver_result.dpv_surrogate_best_bound;
+    result.dpv_surrogate_gap = solver_result.dpv_surrogate_gap;
+    result.dpv_benders_iterations = solver_result.dpv_benders_iterations;
+    result.dpv_benders_subproblems_solved =
+        solver_result.dpv_benders_subproblems_solved;
+    result.dpv_benders_cuts_generated = solver_result.dpv_benders_cuts_generated;
+    result.dpv_benders_cuts_added = solver_result.dpv_benders_cuts_added;
+    result.dpv_benders_duplicate_cuts = solver_result.dpv_benders_duplicate_cuts;
+    result.dpv_benders_max_cut_violation =
+        solver_result.dpv_benders_max_cut_violation;
+    result.dpv_benders_max_tightness_error =
+        solver_result.dpv_benders_max_tightness_error;
+    result.dpv_benders_subproblem_time_sec =
+        solver_result.dpv_benders_subproblem_time_sec;
+    result.dpv_benders_cut_time_sec = solver_result.dpv_benders_cut_time_sec;
+    result.dpv_llbi_enabled = solver_result.dpv_llbi_enabled;
+    result.dpv_llbi_weighted = solver_result.dpv_llbi_weighted;
+    result.dpv_llbi_type = solver_result.dpv_llbi_type;
+    result.dpv_llbi_constraints_added = solver_result.dpv_llbi_constraints_added;
+    result.dpv_llbi_precompute_time_sec =
+        solver_result.dpv_llbi_precompute_time_sec;
+    result.dpv_llbi_validity_mode = solver_result.dpv_llbi_validity_mode;
     result.risk_measure = solver_result.risk_measure;
     result.cvar_beta = solver_result.cvar_beta;
     result.cvar_lambda = solver_result.cvar_lambda;
@@ -1322,7 +1825,32 @@ io::StandardExperimentResult MethodDispatcher::run_method(const MethodDispatchRe
     for (const auto& warning : test_warnings) {
         result.notes.push_back("Test reader warning: " + warning);
     }
+    for (const auto& warning : train_recourse.warnings) {
+        result.notes.push_back("Train weighted recourse warning: " + warning);
+    }
+    for (const auto& warning : test_recourse.warnings) {
+        result.notes.push_back("Test weighted recourse warning: " + warning);
+    }
+    for (const auto& warning : weighted_eval_warnings) {
+        result.notes.push_back("Weighted recourse warning: " + warning);
+    }
     result.notes.push_back("Test scenarios were used only for out-of-sample evaluation.");
+
+    // Phase 8B: canonical weight-map registry metadata survives from the manifest row to
+    // the final result unchanged. These are provenance fields, not computed outputs.
+    result.weight_replicate = request.weight_replicate;
+    result.weight_generation_seed = request.weight_generation_seed;
+    result.weight_generator_version = request.weight_generator_version;
+    result.canonical_landscape_id = request.canonical_landscape_id;
+    result.paired_landscape_id = request.paired_landscape_id;
+    result.weight_source_universe_hash = request.weight_source_universe_hash;
+    result.paired_reburn_instance_id = request.paired_reburn_instance_id;
+    result.paired_evaluation_enabled = request.paired_evaluation_enabled;
+    if (!request.weight_map_file.empty()) {
+        result.weight_mapping_method = weight_attachment_diagnostics.mapping_method;
+        result.weight_mapped_cell_count = weight_attachment_diagnostics.mapped_instance_cell_count;
+        result.weight_missing_cell_count = weight_attachment_diagnostics.missing_instance_cell_count;
+    }
 
     io::write_experiment_result_json(result_json_path(request.output_dir, request.run_id), result);
     io::append_experiment_result_csv(request.output_csv, result);

@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "opt/OptimizationInstance.hpp"
+#include "opt/WeightedDpvScoring.hpp"
 #include "solver/FppSaaCplexModel.hpp"
 #include "solver/ModelResult.hpp"
 #include "solver/WarmStart.hpp"
@@ -15,6 +16,7 @@ struct DpvObjectiveTermDescriptor {
     int source_index = -1;
     int successor_index = -1;
     int descendant_index = -1;
+    double coefficient = 1.0;
 };
 
 struct DpvSaaModelStructure {
@@ -44,7 +46,9 @@ public:
         double mip_gap,
         int threads,
         bool verbose,
-        const WarmStart* warm_start = nullptr) const;
+        const WarmStart* warm_start = nullptr,
+        opt::WeightedDpvIgnitionPolicy ignition_policy =
+            opt::WeightedDpvIgnitionPolicy::FppIgnitionNoProtection) const;
 };
 
 }  // namespace firebreak::solver

@@ -13,6 +13,7 @@
 #include "benders/DpvBendersMaster.hpp"
 #include "benders/DpvLiftedLowerBound.hpp"
 #include "benders/DpvScenarioSubproblem.hpp"
+#include "opt/WeightedDpvScoring.hpp"
 #include "solver/CplexEnvironment.hpp"
 
 namespace firebreak::benders {
@@ -137,6 +138,46 @@ double relative_gap(double upper_bound, double lower_bound) {
     const double denom = std::max(1.0, std::fabs(upper_bound));
     return std::fabs(upper_bound - lower_bound) / denom;
 }
+
+void attach_dpv_benders_metadata(
+    solver::ModelResult& result,
+    const opt::OptimizationInstance& opt,
+    const DpvBendersOptions& options) {
+    const auto weights = opt::canonical_compact_dpv_weights_or_unit(opt);
+    result.dpv_model_weighted = true;
+    result.dpv_model_type = "explicit_loop_dpv_benders";
+    result.dpv_variant = "solution_dependent_product_pair_loss";
+    result.dpv_structural_definition =
+        "product pairs (source, successor, closed descendant); destination descendant weights; multiplicity preserved";
+    result.dpv_ignition_policy =
+        opt::weighted_dpv_ignition_policy_name(options.dpv_ignition_policy);
+    result.dpv_weight_profile = opt::weighted_dpv_weight_profile(opt, weights);
+    result.dpv_weight_map_hash = opt::weighted_dpv_weight_map_hash(opt, weights);
+    result.dpv_scenario_aggregation = "scenario_probability_weighted_sum";
+    result.dpv_normalization = "none";
+    result.dpv_risk_measure = "expected";
+    result.dpv_surrogate_objective = result.objective_value;
+    result.dpv_surrogate_best_bound = result.best_bound;
+    result.dpv_surrogate_gap = result.mip_gap;
+    result.dpv_benders_iterations = result.benders_iterations;
+    result.dpv_benders_subproblems_solved = result.benders_subproblems_solved;
+    result.dpv_benders_cuts_generated = result.benders_cuts_added;
+    result.dpv_benders_cuts_added = result.benders_cuts_added;
+    result.dpv_benders_duplicate_cuts = 0;
+    result.dpv_benders_max_cut_violation = result.benders_final_max_cut_violation;
+    result.dpv_benders_subproblem_time_sec = result.benders_subproblem_time_sec;
+    result.dpv_benders_cut_time_sec = 0.0;
+    result.dpv_llbi_enabled = options.use_lifted_lower_bounds;
+    result.dpv_llbi_weighted = options.use_lifted_lower_bounds;
+    result.dpv_llbi_type =
+        options.use_lifted_lower_bounds ? "weighted_optimistic_downstream_product_pair_llbi" : "";
+    result.dpv_llbi_constraints_added = result.benders_lifted_lower_bound_count;
+    result.dpv_llbi_precompute_time_sec =
+        result.benders_lifted_lower_bound_precompute_time_sec;
+    result.dpv_llbi_validity_mode = result.benders_lifted_lower_bound_validity_mode;
+    result.objective_metric = "weighted_solution_dependent_DPV_product_pair_loss_benders";
+    result.solver_weighted_objective = result.objective_value;
+}
 #endif
 
 }  // namespace
@@ -189,6 +230,23 @@ solver::ModelResult DpvBendersSolver::solve(
             llb_result.total_nonzero_coefficients;
         result.benders_lifted_lower_bound_min_rhs = llb_result.min_rhs;
         result.benders_lifted_lower_bound_max_rhs = llb_result.max_rhs;
+        result.benders_lifted_lower_bound_weighted = llb_result.weighted;
+        result.benders_lifted_lower_bound_weight_map_hash = llb_result.weight_map_hash;
+        result.benders_lifted_lower_bound_scenarios_precomputed =
+            llb_result.scenarios_precomputed;
+        result.benders_lifted_lower_bound_singletons_evaluated =
+            llb_result.singletons_evaluated;
+        result.benders_lifted_lower_bound_no_firebreak_loss_min =
+            llb_result.no_firebreak_loss_min;
+        result.benders_lifted_lower_bound_no_firebreak_loss_max =
+            llb_result.no_firebreak_loss_max;
+        result.benders_lifted_lower_bound_singleton_benefit_min =
+            llb_result.singleton_benefit_min;
+        result.benders_lifted_lower_bound_singleton_benefit_max =
+            llb_result.singleton_benefit_max;
+        result.benders_lifted_lower_bound_constraints_added =
+            result.benders_lifted_lower_bound_count;
+        result.benders_lifted_lower_bound_validity_mode = llb_result.validity_mode;
         result.benders_lifted_lower_bound_notes = llb_result.notes;
         result.notes.push_back(
             "Optional DPV lifted lower-bound inequalities were added to the Benders master.");
@@ -410,7 +468,8 @@ solver::ModelResult DpvBendersSolver::solve(
     result.notes.push_back("Master solves binary y and per-scenario eta variables to optimality at each iteration.");
     result.notes.push_back("Scenario subproblems solve the LP relaxation with y_copy fixed to the incumbent y.");
 	    result.notes.push_back("Benders cuts use CPLEX equality-row duals directly: eta_s >= Q_s(ybar) + pi*(y-ybar).");
-	    result.notes.push_back("DPV objective uses unit product-pair weights and scenario probabilities in the master.");
+	    attach_dpv_benders_metadata(result, opt, options);
+	    result.notes.push_back("DPV objective uses weight(descendant) product-pair weights and scenario probabilities in the master.");
 	    if (options.use_lifted_lower_bounds) {
 	        result.notes.push_back("Lifted lower-bound inequalities added: " +
 	                               std::to_string(result.benders_lifted_lower_bound_count) + ".");

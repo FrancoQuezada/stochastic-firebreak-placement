@@ -26,6 +26,7 @@
 #include "benders/RestrictedCandidateCutPool.hpp"
 #include "risk/RiskMeasure.hpp"
 #include "solver/CplexEnvironment.hpp"
+#include "solver/FppWeightedLossUtils.hpp"
 
 #ifdef FIREBREAK_WITH_CPLEX
 #include <ilcplex/ilocplex.h>
@@ -140,9 +141,9 @@ void validate_options(const FppRestrictedCandidateBranchBendersOptions& options)
             "FPP restricted Branch-Benders Benders-coefficient activation requires activation_batch_size > 0.");
     }
     if (options.candidate_maintenance_policy != "none") {
-        if (!options.restricted_heuristic_mode || options.eventually_activate_all) {
+        if (!options.restricted_heuristic_mode && !options.eventually_activate_all) {
             throw std::runtime_error(
-                "FPP restricted Branch-Benders active-set maintenance is heuristic-mode only; use --restricted-heuristic-mode.");
+                "FPP restricted Branch-Benders active-set maintenance requires either restricted heuristic mode or exact eventual full activation.");
         }
         if (options.activation_policy != "benders-coefficients") {
             throw std::runtime_error(
@@ -154,18 +155,18 @@ void validate_options(const FppRestrictedCandidateBranchBendersOptions& options)
             throw std::runtime_error(
                 "CVaR tail-aware candidate scoring requires an initial restricted stage.");
         }
-        if (!options.restricted_heuristic_mode || options.eventually_activate_all) {
+        if (effective_risk_config.type == risk::RiskMeasureType::Expected) {
             throw std::runtime_error(
-                "CVaR tail-aware candidate scoring is supported only in restricted heuristic mode.");
+                "CVaR tail-aware candidate scoring requires risk_measure=cvar or risk_measure=mean-cvar.");
         }
-        if (effective_risk_config.type != risk::RiskMeasureType::CVaR) {
+        if (options.activation_policy != "benders-coefficients") {
             throw std::runtime_error(
-                "CVaR tail-aware candidate scoring requires risk_measure=cvar.");
+                "CVaR tail-aware candidate scoring requires candidate_activation_policy=benders-coefficients.");
         }
-        if (options.activation_policy != "benders-coefficients" ||
-            options.candidate_maintenance_policy != "benders-coefficients") {
+        if (options.candidate_maintenance_policy != "none" &&
+            (!options.restricted_heuristic_mode && !options.eventually_activate_all)) {
             throw std::runtime_error(
-                "CVaR tail-aware candidate scoring requires Benders-coefficient activation and maintenance policies.");
+                "CVaR tail-aware candidate maintenance requires either restricted heuristic mode or exact eventual full activation.");
         }
     }
 }
@@ -183,6 +184,55 @@ void validate_instance(const opt::OptimizationInstance& opt) {
     if (opt.budget < 0 || opt.budget > static_cast<int>(opt.eligible_indices.size())) {
         throw std::runtime_error(
             "FPP restricted Branch-Benders budget must be between zero and the eligible-node count.");
+    }
+    if (!opt.compact_cell_weights.empty()) {
+        (void)solver::direct_fpp_compact_weights(opt);
+    }
+}
+
+bool has_nonunit_compact_weights(const opt::OptimizationInstance& opt) {
+    if (opt.compact_cell_weights.empty()) {
+        return false;
+    }
+    const auto& weights = solver::direct_fpp_compact_weights(opt);
+    for (const double weight : weights) {
+        if (std::fabs(weight - 1.0) > 1.0e-9) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void validate_weighted_phase5c2b2_options(
+    const opt::OptimizationInstance& opt,
+    const FppRestrictedCandidateBranchBendersOptions& options) {
+    if (!has_nonunit_compact_weights(opt)) {
+        return;
+    }
+    if (!options.eventually_activate_all || options.restricted_heuristic_mode) {
+        throw std::runtime_error(
+            "Non-homogeneous weighted restricted Branch-Benders Phase 5C2B2 supports exact operation only with eventual full activation; heuristic candidate truncation is not validated for non-homogeneous weights.");
+    }
+    if (options.export_tail_score_diagnostics &&
+        options.risk_config.type == risk::RiskMeasureType::Expected) {
+        throw std::runtime_error(
+            "Non-homogeneous weighted CVaR-tail diagnostic export requires risk_measure=cvar or risk_measure=mean-cvar.");
+    }
+    if (options.use_lifted_lower_bounds ||
+        options.combinatorial_options.enabled ||
+        options.strengthening_options.use_coverage_llbi ||
+        options.strengthening_options.use_path_llbi ||
+        options.strengthening_options.use_projected_coverage_llbi_exp ||
+        options.strengthening_options.use_projected_path_llbi_exp ||
+        options.strengthening_options.use_projected_coverage_llbi_poly ||
+        options.strengthening_options.use_projected_path_llbi_poly) {
+        throw std::runtime_error(
+            "Non-homogeneous weighted restricted Branch-Benders Phase 6B2B allows structural global dominance and conditional zero-benefit diagnostics; restricted standard LLBI, restricted CoverageLLBI, and restricted PathLLBI remain disabled because inactive candidate coefficients are not retained safely. Projected LLBI and combinatorial Benders remain unconverted.");
+    }
+    if (options.candidate_score_mode == "cvar-tail-blend" &&
+        options.activation_policy != "benders-coefficients") {
+        throw std::runtime_error(
+            "Non-homogeneous weighted CVaR-tail-aware scoring requires Benders-coefficient activation.");
     }
 }
 
@@ -505,6 +555,9 @@ void update_cut_pool_diagnostics(
     const RestrictedCandidateCutPool& cut_pool) {
     result.cut_pool = cut_pool;
     result.cut_pool_size = cut_pool.size();
+    result.cut_pool_peak_size = cut_pool.peakSize();
+    result.cut_pool_evictions = cut_pool.evictions();
+    result.cut_pool_reinstantiations = cut_pool.reinstantiations();
     result.duplicate_cuts_skipped = cut_pool.duplicateCutsSkipped();
     result.cuts_by_round = vector_from_count_map(cut_pool.cutsByRound());
     result.cuts_by_scenario = vector_from_count_map(cut_pool.cutsByScenario());
@@ -546,6 +599,15 @@ void record_maintenance_diagnostics(
     result.protected_cooldown_count += decision.protected_cooldown_count;
     result.protected_newly_activated_count +=
         decision.protected_newly_activated_count;
+    result.candidates_reactivated += static_cast<int>(decision.activated.size());
+    result.candidates_deactivated += static_cast<int>(decision.deactivated.size());
+    result.candidates_considered_for_deactivation += decision.deactivation_candidate_count;
+    result.candidates_protected_from_deactivation +=
+        decision.protected_selected_count +
+        decision.protected_min_age_count +
+        decision.protected_cooldown_count +
+        decision.protected_newly_activated_count +
+        decision.protected_tail_count;
     result.protected_tail_count += decision.protected_tail_count;
     result.deactivation_blocked_by_tail_protection_count +=
         decision.protected_tail_count;
@@ -601,6 +663,9 @@ void append_tail_score_diagnostics_if_enabled(
     input.round_index = log.round_index;
     input.risk_measure = log.risk_measure;
     input.cvar_beta = result.cvar_beta;
+    input.weighted = has_nonunit_compact_weights(opt);
+    input.weight_profile = opt.cell_weight_map.profile;
+    input.weight_map_hash = opt.cell_weight_map.deterministic_hash;
     input.risk_threshold = stage.model_result.risk_threshold_value;
     input.candidate_count = static_cast<int>(opt.eligible_indices.size());
     input.eligible_compact_indices = opt.eligible_indices;
@@ -637,7 +702,8 @@ void append_tail_score_diagnostics_if_enabled(
             input.scenario_losses_by_id,
             input.cvar_beta,
             options.candidate_tail_score_gamma,
-            input.scenario_probability_by_id);
+            input.scenario_probability_by_id,
+            opt.cell_weight_map.deterministic_hash);
         const int top_k = std::max(1, std::min(input.top_k, input.candidate_count));
         diagnostics.top_tail_blend_candidates =
             tail_rank_array_from_scores(score_summary.blend_scores, top_k);
@@ -850,15 +916,16 @@ struct BranchBendersRootUserCutStats {
     mutable std::mutex mutex;
 };
 
-void add_coverage_llbi_constraints(
+double add_coverage_llbi_constraints(
     IloEnv& env,
     IloModel& model,
     const FppCoverageLlbiData& data,
     const IloBoolVarArray& y,
     const IloNumVarArray& eta,
     const std::vector<int>& y_position_by_node) {
+    const auto start = std::chrono::steady_clock::now();
     if (!data.enabled) {
-        return;
+        return 0.0;
     }
     for (const auto& scenario_record : data.scenarios) {
         IloExpr lower_bound_rhs(env);
@@ -883,7 +950,7 @@ void add_coverage_llbi_constraints(
             cover -= zeta;
             model.add(cover >= 0.0);
             cover.end();
-            lower_bound_rhs -= zeta;
+            lower_bound_rhs -= node_record.cell_weight * zeta;
         }
         if (!scenario_record.nodes.empty()) {
             IloExpr lhs(env);
@@ -894,17 +961,19 @@ void add_coverage_llbi_constraints(
         }
         lower_bound_rhs.end();
     }
+    return std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
 }
 
-void add_path_llbi_constraints(
+double add_path_llbi_constraints(
     IloEnv& env,
     IloModel& model,
     const FppPathLlbiData& data,
     const IloBoolVarArray& y,
     const IloNumVarArray& eta,
     const std::vector<int>& y_position_by_node) {
+    const auto start = std::chrono::steady_clock::now();
     if (!data.enabled) {
-        return;
+        return 0.0;
     }
     for (const auto& scenario_record : data.scenarios) {
         IloExpr eta_lower_bound(env);
@@ -914,7 +983,7 @@ void add_path_llbi_constraints(
             b_name << "path_b_s" << scenario_record.scenario_id
                    << "_" << node_record.compact_node;
             burn_lb.setName(b_name.str().c_str());
-            eta_lower_bound += burn_lb;
+            eta_lower_bound += node_record.cell_weight * burn_lb;
             for (const auto& path : node_record.paths) {
                 IloExpr expr(env);
                 expr += burn_lb;
@@ -940,6 +1009,7 @@ void add_path_llbi_constraints(
         }
         eta_lower_bound.end();
     }
+    return std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
 }
 
 void add_benders_cut_to_model(
@@ -1739,6 +1809,7 @@ RestrictedStageSolveResult solve_stage_impl(
     stage.model_result.risk_measure = risk::to_string(risk_config.type);
     stage.model_result.cvar_beta = risk_config.cvarBeta;
     stage.model_result.cvar_lambda = risk_config.cvarLambda;
+    stage.model_result.objective_metric = solver::weighted_objective_metric_label(risk_config);
     stage.model_result.branch_benders_enabled = true;
     stage.model_result.combinatorial_benders_enabled =
         options.combinatorial_options.enabled;
@@ -1918,6 +1989,26 @@ RestrictedStageSolveResult solve_stage_impl(
                 llb_result.total_nonzero_coefficients;
             stage.model_result.benders_lifted_lower_bound_min_rhs = llb_result.min_rhs;
             stage.model_result.benders_lifted_lower_bound_max_rhs = llb_result.max_rhs;
+            stage.model_result.benders_lifted_lower_bound_weighted = llb_result.weighted;
+            stage.model_result.benders_lifted_lower_bound_weight_map_hash =
+                llb_result.weight_map_hash;
+            stage.model_result.benders_lifted_lower_bound_scenarios_precomputed =
+                llb_result.scenarios_precomputed;
+            stage.model_result.benders_lifted_lower_bound_singletons_evaluated =
+                llb_result.singletons_evaluated;
+            stage.model_result.benders_lifted_lower_bound_no_firebreak_loss_min =
+                llb_result.no_firebreak_loss_min;
+            stage.model_result.benders_lifted_lower_bound_no_firebreak_loss_max =
+                llb_result.no_firebreak_loss_max;
+            stage.model_result.benders_lifted_lower_bound_singleton_benefit_min =
+                llb_result.singleton_benefit_min;
+            stage.model_result.benders_lifted_lower_bound_singleton_benefit_max =
+                llb_result.singleton_benefit_max;
+            stage.model_result.benders_lifted_lower_bound_constraints_added =
+                lifted_lower_bound_count;
+            stage.model_result.benders_lifted_lower_bound_cache_hit = llb_result.cache_hit;
+            stage.model_result.benders_lifted_lower_bound_validity_mode =
+                llb_result.validity_mode;
             stage.model_result.benders_lifted_lower_bound_notes = llb_result.notes;
         }
 
@@ -1928,14 +2019,14 @@ RestrictedStageSolveResult solve_stage_impl(
             opt,
             options.strengthening_options.use_path_llbi,
             options.strengthening_options.path_llbi_max_paths_per_node);
-        add_coverage_llbi_constraints(
+        const double coverage_llbi_build_time_sec = add_coverage_llbi_constraints(
             env,
             model,
             coverage_llbi,
             y,
             eta,
             y_position_by_node);
-        add_path_llbi_constraints(
+        const double path_llbi_build_time_sec = add_path_llbi_constraints(
             env,
             model,
             path_llbi,
@@ -1946,14 +2037,47 @@ RestrictedStageSolveResult solve_stage_impl(
         stage.model_result.coverage_llbi_num_zeta_vars = coverage_llbi.num_zeta_vars;
         stage.model_result.coverage_llbi_num_constraints = coverage_llbi.num_constraints;
         stage.model_result.coverage_llbi_precompute_time_sec = coverage_llbi.precompute_time_sec;
+        stage.model_result.coverage_llbi_weighted = coverage_llbi.weighted;
+        stage.model_result.coverage_llbi_weight_map_hash = coverage_llbi.weight_map_hash;
+        stage.model_result.coverage_llbi_scenarios_precomputed =
+            coverage_llbi.scenarios_precomputed;
+        stage.model_result.coverage_llbi_baseline_cells = coverage_llbi.baseline_cells;
+        stage.model_result.coverage_llbi_auxiliary_variables =
+            coverage_llbi.auxiliary_variables;
+        stage.model_result.coverage_llbi_linking_constraints =
+            coverage_llbi.linking_constraints;
+        stage.model_result.coverage_llbi_loss_constraints = coverage_llbi.loss_constraints;
+        stage.model_result.coverage_llbi_nonempty_coverage_sets =
+            coverage_llbi.nonempty_coverage_sets;
+        stage.model_result.coverage_llbi_total_incidence_terms =
+            coverage_llbi.total_incidence_terms;
+        stage.model_result.coverage_llbi_build_time_sec = coverage_llbi_build_time_sec;
+        stage.model_result.coverage_llbi_validity_mode = coverage_llbi.validity_mode;
         stage.model_result.path_llbi_enabled = path_llbi.enabled;
         stage.model_result.path_llbi_num_b_vars = path_llbi.num_b_vars;
         stage.model_result.path_llbi_num_path_constraints = path_llbi.num_path_constraints;
         stage.model_result.path_llbi_num_paths_used = path_llbi.num_paths_used;
+        stage.model_result.path_llbi_weighted = path_llbi.weighted;
+        stage.model_result.path_llbi_weight_map_hash = path_llbi.weight_map_hash;
+        stage.model_result.path_llbi_scenarios_precomputed = path_llbi.scenarios_precomputed;
+        stage.model_result.path_llbi_baseline_nodes = path_llbi.baseline_nodes;
+        stage.model_result.path_llbi_auxiliary_variables = path_llbi.auxiliary_variables;
+        stage.model_result.path_llbi_path_constraints = path_llbi.path_constraints;
+        stage.model_result.path_llbi_loss_constraints = path_llbi.loss_constraints;
+        stage.model_result.path_llbi_total_paths = path_llbi.total_paths;
+        stage.model_result.path_llbi_total_candidate_incidence_terms =
+            path_llbi.total_candidate_incidence_terms;
+        stage.model_result.path_llbi_nodes_without_paths = path_llbi.nodes_without_paths;
+        stage.model_result.path_llbi_path_enumeration_complete =
+            path_llbi.path_enumeration_complete;
+        stage.model_result.path_llbi_paths_truncated = path_llbi.paths_truncated;
         stage.model_result.path_llbi_precompute_time_sec = path_llbi.precompute_time_sec;
+        stage.model_result.path_llbi_build_time_sec = path_llbi_build_time_sec;
+        stage.model_result.path_llbi_validity_mode = path_llbi.validity_mode;
         stage.model_result.conditional_zero_benefit_enabled =
             options.strengthening_options.use_conditional_zero_benefit_fixing;
         if (options.strengthening_options.use_conditional_zero_benefit_fixing) {
+            stage.model_result.conditional_zero_benefit_structural_weight_safe = true;
             stage.model_result.notes.push_back(
                 "Conditional zero-benefit local fixing requested, but CPLEX generic callbacks in this restricted solver do not safely expose node-local y upper-bound tightening; diagnostics are reported with zero applied local fixings.");
         }
@@ -2169,6 +2293,7 @@ RestrictedStageSolveResult solve_stage_impl(
             risk_config);
 
         stage.model_result.objective_value = risk_evaluation.objective;
+        stage.model_result.solver_weighted_objective = stage.model_result.objective_value;
         stage.model_result.expected_loss_component = risk_evaluation.expected;
         if (risk_enabled) {
             stage.model_result.cvar_loss_component = risk_evaluation.cvar;
@@ -2307,6 +2432,8 @@ RestrictedStageSolveResult solve_stage_impl(
         stage.model_result.compact_node_count = opt.node_mapper.size();
         stage.model_result.eligible_node_count = static_cast<int>(opt.eligible_indices.size());
         stage.model_result.total_scenario_arcs = static_cast<int>(opt.total_arcs);
+        solver::attach_direct_fpp_weight_metadata(stage.model_result, opt);
+        stage.model_result.solver_weighted_objective = stage.model_result.objective_value;
         stage.model_result.notes.push_back("Restricted-candidate FPP Branch-and-Benders stage: " + stage_name + ".");
         stage.model_result.notes.push_back("Master keeps the full eligible firebreak vector and applies candidate upper bounds.");
         stage.model_result.notes.push_back("Lazy Benders cuts are generated over the full eligible y-vector.");
@@ -2423,8 +2550,11 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
     const FppRestrictedCandidateBranchBendersOptions& options) const {
     validate_options(options);
     validate_instance(opt);
+    validate_weighted_phase5c2b2_options(opt, options);
     const auto risk_config = effective_risk_config_from(options.risk_config);
     const auto global_start = std::chrono::steady_clock::now();
+    const bool nonunit_weights = has_nonunit_compact_weights(opt);
+    const std::string score_weight_map_hash = opt.cell_weight_map.deterministic_hash;
 
     std::vector<std::pair<int, double>> burn_frequency_scores;
     bool burn_frequency_score_available = false;
@@ -2440,10 +2570,12 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
         initial_active_candidates);
     CandidateBoundController bounds(static_cast<int>(opt.eligible_indices.size()));
     RestrictedCandidateCutPool cut_pool;
+    cut_pool.setWeightMapHash(opt.cell_weight_map.deterministic_hash);
     FppPersistentScenarioSubproblemManager subproblem_manager(opt, options.verbose);
     RestrictedCandidateMaintenanceTracker maintenance_tracker(
         manager.candidateCount(),
-        manager.activeCandidates());
+        manager.activeCandidates(),
+        opt.cell_weight_map.deterministic_hash);
     const RestrictedCandidateMaintenanceOptions maintenance_options =
         effective_maintenance_options(options, manager);
 
@@ -2452,17 +2584,44 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
     result.cvar_beta = risk_config.cvarBeta;
     result.cvar_lambda = risk_config.cvarLambda;
     result.restricted_candidate_exact_mode = options.eventually_activate_all;
+    result.candidate_bounds_enabled = true;
+    result.candidate_bounds_weighted = nonunit_weights;
+    result.candidate_bound_type = "active-set-upper-bound";
+    result.candidate_bound_map_hash = score_weight_map_hash;
+    result.candidates_evaluated_by_bound =
+        static_cast<int>(opt.eligible_indices.size());
+    result.candidates_permanently_pruned = 0;
+    result.candidates_not_pruned_due_to_safety =
+        nonunit_weights ? static_cast<int>(opt.eligible_indices.size()) : 0;
+    result.early_exactness_certificate_used = false;
+    result.full_activation_avoided = false;
+    result.unvalidated_bound_rejected = false;
     result.heuristic_mode_enabled = options.restricted_heuristic_mode;
     result.initial_candidate_policy = options.initial_candidate_policy;
     result.activation_policy = options.activation_policy;
     result.candidate_maintenance_policy = options.candidate_maintenance_policy;
+    result.maintenance_weighted = nonunit_weights;
+    result.maintenance_map_hash = score_weight_map_hash;
     result.deactivation_enabled = options.candidate_maintenance_policy != "none";
     result.candidate_score_mode = options.candidate_score_mode;
     result.candidate_tail_score_gamma = options.candidate_tail_score_gamma;
     result.candidate_tail_protection_size =
         effective_tail_protection_size(options);
+    result.candidate_scorer = "none";
+    if (options.initial_candidate_policy == "burn-frequency" ||
+        options.activation_policy == "burn-frequency") {
+        result.candidate_scorer =
+            nonunit_weights ? "weighted-burn-frequency" : "burn-frequency";
+    } else if (options.activation_policy == "benders-coefficients") {
+        result.candidate_scorer = uses_tail_aware_candidate_scoring(options)
+            ? (nonunit_weights ? "weighted-cvar-tail-blend" : "cvar-tail-blend")
+            : (nonunit_weights ? "weighted-benders-coefficients" : "benders-coefficients");
+    }
+    result.candidate_scorer_weighted = nonunit_weights;
+    result.candidate_score_map_hash = score_weight_map_hash;
     result.candidate_min_active_size = maintenance_options.min_active_size;
     result.candidate_max_active_size = maintenance_options.max_active_size;
+    result.active_candidate_target = maintenance_options.max_active_size;
     result.candidate_deactivation_batch_size =
         maintenance_options.deactivation_batch_size;
     result.candidate_deactivation_min_age =
@@ -2486,6 +2645,14 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
               burn_frequency_scores,
               static_cast<int>(std::min<std::size_t>(10, burn_frequency_scores.size())))
         : std::vector<std::pair<int, double>>();
+    result.initial_candidate_ids = initial_active_candidates;
+    if (burn_frequency_score_available) {
+        result.initial_candidate_scores =
+            topBurnFrequencyCandidates(
+                burn_frequency_scores,
+                static_cast<int>(burn_frequency_scores.size()));
+        ++result.score_recomputations;
+    }
     if (options.initial_candidate_policy == "burn-frequency") {
         result.initial_candidates_from_burn_frequency = initial_active_candidates;
     }
@@ -2495,6 +2662,7 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
     result.active_candidate_fraction_final = manager.activeFraction();
     result.eventually_activated_all = manager.allActive();
     result.notes.push_back("FPP restricted Branch-and-Benders solver with Phase 1O persistence diagnostics.");
+    result.notes.push_back("Restricted FPP eta values, candidate cuts, bounds, and objectives are expressed in weighted burned-node loss units when a weight map is attached.");
     if (risk_config.type == risk::RiskMeasureType::Expected) {
         result.notes.push_back("Restricted FPP risk measure: expected burned area.");
     } else if (risk_config.type == risk::RiskMeasureType::CVaR) {
@@ -2504,12 +2672,13 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
     }
     if (uses_tail_aware_candidate_scoring(options)) {
         result.notes.push_back(
-            "DPV and reduced-cost activation remain disabled; LLBI and root cuts follow their restricted Branch-and-Benders options.");
+            "Weighted CVaR-tail-aware candidate scoring is used only for activation ordering; DPV and reduced-cost activation remain disabled.");
     } else {
         result.notes.push_back(
-            "DPV, reduced-cost activation, and CVaR-aware activation weighting are disabled; LLBI and root cuts follow their restricted Branch-and-Benders options.");
+            "DPV, reduced-cost activation, and tail-aware activation weighting are disabled; LLBI and root cuts follow their restricted Branch-and-Benders options.");
     }
     result.notes.push_back("Exactness is claimed only after eventual full activation and an optimal final solve.");
+    result.notes.push_back("Phase 5C2B2 candidate bounds are structural active-set upper bounds only; no candidate is permanently pruned by a weighted bound.");
     result.notes.push_back("Restricted-stage cuts are generated over the full y-vector and persisted in a reusable cut pool.");
     if (options.combinatorial_options.enabled) {
         result.notes.push_back(
@@ -2523,19 +2692,20 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
         result.notes.push_back("Restricted heuristic mode is enabled; global optimality will not be claimed before full activation.");
     }
     if (options.candidate_maintenance_policy == "benders-coefficients") {
-        result.notes.push_back("Phase 1P Benders-coefficient active-set maintenance is enabled for heuristic mode.");
+        result.notes.push_back("Phase 5C2B1 Benders-coefficient active-set maintenance is enabled.");
         result.notes.push_back("Selected firebreaks are protected from deactivation by default; deactivation uses upper-bound changes only.");
+        result.notes.push_back("Maintenance scores consume weighted Benders coefficients directly when a weight map is attached; coefficients are not multiplied by weights again.");
     }
     if (uses_tail_aware_candidate_scoring(options)) {
         result.notes.push_back(
-            "Phase 1S CVaR-tail-aware blended Benders scoring is enabled for restricted FPP-CVaR heuristic maintenance only.");
+            "Phase 5C2A CVaR-tail-aware blended Benders scoring is enabled for restricted FPP-CVaR activation ordering.");
         result.notes.push_back(
-            "Tail-aware scoring changes candidate activation/deactivation choices but does not change the FPP-CVaR objective, cuts, or feasibility logic.");
+            "Tail-aware scoring changes candidate activation order but does not change the FPP objective, cuts, feasibility logic, or eventual full activation guarantee.");
         result.notes.push_back(
-            "Tail-score diagnostics are auto-enabled for cvar-tail-blend mode.");
+            "Tail membership is computed from weighted scenario losses when a weight map is attached.");
     }
     if (burn_frequency_score_available) {
-        result.notes.push_back("Burn-frequency candidate scores were computed from no-firebreak scenario reachability.");
+        result.notes.push_back("Burn-frequency candidate scores were computed from no-firebreak scenario reachability and candidate cell value when a weight map is attached.");
     }
     if (result.global_time_budget_enabled) {
         result.notes.push_back(
@@ -2567,6 +2737,8 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
         result.active_candidate_fraction_final = manager.activeFraction();
         result.active_candidate_fraction_at_stop = manager.activeFraction();
         result.eventually_activated_all = manager.allActive();
+        result.full_activation_avoided = !result.full_activation_performed;
+        result.early_exactness_certificate_used = false;
         result.candidate_rounds = static_cast<int>(result.round_log.size());
         result.activation_history = manager.activationHistory();
         result.notes.push_back(reason);
@@ -2722,6 +2894,7 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
             burn_frequency_scores = scorer.scoreCandidates(opt);
             burn_frequency_score_available = true;
             result.burn_frequency_score_available = true;
+            ++result.score_recomputations;
             result.top_burn_frequency_candidates = topBurnFrequencyCandidates(
                 burn_frequency_scores,
                 static_cast<int>(std::min<std::size_t>(10, burn_frequency_scores.size())));
@@ -2743,6 +2916,10 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
             }
             result.candidates_activated_by_burn_frequency.insert(
                 result.candidates_activated_by_burn_frequency.end(),
+                activated.begin(),
+                activated.end());
+            result.candidates_activated_by_score.insert(
+                result.candidates_activated_by_score.end(),
                 activated.begin(),
                 activated.end());
 
@@ -2812,6 +2989,8 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
             const auto active_before_round = manager.activeCandidates();
             RestrictedCandidateMaintenanceDecision decision;
             decision.maintenance_round = maintenance_tracker.currentRound();
+            decision.weighted = nonunit_weights;
+            decision.weight_map_hash = score_weight_map_hash;
             decision.active_count_before_maintenance = manager.activeCount();
 
             BendersCoefficientScoringSummary inactive_summary;
@@ -2828,7 +3007,8 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
                     latest_scenario_losses_by_id,
                     risk_config.cvarBeta,
                     options.candidate_tail_score_gamma,
-                    probability_by_id);
+                    probability_by_id,
+                    score_weight_map_hash);
                 raw_activation_scores = inactive_tail_summary.blend_scores;
                 activation_cuts_used = inactive_tail_summary.cuts_used;
                 activation_nonzero_coefficients =
@@ -2839,12 +3019,14 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
                     opt.eligible_indices,
                     manager.inactiveCandidates(),
                     cut_pool.cuts(),
-                    probability_by_id);
+                    probability_by_id,
+                    score_weight_map_hash);
                 raw_activation_scores = inactive_summary.scores;
                 activation_cuts_used = inactive_summary.cuts_used;
                 activation_nonzero_coefficients =
                     inactive_summary.nonzero_inactive_coefficients;
             }
+            ++result.score_recomputations;
             auto activation_scores = maintenance_tracker.filterActivationScores(
                 raw_activation_scores,
                 maintenance_options.reactivation_cooldown_rounds,
@@ -2904,6 +3086,10 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
                 result.candidates_activated_by_benders_coefficients.end(),
                 activated.begin(),
                 activated.end());
+            result.candidates_activated_by_score.insert(
+                result.candidates_activated_by_score.end(),
+                activated.begin(),
+                activated.end());
             if (tail_aware_scoring) {
                 result.activated_by_tail_blend_count +=
                     static_cast<int>(activated.size());
@@ -2927,7 +3113,8 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
                     latest_scenario_losses_by_id,
                     risk_config.cvarBeta,
                     options.candidate_tail_score_gamma,
-                    probability_by_id);
+                    probability_by_id,
+                    score_weight_map_hash);
                 deactivation_scores = active_tail_summary.blend_scores;
                 top_tail_scores = topCvarTailAwareCandidates(
                     active_tail_summary.tail_scores,
@@ -2939,7 +3126,8 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
                     opt.eligible_indices,
                     manager.activeCandidates(),
                     cut_pool.cuts(),
-                    probability_by_id);
+                    probability_by_id,
+                    score_weight_map_hash);
                 deactivation_scores = active_summary.scores;
             }
             const auto selected_candidates = candidate_ids_from_selected_compact_indices(
@@ -3074,33 +3262,80 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
         effective_candidate_round_limit(options) > 0 &&
         options.activation_batch_size > 0) {
         BendersCoefficientCandidateScorer scorer;
+        CvarTailAwareBendersCandidateScorer tail_scorer;
+        const bool tail_aware_scoring = uses_tail_aware_candidate_scoring(options);
         const auto probability_by_id = scenario_probability_by_id(opt);
         for (int activation_round = 0;
              activation_round < effective_candidate_round_limit(options) && !manager.allActive();
              ++activation_round) {
             const auto active_before_round = manager.activeCandidates();
-            const auto summary = scorer.scoreInactiveCandidates(
-                manager.candidateCount(),
-                opt.eligible_indices,
-                manager.inactiveCandidates(),
-                cut_pool.cuts(),
-                probability_by_id);
+            BendersCoefficientScoringSummary summary;
+            CvarTailAwareBendersScoringSummary tail_summary;
+            std::vector<std::pair<int, double>> activation_scores;
+            if (tail_aware_scoring) {
+                tail_summary = tail_scorer.scoreCandidates(
+                    manager.candidateCount(),
+                    opt.eligible_indices,
+                    manager.inactiveCandidates(),
+                    cut_pool.cuts(),
+                    latest_scenario_losses_by_id,
+                    risk_config.cvarBeta,
+                    options.candidate_tail_score_gamma,
+                    probability_by_id,
+                    score_weight_map_hash);
+                activation_scores = tail_summary.blend_scores;
+            } else {
+                summary = scorer.scoreInactiveCandidates(
+                    manager.candidateCount(),
+                    opt.eligible_indices,
+                    manager.inactiveCandidates(),
+                    cut_pool.cuts(),
+                    probability_by_id,
+                    score_weight_map_hash);
+                activation_scores = summary.scores;
+            }
+            ++result.score_recomputations;
             result.benders_coefficient_scores_available = true;
-            result.number_of_cuts_used_for_activation = summary.cuts_used;
+            result.number_of_cuts_used_for_activation =
+                tail_aware_scoring ? tail_summary.cuts_used : summary.cuts_used;
             result.number_of_nonzero_inactive_coefficients =
-                summary.nonzero_inactive_coefficients;
-            result.max_benders_coefficient_score = summary.max_score;
-            result.avg_benders_coefficient_score = summary.average_score;
-            result.top_benders_coefficient_candidates =
-                topBendersCoefficientCandidates(
-                    summary.scores,
-                    static_cast<int>(std::min<std::size_t>(10, summary.scores.size())));
+                tail_aware_scoring
+                    ? tail_summary.nonzero_generic_coefficients
+                    : summary.nonzero_inactive_coefficients;
+            result.max_benders_coefficient_score = 0.0;
+            result.avg_benders_coefficient_score = 0.0;
+            if (!activation_scores.empty()) {
+                double total_score = 0.0;
+                result.max_benders_coefficient_score =
+                    -std::numeric_limits<double>::infinity();
+                for (const auto& [candidate, score] : activation_scores) {
+                    (void)candidate;
+                    result.max_benders_coefficient_score =
+                        std::max(result.max_benders_coefficient_score, score);
+                    total_score += score;
+                }
+                result.avg_benders_coefficient_score =
+                    total_score / static_cast<double>(activation_scores.size());
+            }
+            result.top_benders_coefficient_candidates = tail_aware_scoring
+                ? topCvarTailAwareCandidates(
+                      tail_summary.generic_scores,
+                      static_cast<int>(std::min<std::size_t>(
+                          10,
+                          tail_summary.generic_scores.size())))
+                : topBendersCoefficientCandidates(
+                      summary.scores,
+                      static_cast<int>(std::min<std::size_t>(10, summary.scores.size())));
 
-            const auto top_scores = topBendersCoefficientCandidates(
-                summary.scores,
-                options.activation_batch_size);
+            const auto top_scores = tail_aware_scoring
+                ? topCvarTailAwareCandidates(
+                      activation_scores,
+                      options.activation_batch_size)
+                : topBendersCoefficientCandidates(
+                      activation_scores,
+                      options.activation_batch_size);
             const auto activated = manager.activateTopK(
-                summary.scores,
+                activation_scores,
                 options.activation_batch_size);
             if (activated.empty()) {
                 break;
@@ -3109,6 +3344,14 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
                 result.candidates_activated_by_benders_coefficients.end(),
                 activated.begin(),
                 activated.end());
+            result.candidates_activated_by_score.insert(
+                result.candidates_activated_by_score.end(),
+                activated.begin(),
+                activated.end());
+            if (tail_aware_scoring) {
+                result.activated_by_tail_blend_count +=
+                    static_cast<int>(activated.size());
+            }
 
             bounds.apply(manager);
             const std::string stage_name =
@@ -3142,8 +3385,44 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
                 stage.cut_pool_size_before,
                 stage.new_cuts_added_to_pool,
                 stage.duplicate_cuts_skipped,
-                summary.cuts_used,
-                summary.nonzero_inactive_coefficients);
+                tail_aware_scoring ? tail_summary.cuts_used : summary.cuts_used,
+                tail_aware_scoring
+                    ? tail_summary.nonzero_generic_coefficients
+                    : summary.nonzero_inactive_coefficients);
+            log.candidate_score_mode = options.candidate_score_mode;
+            log.candidate_tail_score_gamma = options.candidate_tail_score_gamma;
+            log.candidate_tail_protection_size = effective_tail_protection_size(options);
+            if (tail_aware_scoring) {
+                const int diagnostic_top_k = std::max(
+                    1,
+                    std::min(
+                        static_cast<int>(std::max<std::size_t>(
+                            tail_summary.blend_scores.size(),
+                            tail_summary.tail_scores.size())),
+                        std::max(10, options.activation_batch_size)));
+                log.top_blend_candidates = topCvarTailAwareCandidates(
+                    tail_summary.blend_scores,
+                    diagnostic_top_k);
+                log.top_generic_candidates_for_score_mode =
+                    topCvarTailAwareCandidates(
+                        tail_summary.generic_scores,
+                        diagnostic_top_k);
+                log.top_tail_candidates = topCvarTailAwareCandidates(
+                    tail_summary.tail_scores,
+                    diagnostic_top_k);
+                log.top_blend_tail_overlap = overlap_count(
+                    candidate_ids_from_scores(log.top_blend_candidates),
+                    candidate_ids_from_scores(log.top_tail_candidates));
+                log.top_blend_generic_overlap = overlap_count(
+                    candidate_ids_from_scores(log.top_blend_candidates),
+                    candidate_ids_from_scores(log.top_generic_candidates_for_score_mode));
+                log.activated_tail_top_k_overlap =
+                    overlap_count(
+                        activated,
+                        candidate_ids_from_scores(topCvarTailAwareCandidates(
+                            tail_summary.tail_scores,
+                            options.activation_batch_size)));
+            }
             append_tail_score_diagnostics_if_enabled(
                 result,
                 opt,
@@ -3203,6 +3482,7 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
         result.active_candidate_count_final = manager.activeCount();
         result.active_candidate_fraction_final = manager.activeFraction();
         result.eventually_activated_all = manager.allActive();
+        result.full_activation_avoided = !result.full_activation_performed;
         result.activation_history = manager.activationHistory();
         refresh_elapsed_time();
         update_cut_pool_diagnostics(result, cut_pool);
@@ -3212,12 +3492,16 @@ FppRestrictedCandidateBranchBendersResult FppRestrictedCandidateBranchBendersSol
 
     const auto active_before_full_activation = manager.activeCandidates();
     const std::size_t history_size_before_full_activation = manager.activationHistory().size();
+    result.full_activation_overrode_maintenance =
+        options.candidate_maintenance_policy != "none" && !manager.allActive();
     manager.activateAll();
     std::vector<int> full_activation_batch;
     if (manager.activationHistory().size() > history_size_before_full_activation) {
         full_activation_batch = manager.activationHistory().back().activated;
     }
+    result.candidates_activated_by_full_fallback = full_activation_batch;
     result.full_activation_performed = true;
+    result.full_activation_avoided = false;
     result.activation_history = manager.activationHistory();
 
     bounds.apply(manager);

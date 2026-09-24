@@ -14,6 +14,7 @@
 #include "benders/FppScenarioSubproblem.hpp"
 #include "risk/RiskMeasure.hpp"
 #include "solver/CplexEnvironment.hpp"
+#include "solver/FppWeightedLossUtils.hpp"
 
 namespace firebreak::benders {
 
@@ -35,6 +36,15 @@ void validate_options(const FppBendersOptions& options) {
     if (options.threads < 0) {
         throw std::runtime_error("FPP Benders threads must be nonnegative.");
     }
+    if (options.strengthening_options.use_projected_coverage_llbi_exp ||
+        options.strengthening_options.use_projected_path_llbi_exp ||
+        options.strengthening_options.use_projected_coverage_llbi_poly ||
+        options.strengthening_options.use_projected_path_llbi_poly ||
+        options.strengthening_options.use_global_dominance_preprocessing ||
+        options.strengthening_options.use_conditional_zero_benefit_fixing) {
+        throw std::runtime_error(
+            "FPP Benders explicit-loop Phase 6B2B supports standard LLBI, extended CoverageLLBI, and extended PathLLBI only; projected LLBI, dominance, and conditional fixing are not explicit-loop options.");
+    }
     risk::RiskMeasureConfig effective_risk_config = options.risk_config;
     if (effective_risk_config.type == risk::RiskMeasureType::CVaR) {
         effective_risk_config.cvarLambda = 1.0;
@@ -54,6 +64,9 @@ void validate_instance(const opt::OptimizationInstance& opt) {
     }
     if (opt.budget < 0 || opt.budget > static_cast<int>(opt.eligible_indices.size())) {
         throw std::runtime_error("FPP Benders budget must be between zero and the eligible-node count.");
+    }
+    if (!opt.compact_cell_weights.empty()) {
+        (void)solver::direct_fpp_compact_weights(opt);
     }
 }
 
@@ -192,6 +205,7 @@ solver::ModelResult FppBendersSolver::solve(
     result.risk_measure = risk::to_string(risk_config.type);
     result.cvar_beta = risk_config.cvarBeta;
     result.cvar_lambda = risk_config.cvarLambda;
+    result.objective_metric = solver::weighted_objective_metric_label(risk_config);
 
     const auto solve_start = std::chrono::steady_clock::now();
 
@@ -219,10 +233,72 @@ solver::ModelResult FppBendersSolver::solve(
             llb_result.total_nonzero_coefficients;
         result.benders_lifted_lower_bound_min_rhs = llb_result.min_rhs;
         result.benders_lifted_lower_bound_max_rhs = llb_result.max_rhs;
+        result.benders_lifted_lower_bound_weighted = llb_result.weighted;
+        result.benders_lifted_lower_bound_weight_map_hash = llb_result.weight_map_hash;
+        result.benders_lifted_lower_bound_scenarios_precomputed =
+            llb_result.scenarios_precomputed;
+        result.benders_lifted_lower_bound_singletons_evaluated =
+            llb_result.singletons_evaluated;
+        result.benders_lifted_lower_bound_no_firebreak_loss_min =
+            llb_result.no_firebreak_loss_min;
+        result.benders_lifted_lower_bound_no_firebreak_loss_max =
+            llb_result.no_firebreak_loss_max;
+        result.benders_lifted_lower_bound_singleton_benefit_min =
+            llb_result.singleton_benefit_min;
+        result.benders_lifted_lower_bound_singleton_benefit_max =
+            llb_result.singleton_benefit_max;
+        result.benders_lifted_lower_bound_constraints_added =
+            master.getLiftedLowerBoundCount();
+        result.benders_lifted_lower_bound_cache_hit = llb_result.cache_hit;
+        result.benders_lifted_lower_bound_validity_mode = llb_result.validity_mode;
         result.benders_lifted_lower_bound_notes = llb_result.notes;
         result.notes.push_back(
             "Optional FPP lifted lower-bound inequalities were added to the Benders master.");
     }
+    const auto coverage_llbi = build_fpp_coverage_llbi_data(
+        opt,
+        options.strengthening_options.use_coverage_llbi);
+    const double coverage_llbi_build_time_sec = master.addCoverageLlbi(coverage_llbi);
+    result.coverage_llbi_enabled = coverage_llbi.enabled;
+    result.coverage_llbi_num_zeta_vars = coverage_llbi.num_zeta_vars;
+    result.coverage_llbi_num_constraints = coverage_llbi.num_constraints;
+    result.coverage_llbi_precompute_time_sec = coverage_llbi.precompute_time_sec;
+    result.coverage_llbi_weighted = coverage_llbi.weighted;
+    result.coverage_llbi_weight_map_hash = coverage_llbi.weight_map_hash;
+    result.coverage_llbi_scenarios_precomputed = coverage_llbi.scenarios_precomputed;
+    result.coverage_llbi_baseline_cells = coverage_llbi.baseline_cells;
+    result.coverage_llbi_auxiliary_variables = coverage_llbi.auxiliary_variables;
+    result.coverage_llbi_linking_constraints = coverage_llbi.linking_constraints;
+    result.coverage_llbi_loss_constraints = coverage_llbi.loss_constraints;
+    result.coverage_llbi_nonempty_coverage_sets = coverage_llbi.nonempty_coverage_sets;
+    result.coverage_llbi_total_incidence_terms = coverage_llbi.total_incidence_terms;
+    result.coverage_llbi_build_time_sec = coverage_llbi_build_time_sec;
+    result.coverage_llbi_validity_mode = coverage_llbi.validity_mode;
+    const auto path_llbi = build_fpp_path_llbi_data(
+        opt,
+        options.strengthening_options.use_path_llbi,
+        options.strengthening_options.path_llbi_max_paths_per_node);
+    const double path_llbi_build_time_sec = master.addPathLlbi(path_llbi);
+    result.path_llbi_enabled = path_llbi.enabled;
+    result.path_llbi_num_b_vars = path_llbi.num_b_vars;
+    result.path_llbi_num_path_constraints = path_llbi.num_path_constraints;
+    result.path_llbi_num_paths_used = path_llbi.num_paths_used;
+    result.path_llbi_weighted = path_llbi.weighted;
+    result.path_llbi_weight_map_hash = path_llbi.weight_map_hash;
+    result.path_llbi_scenarios_precomputed = path_llbi.scenarios_precomputed;
+    result.path_llbi_baseline_nodes = path_llbi.baseline_nodes;
+    result.path_llbi_auxiliary_variables = path_llbi.auxiliary_variables;
+    result.path_llbi_path_constraints = path_llbi.path_constraints;
+    result.path_llbi_loss_constraints = path_llbi.loss_constraints;
+    result.path_llbi_total_paths = path_llbi.total_paths;
+    result.path_llbi_total_candidate_incidence_terms =
+        path_llbi.total_candidate_incidence_terms;
+    result.path_llbi_nodes_without_paths = path_llbi.nodes_without_paths;
+    result.path_llbi_path_enumeration_complete = path_llbi.path_enumeration_complete;
+    result.path_llbi_paths_truncated = path_llbi.paths_truncated;
+    result.path_llbi_precompute_time_sec = path_llbi.precompute_time_sec;
+    result.path_llbi_build_time_sec = path_llbi_build_time_sec;
+    result.path_llbi_validity_mode = path_llbi.validity_mode;
 
     FppScenarioSubproblem subproblem;
     double incumbent_upper_bound = std::numeric_limits<double>::infinity();
@@ -399,6 +475,7 @@ solver::ModelResult FppBendersSolver::solve(
     result.status = termination_status;
     result.solver_status_code = solver_status_code;
     result.objective_value = std::isfinite(incumbent_upper_bound) ? incumbent_upper_bound : 0.0;
+    result.solver_weighted_objective = result.objective_value;
     result.best_bound = last_master_bound;
     result.mip_gap = relative_gap(result.objective_value, result.best_bound);
     result.iterations = completed_iterations;
@@ -448,7 +525,9 @@ solver::ModelResult FppBendersSolver::solve(
     result.notes.push_back("Classical iterative FPP-SAA Benders decomposition; no callbacks or lazy cuts.");
     result.notes.push_back("Master solves binary y and per-scenario eta variables to optimality at each iteration.");
     result.notes.push_back("Scenario subproblems solve the FPP LP relaxation with y_copy fixed to the incumbent y.");
-    result.notes.push_back("FPP recourse objective is unweighted burned area sum_i x_i for each scenario.");
+    solver::attach_direct_fpp_weight_metadata(result, opt);
+    result.solver_weighted_objective = result.objective_value;
+    result.notes.push_back("FPP recourse objective is weighted burned-node loss sum_i w_i x_i for each scenario.");
     result.notes.push_back("Benders cuts use CPLEX equality-row duals directly: eta_s >= Q_s(ybar) + pi*(y-ybar).");
     if (risk_config.type == risk::RiskMeasureType::Expected) {
         result.notes.push_back("Scenario probabilities are applied in the expected-value master objective.");

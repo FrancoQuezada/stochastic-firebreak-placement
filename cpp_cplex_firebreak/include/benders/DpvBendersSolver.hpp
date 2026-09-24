@@ -1,6 +1,7 @@
 #pragma once
 
 #include "opt/OptimizationInstance.hpp"
+#include "opt/WeightedDpvScoring.hpp"
 #include "solver/ModelResult.hpp"
 #include "solver/WarmStart.hpp"
 
@@ -14,6 +15,8 @@ struct DpvBendersOptions {
     int threads = 0;
     bool verbose = false;
     bool use_lifted_lower_bounds = false;
+    opt::WeightedDpvIgnitionPolicy dpv_ignition_policy =
+        opt::WeightedDpvIgnitionPolicy::FppIgnitionNoProtection;
     const solver::WarmStart* warm_start = nullptr;
 };
 

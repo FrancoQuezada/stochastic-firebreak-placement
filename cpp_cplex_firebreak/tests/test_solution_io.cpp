@@ -3,6 +3,8 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <sstream>
+#include <string>
 #include <vector>
 
 #include "io/ExperimentResultWriter.hpp"
@@ -88,6 +90,100 @@ int main() {
     result.combinatorial_benders_avg_paths_per_cut = 2.5;
     result.combinatorial_benders_avg_cut_nonzeros = 3.5;
     result.combinatorial_benders_num_violated_cuts = 7;
+    result.combinatorial_benders_weighted = true;
+    result.combinatorial_benders_mode = "baseline-integer-exact-no-lifting";
+    result.combinatorial_benders_weight_map_hash = "hash-combinatorial";
+    result.combinatorial_benders_weighted_recourse_evaluations = 9;
+    result.combinatorial_benders_duplicate_cuts = 1;
+    result.combinatorial_benders_cuts_tight_at_incumbent = 8;
+    result.combinatorial_benders_lifting_enabled = false;
+    result.combinatorial_benders_scenario_sampling_enabled = false;
+    result.combinatorial_benders_max_tightness_error = 1.0e-9;
+    result.combinatorial_benders_max_violation = 2.0;
+    result.combinatorial_benders_propagation_time_sec = 0.011;
+    result.combinatorial_benders_cut_build_time_sec = 0.012;
+    result.combinatorial_benders_validity_mode =
+        "weighted-baseline-integer-path-activation-cut";
+    result.combinatorial_weighted = true;
+    result.combinatorial_mode = "baseline-integer-exact-no-lifting";
+    result.combinatorial_weight_map_hash = "hash-combinatorial";
+    result.combinatorial_scenario_order = "eta-desc";
+    result.combinatorial_cut_sampling_ratio = 0.1;
+    result.combinatorial_candidate_callbacks = 13;
+    result.combinatorial_scenarios_evaluated = 6;
+    result.combinatorial_weighted_recourse_evaluations = 9;
+    result.combinatorial_cuts_generated = 7;
+    result.combinatorial_cuts_added = 12;
+    result.combinatorial_duplicate_cuts = 1;
+    result.combinatorial_cuts_tight_at_incumbent = 8;
+    result.combinatorial_max_tightness_error = 1.0e-9;
+    result.combinatorial_max_violation = 2.0;
+    result.combinatorial_propagation_time_sec = 0.011;
+    result.combinatorial_cut_build_time_sec = 0.012;
+    result.combinatorial_callback_time_sec = 0.013;
+    result.combinatorial_validity_mode =
+        "weighted-baseline-integer-path-activation-cut";
+    result.combinatorial_lifting_enabled = false;
+    result.combinatorial_fractional_cuts_enabled = false;
+    result.combinatorial_initial_cuts_enabled = false;
+    result.combinatorial_scenario_sampling_enabled = false;
+    result.combinatorial_lifting_weighted = true;
+    result.combinatorial_lifting_mode = "heuristic";
+    result.combinatorial_lifting_weight_map_hash = "hash-combinatorial";
+    result.combinatorial_lifting_attempts = 5;
+    result.combinatorial_lifting_successes = 5;
+    result.combinatorial_lifting_failures = 0;
+    result.combinatorial_candidates_considered_for_lifting = 17;
+    result.combinatorial_coefficients_changed = 2;
+    result.combinatorial_propagation_evaluations_for_lifting = 0;
+    result.combinatorial_baseline_cut_nonzeros = 21;
+    result.combinatorial_lifted_cut_nonzeros = 19;
+    result.combinatorial_max_coefficient_change = 3.0;
+    result.combinatorial_max_baseline_tightness_error = 1.0e-9;
+    result.combinatorial_max_lifted_tightness_error = 1.0e-9;
+    result.combinatorial_lifted_cuts_dominating_baseline = 5;
+    result.combinatorial_lifting_time_sec = 0.014;
+    result.combinatorial_lifting_validity_mode =
+        "heuristic-mode-exact-weighted-path-dedup-lifting";
+    result.combinatorial_initial_solutions_evaluated = 1;
+    result.combinatorial_initial_cuts_generated = 3;
+    result.combinatorial_initial_duplicate_cuts = 1;
+    result.combinatorial_initial_cut_time_sec = 0.015;
+    result.combinatorial_root_cuts_enabled = false;
+    result.combinatorial_root_rounds = 0;
+    result.combinatorial_root_integer_points_evaluated = 0;
+    result.combinatorial_root_fractional_points_evaluated = 0;
+    result.combinatorial_root_cuts_generated = 0;
+    result.combinatorial_root_cuts_added = 0;
+    result.combinatorial_root_duplicate_cuts = 0;
+    result.combinatorial_root_cut_time_sec = 0.0;
+    result.combinatorial_root_skipped_reason =
+        "No dedicated combinatorial root-only cut mechanism is implemented.";
+    result.combinatorial_fractional_validity_mode =
+        "weighted-fractional-path-activation-user-cut-convex-hull-valid";
+    result.combinatorial_fractional_separation_calls = 4;
+    result.combinatorial_fractional_scenarios_evaluated = 12;
+    result.combinatorial_fractional_cuts_generated = 6;
+    result.combinatorial_fractional_duplicate_cuts = 2;
+    result.combinatorial_fractional_max_violation = 4.5;
+    result.combinatorial_fractional_max_tightness_error = 0.0;
+    result.combinatorial_fractional_separation_time_sec = 0.016;
+    result.combinatorial_realized_sample_size = 2;
+    result.combinatorial_sampling_exact_fallback = true;
+    result.combinatorial_scenario_policy_exact = true;
+    result.combinatorial_scenario_policy_heuristic = false;
+    result.combinatorial_full_verification_before_acceptance = true;
+    result.combinatorial_candidate_initial_sample_scenarios_evaluated = 8;
+    result.combinatorial_candidate_fallback_scenarios_evaluated = 4;
+    result.combinatorial_candidate_full_sweeps = 2;
+    result.combinatorial_candidates_rejected_in_initial_sample = 1;
+    result.combinatorial_candidates_rejected_in_fallback = 2;
+    result.combinatorial_candidates_fully_verified = 3;
+    result.combinatorial_sampled_violations = 4;
+    result.combinatorial_fallback_violations = 5;
+    result.combinatorial_scenarios_skipped_after_candidate_rejection = 6;
+    result.combinatorial_sampling_time_sec = 0.017;
+    result.combinatorial_ordering_time_sec = 0.018;
     result.coverage_llbi_enabled = true;
     result.coverage_llbi_num_zeta_vars = 7;
     result.coverage_llbi_num_constraints = 8;
@@ -97,6 +193,25 @@ int main() {
     result.path_llbi_num_path_constraints = 10;
     result.path_llbi_num_paths_used = 11;
     result.path_llbi_precompute_time_sec = 0.04;
+    result.projected_path_llbi_enabled = true;
+    result.projected_path_llbi_weighted = true;
+    result.projected_path_llbi_mode = "exp-exact-stored-path-separation";
+    result.projected_path_llbi_weight_map_hash = "hash-path";
+    result.projected_path_llbi_scenarios_precomputed = 2;
+    result.projected_path_llbi_destination_nodes = 5;
+    result.projected_path_llbi_total_paths = 8;
+    result.projected_path_llbi_total_incidence_terms = 13;
+    result.projected_path_llbi_nodes_without_paths = 0;
+    result.projected_path_llbi_enumeration_complete = true;
+    result.projected_path_llbi_paths_truncated = 0;
+    result.projected_path_llbi_separation_calls = 3;
+    result.projected_path_llbi_cuts_generated = 4;
+    result.projected_path_llbi_cuts_added = 3;
+    result.projected_path_llbi_duplicate_cuts = 1;
+    result.projected_path_llbi_max_violation = 1.25;
+    result.projected_path_llbi_precompute_time_sec = 0.08;
+    result.projected_path_llbi_separation_time_sec = 0.09;
+    result.projected_path_llbi_validity_mode = "exact-directed-path-projection";
     result.global_dominance_enabled = true;
     result.global_dominance_candidates_removed = 1;
     result.global_dominance_equivalence_classes = 1;
@@ -106,6 +221,7 @@ int main() {
     result.conditional_zero_benefit_fixings_applied = 0;
     result.conditional_zero_benefit_time_sec = 0.06;
     firebreak::io::write_experiment_result_json(result_json_path, result);
+    firebreak::io::append_experiment_result_csv(result_csv_path, result);
     firebreak::io::append_experiment_result_csv(result_csv_path, result);
     assert(std::filesystem::exists(result_json_path));
     assert(std::filesystem::exists(result_csv_path));
@@ -125,11 +241,68 @@ int main() {
         assert(text.find("combinatorial_benders_scenario_order") != std::string::npos);
         assert(text.find("eta-desc") != std::string::npos);
         assert(text.find("combinatorial_benders_integer_cuts_added") != std::string::npos);
+        assert(text.find("combinatorial_benders_weighted") != std::string::npos);
+        assert(text.find("combinatorial_benders_lifting_enabled") != std::string::npos);
+        assert(text.find("combinatorial_benders_scenario_sampling_enabled") != std::string::npos);
+        assert(text.find("combinatorial_scenario_order") != std::string::npos);
+        assert(text.find("combinatorial_cut_sampling_ratio") != std::string::npos);
+        assert(text.find("combinatorial_candidate_callbacks") != std::string::npos);
+        assert(text.find("combinatorial_scenarios_evaluated") != std::string::npos);
+        assert(text.find("combinatorial_cuts_generated") != std::string::npos);
+        assert(text.find("combinatorial_cuts_added") != std::string::npos);
+        assert(text.find("combinatorial_validity_mode") != std::string::npos);
+        assert(text.find("combinatorial_fractional_cuts_enabled") != std::string::npos);
+        assert(text.find("combinatorial_lifting_weighted") != std::string::npos);
+        assert(text.find("combinatorial_lifting_attempts") != std::string::npos);
+        assert(text.find("combinatorial_coefficients_changed") != std::string::npos);
+        assert(text.find("combinatorial_lifting_validity_mode") != std::string::npos);
+        assert(text.find("combinatorial_initial_solutions_evaluated") != std::string::npos);
+        assert(text.find("combinatorial_root_cuts_enabled") != std::string::npos);
+        assert(text.find("combinatorial_fractional_validity_mode") != std::string::npos);
+        assert(text.find("combinatorial_realized_sample_size") != std::string::npos);
+        assert(text.find("combinatorial_sampling_exact_fallback") != std::string::npos);
+        assert(text.find("combinatorial_full_verification_before_acceptance") != std::string::npos);
+        assert(text.find("combinatorial_candidate_fallback_scenarios_evaluated") != std::string::npos);
+        assert(text.find("baseline-integer-exact-no-lifting") != std::string::npos);
+        assert(text.find("weighted-baseline-integer-path-activation-cut") != std::string::npos);
+        assert(text.find("heuristic-mode-exact-weighted-path-dedup-lifting") != std::string::npos);
+        assert(text.find("weighted-fractional-path-activation-user-cut-convex-hull-valid") != std::string::npos);
         assert(text.find("coverage_llbi_enabled") != std::string::npos);
         assert(text.find("path_llbi_num_paths_used") != std::string::npos);
+        assert(text.find("projected_path_llbi_weighted") != std::string::npos);
+        assert(text.find("exact-directed-path-projection") != std::string::npos);
         assert(text.find("global_dominance_candidates_removed") != std::string::npos);
         assert(text.find("conditional_zero_benefit_fixings_attempted") != std::string::npos);
         assert(text.find("fpp_cut_dominator_separator_greedy") != std::string::npos);
+        std::istringstream rows(text);
+        std::string line;
+        std::vector<int> column_counts;
+        int header_count = 0;
+        while (std::getline(rows, line)) {
+            if (line.empty()) {
+                continue;
+            }
+            assert(line != "projected_path_llbi_weighted");
+            assert(line != "combinatorial_benders_weighted");
+            assert(line != "combinatorial_candidate_callbacks");
+            assert(line != "combinatorial_lifting_weighted");
+            assert(line != "combinatorial_fractional_validity_mode");
+            assert(line != "combinatorial_sampling_exact_fallback");
+            if (line.find("experiment_id") == 0) {
+                ++header_count;
+            }
+            int columns = 1;
+            for (const char ch : line) {
+                if (ch == ',') {
+                    ++columns;
+                }
+            }
+            column_counts.push_back(columns);
+        }
+        assert(header_count == 1);
+        assert(column_counts.size() == 3);
+        assert(column_counts[0] == column_counts[1]);
+        assert(column_counts[1] == column_counts[2]);
     }
     {
         std::ifstream in(result_json_path);
@@ -141,7 +314,34 @@ int main() {
         assert(text.find("\"combinatorial_benders_enabled\": true") != std::string::npos);
         assert(text.find("\"combinatorial_benders_scenario_order\": \"eta-desc\"") != std::string::npos);
         assert(text.find("\"combinatorial_benders_integer_cuts_added\": 3") != std::string::npos);
+        assert(text.find("\"combinatorial_benders_weighted\": true") != std::string::npos);
+        assert(text.find("\"combinatorial_benders_lifting_enabled\": false") != std::string::npos);
+        assert(text.find("\"combinatorial_benders_scenario_sampling_enabled\": false") != std::string::npos);
+        assert(text.find("\"combinatorial_benders_mode\": \"baseline-integer-exact-no-lifting\"") != std::string::npos);
+        assert(text.find("\"combinatorial_benders_validity_mode\": \"weighted-baseline-integer-path-activation-cut\"") != std::string::npos);
+        assert(text.find("\"combinatorial_candidate_callbacks\": 13") != std::string::npos);
+        assert(text.find("\"combinatorial_scenarios_evaluated\": 6") != std::string::npos);
+        assert(text.find("\"combinatorial_cuts_generated\": 7") != std::string::npos);
+        assert(text.find("\"combinatorial_cuts_added\": 12") != std::string::npos);
+        assert(text.find("\"combinatorial_validity_mode\": \"weighted-baseline-integer-path-activation-cut\"") != std::string::npos);
+        assert(text.find("\"combinatorial_scenario_order\": \"eta-desc\"") != std::string::npos);
+        assert(text.find("\"combinatorial_cut_sampling_ratio\": 0.10000000") != std::string::npos);
+        assert(text.find("\"combinatorial_fractional_cuts_enabled\": false") != std::string::npos);
+        assert(text.find("\"combinatorial_lifting_weighted\": true") != std::string::npos);
+        assert(text.find("\"combinatorial_lifting_attempts\": 5") != std::string::npos);
+        assert(text.find("\"combinatorial_coefficients_changed\": 2") != std::string::npos);
+        assert(text.find("\"combinatorial_lifting_validity_mode\": \"heuristic-mode-exact-weighted-path-dedup-lifting\"") != std::string::npos);
+        assert(text.find("\"combinatorial_initial_solutions_evaluated\": 1") != std::string::npos);
+        assert(text.find("\"combinatorial_root_cuts_enabled\": false") != std::string::npos);
+        assert(text.find("\"combinatorial_fractional_validity_mode\": \"weighted-fractional-path-activation-user-cut-convex-hull-valid\"") != std::string::npos);
+        assert(text.find("\"combinatorial_fractional_separation_calls\": 4") != std::string::npos);
+        assert(text.find("\"combinatorial_realized_sample_size\": 2") != std::string::npos);
+        assert(text.find("\"combinatorial_sampling_exact_fallback\": true") != std::string::npos);
+        assert(text.find("\"combinatorial_full_verification_before_acceptance\": true") != std::string::npos);
+        assert(text.find("\"combinatorial_candidate_fallback_scenarios_evaluated\": 4") != std::string::npos);
         assert(text.find("\"path_llbi_num_paths_used\": 11") != std::string::npos);
+        assert(text.find("\"projected_path_llbi_weighted\": true") != std::string::npos);
+        assert(text.find("\"projected_path_llbi_validity_mode\": \"exact-directed-path-projection\"") != std::string::npos);
         assert(text.find("\"global_dominance_candidates_removed\": 1") != std::string::npos);
         assert(text.find("\"conditional_zero_benefit_fixings_attempted\": 12") != std::string::npos);
     }

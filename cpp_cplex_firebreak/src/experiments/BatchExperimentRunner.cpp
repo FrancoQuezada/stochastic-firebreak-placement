@@ -116,7 +116,10 @@ std::string resume_key(
     std::size_t test_count,
     std::size_t case_id,
     const std::string& method,
-    const std::string& fpp_mode = "") {
+    const std::string& fpp_mode = "",
+    const std::string& weight_profile = "",
+    int weight_replicate = 0,
+    const std::string& weight_map_hash = "") {
     std::ostringstream out;
     out << experiment_id << "|"
         << landscape << "|"
@@ -125,7 +128,13 @@ std::string resume_key(
         << test_count << "|"
         << case_id << "|"
         << method << "|"
-        << fpp_mode;
+        << fpp_mode << "|"
+        // A weighted row's resume key always differs from a legacy homogeneous row's
+        // (empty weight fields), so resuming a weighted batch can never skip a stale
+        // legacy result or vice versa.
+        << weight_profile << "|"
+        << weight_replicate << "|"
+        << weight_map_hash;
     return out.str();
 }
 
@@ -223,6 +232,10 @@ std::unordered_set<std::string> load_completed_resume_keys(const std::filesystem
         const int train_count = parse_int_or_default(get_csv_field(fields, columns, "train_scenario_count"), -1);
         const int test_count = parse_int_or_default(get_csv_field(fields, columns, "test_scenario_count"), -1);
         const int case_id = parse_int_or_default(get_csv_field(fields, columns, "case_id"), -1);
+        const std::string weight_profile = get_csv_field(fields, columns, "weight_profile");
+        const int weight_replicate =
+            parse_int_or_default(get_csv_field(fields, columns, "weight_replicate"), 0);
+        const std::string weight_map_hash = get_csv_field(fields, columns, "weight_map_hash");
         if (experiment_id.empty() || landscape.empty() || method.empty() ||
             alpha < 0.0 || train_count < 0 || test_count < 0 || case_id < 0) {
             continue;
@@ -235,7 +248,10 @@ std::unordered_set<std::string> load_completed_resume_keys(const std::filesystem
             static_cast<std::size_t>(test_count),
             static_cast<std::size_t>(case_id),
             method,
-            fpp_mode));
+            fpp_mode,
+            weight_profile,
+            weight_replicate,
+            weight_map_hash));
     }
     return keys;
 }
@@ -393,7 +409,10 @@ int BatchExperimentRunner::run(const BatchExperimentConfig& raw_config) const {
                             config.test_count,
                             case_id,
                             method,
-                            result_fpp_mode);
+                            result_fpp_mode,
+                            config.weight_profile,
+                            config.weight_replicate,
+                            config.weight_map_hash);
                         if (config.resume_existing && completed_keys.find(current_key) != completed_keys.end()) {
                             ++skipped_count;
                             std::cout << "SKIPPED existing result: "
@@ -475,6 +494,17 @@ int BatchExperimentRunner::run(const BatchExperimentConfig& raw_config) const {
                         request.risk_measure_specified = run_config.risk_measure_specified;
                         request.cvar_beta_specified = run_config.cvar_beta_specified;
                         request.cvar_lambda_specified = run_config.cvar_lambda_specified;
+                        request.weight_map_file = run_config.weight_map_file;
+                        request.weight_profile = run_config.weight_profile;
+                        request.weight_replicate = run_config.weight_replicate;
+                        request.weight_generation_seed = run_config.weight_generation_seed;
+                        request.weight_generator_version = run_config.weight_generator_version;
+                        request.canonical_landscape_id = run_config.canonical_landscape_id;
+                        request.paired_landscape_id = run_config.paired_landscape_id;
+                        request.weight_map_hash = run_config.weight_map_hash;
+                        request.weight_source_universe_hash = run_config.weight_source_universe_hash;
+                        request.paired_reburn_instance_id = run_config.paired_reburn_instance_id;
+                        request.paired_evaluation_enabled = run_config.paired_evaluation_enabled;
 
                         std::cout << "[" << (run_count + 1) << "] "
                                   << method

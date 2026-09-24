@@ -8,6 +8,7 @@
 #include <unordered_map>
 #include <utility>
 
+#include "opt/WeightedDpvScoring.hpp"
 #include "solver/CplexEnvironment.hpp"
 
 #ifdef FIREBREAK_WITH_CPLEX
@@ -130,6 +131,7 @@ public:
           scenario_(opt.scenarios[static_cast<std::size_t>(scenario_position)]),
           y_position_by_node_(build_y_position_by_node_index(opt)),
           structure_(analyze_dpv_scenario_subproblem_structure(opt, scenario_position)),
+          compact_weights_(opt::canonical_compact_dpv_weights_or_unit(opt)),
           env_(),
           model_(env_),
           x_(env_),
@@ -271,7 +273,8 @@ private:
 
         IloExpr objective(env_);
         for (IloInt p = 0; p < z_.getSize(); ++p) {
-            objective += z_[p];
+            const auto& pair = scenario_.dpv.product_pairs[static_cast<std::size_t>(p)];
+            objective += compact_weights_[static_cast<std::size_t>(pair.descendant_index)] * z_[p];
         }
         model_.add(IloMinimize(env_, objective));
         objective.end();
@@ -318,6 +321,7 @@ private:
     const opt::OptimizationScenario& scenario_;
     std::unordered_map<int, int> y_position_by_node_;
     DpvScenarioSubproblemStructure structure_;
+    std::vector<double> compact_weights_;
     IloEnv env_;
     IloModel model_;
     IloNumVarArray x_;
