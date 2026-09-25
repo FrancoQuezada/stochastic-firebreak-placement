@@ -56,6 +56,11 @@ WORKER_FIELDS = [
     "paired_reburn_train_evaluation_runtime_seconds",
     "paired_reburn_train_eval_runtime_sec",
     "paired_reburn_train_scenario_count",
+    "compact_success_output",
+    "compact_success_cleanup_status",
+    "solver_result_json_status",
+    "paired_reburn_eval_json_status",
+    "solver_row_csv_status",
 ]
 
 OMIT_FIELDS = {
@@ -140,8 +145,6 @@ OMIT_FIELDS = {
     "evaluator_abs_diff",
     "evaluator_rel_diff",
     "validation_status",
-    "train_cvar_burned_area",
-    "test_cvar_burned_area",
     "selected_firebreaks",
     "warm_start_used",
     "mip_start_accepted",
@@ -167,6 +170,16 @@ def parse_args() -> argparse.Namespace:
                              "always rerun regardless of this flag. Completed valid rows are "
                              "never rerun by this flag.")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--compact-success-output",
+        action="store_true",
+        help=(
+            "After a successful row has been durably recorded in the worker CSV, delete "
+            "the detailed solver and paired-reburn evaluation JSON files. Failed or "
+            "incomplete rows retain their JSON diagnostics. Disabled by default for "
+            "backward compatibility."
+        ),
+    )
     args = parser.parse_args()
     if args.rerun_existing and args.retry_failed:
         raise SystemExit("--rerun-existing and --retry-failed are contradictory; choose one.")
@@ -260,6 +273,27 @@ def load_instance_config(path: Path) -> dict[str, dict[str, str]]:
     return config
 
 
+def instance_config_path_from_manifest(rows: list[dict[str, str]]) -> Path:
+    """Return the instance config selected by the manifest.
+
+    Older manifests did not carry ``instance_config_path``. Keep their behavior by
+    falling back to the historical repository config, while rejecting a worker manifest
+    that mixes multiple config files (which would make paired resolution ambiguous).
+    """
+    configured_paths = {
+        str(row.get("instance_config_path", "")).strip()
+        for row in rows
+        if str(row.get("instance_config_path", "")).strip()
+    }
+    if len(configured_paths) > 1:
+        raise RuntimeError(
+            "Worker manifest rows reference multiple instance_config_path values: "
+            f"{sorted(configured_paths)}")
+    if configured_paths:
+        return Path(next(iter(configured_paths)))
+    return Path("config/fpp_new_instances_scaling_instances.csv")
+
+
 def paired_reburn_instance_id(instance_id: str) -> str | None:
     if instance_id.endswith("_reburn"):
         return None
@@ -267,7 +301,9 @@ def paired_reburn_instance_id(instance_id: str) -> str | None:
 
 
 def resolve_paired_reburn_instance(
-    instance_config: dict[str, dict[str, str]], instance_id: str
+    instance_config: dict[str, dict[str, str]],
+    instance_id: str,
+    requested_id: str | None = None,
 ) -> tuple[str | None, str, str]:
     """Resolve instance_id's paired reburn instance (Phase 8B section 11).
 
@@ -276,10 +312,17 @@ def resolve_paired_reburn_instance(
     against declared_cells so a corrupted/mismatched pairing (e.g. the documented
     100x100 folder mismatch) is rejected rather than silently used.
     """
-    requested_id = paired_reburn_instance_id(instance_id)
-    method = "instance_config_suffix_and_cell_count_match"
+    suffix_id = paired_reburn_instance_id(instance_id)
+    requested_id = str(requested_id or suffix_id or "").strip() or None
+    method = (
+        "manifest_pair_id_and_instance_config_cell_count_match"
+        if requested_id is not None and requested_id != suffix_id
+        else "instance_config_suffix_and_cell_count_match"
+    )
     if requested_id is None:
         return None, method, "not_applicable"
+    if instance_id not in instance_config:
+        return None, method, "source_unavailable"
     if requested_id not in instance_config:
         return None, method, "unavailable"
     reduced_cells = str(instance_config.get(instance_id, {}).get("declared_cells", "")).strip()
@@ -287,6 +330,30 @@ def resolve_paired_reburn_instance(
     if reduced_cells and reburn_cells and reduced_cells != reburn_cells:
         return None, method, "cell_count_mismatch"
     return requested_id, method, "resolved"
+
+
+def paired_reburn_resolution_for_row(
+    instance_config: dict[str, dict[str, str]],
+    row: dict[str, str],
+) -> tuple[bool, str, str | None, str, str]:
+    """Resolve a row's optional paired evaluation without changing its opt landscape.
+
+    Returns ``(enabled, requested_id, resolved_id, method, status)``. In particular,
+    merely finding a suffix pair in the full config never opts a legacy row into paired
+    evaluation; the manifest flag is authoritative.
+    """
+    enabled = bool_value(row.get("paired_evaluation_enabled"))
+    requested_id = str(row.get("paired_reburn_instance_id", "")).strip()
+    if not requested_id:
+        requested_id = paired_reburn_instance_id(row.get("instance_id", "")) or ""
+    if not enabled:
+        return False, requested_id, None, "disabled_by_manifest", "disabled"
+    resolved_id, method, status = resolve_paired_reburn_instance(
+        instance_config,
+        row.get("instance_id", ""),
+        requested_id=requested_id,
+    )
+    return True, requested_id, resolved_id, method, status
 
 
 def read_csv(path: Path) -> list[dict[str, str]]:
@@ -324,11 +391,53 @@ def read_result_json(row: dict[str, str]) -> dict | None:
         return None
 
 
+def solution_csv_path(row: dict[str, str]) -> Path:
+    return Path(row.get("solution_dir", "")) / f"{row.get('task_id', '')}.csv"
+
+
+def requires_objective_validation(row: dict[str, str]) -> bool:
+    """True for exact FPP methods whose incumbent objective has a recourse check."""
+    return str(row.get("method", "")).startswith("FPP-")
+
+
+def compact_success_row_complete_and_valid(row: dict[str, str]) -> bool:
+    """Validate a compact-success receipt without depending on deleted JSON files."""
+    if row.get("worker_return_code") != "0":
+        return False
+    if row.get("compact_success_cleanup_status") != "complete":
+        return False
+    if row.get("solver_result_json_status") != "deleted":
+        return False
+    if row.get("solver_row_csv_status") != "deleted":
+        return False
+    if not str(row.get("run_id", "")).strip():
+        return False
+    status = row.get("solver_status") or row.get("status") or ""
+    if not str(status).strip():
+        return False
+    if requires_objective_validation(row) and not bool_value(row.get("objective_validation_passed")):
+        return False
+    expected_hash = str(row.get("weight_map_hash") or "").strip()
+    actual_hash = str(row.get("optimization_weight_map_hash") or "").strip()
+    if expected_hash and actual_hash != expected_hash:
+        return False
+    if not solution_csv_path(row).exists():
+        return False
+    if bool_value(row.get("paired_evaluation_enabled")):
+        if row.get("paired_reburn_status") != "ok":
+            return False
+        if row.get("paired_reburn_eval_json_status") != "deleted":
+            return False
+    return True
+
+
 def row_complete_and_valid(row: dict[str, str]) -> bool:
     """Real completion validation (Phase 8B section 21). File existence alone is never
     sufficient: the result JSON must exist, parse, name the expected run_id and weight
     map hash, carry a final status, and (when paired evaluation was required) report a
     successful paired reburn evaluation."""
+    if bool_value(row.get("compact_success_output")):
+        return compact_success_row_complete_and_valid(row)
     if row.get("worker_return_code") != "0":
         return False
     payload = read_result_json(row)
@@ -344,12 +453,36 @@ def row_complete_and_valid(row: dict[str, str]) -> bool:
         return False
     if "objective_validation_passed" not in payload:
         return False
-    solution_path = Path(row.get("solution_dir", "")) / f"{row.get('task_id', '')}.csv"
-    if not solution_path.exists():
+    if not solution_csv_path(row).exists():
         return False
-    if bool_value(row.get("paired_evaluation_enabled")) and row.get("paired_reburn_status") != "ok":
-        return False
+    if bool_value(row.get("paired_evaluation_enabled")):
+        if requires_objective_validation(row) and not bool(payload.get("objective_validation_passed")):
+            return False
+        if row.get("paired_reburn_status") != "ok":
+            return False
     return True
+
+
+def delete_detailed_json(path: Path, *, label: str) -> None:
+    """Delete one explicit generated JSON artifact, failing closed on a bad target."""
+    if path.suffix.lower() != ".json":
+        raise RuntimeError(f"Refusing to delete non-JSON {label} artifact: {path}")
+    if not path.is_file():
+        raise RuntimeError(f"Cannot compact missing {label} artifact: {path}")
+    path.unlink()
+    if path.exists():
+        raise RuntimeError(f"Could not delete compacted {label} artifact: {path}")
+
+
+def delete_solver_row_csv(path: Path) -> None:
+    """Delete the redundant one-row solver CSV after its worker receipt is durable."""
+    if path.suffix.lower() != ".csv":
+        raise RuntimeError(f"Refusing to delete non-CSV solver row artifact: {path}")
+    if not path.is_file():
+        raise RuntimeError(f"Cannot compact missing solver row artifact: {path}")
+    path.unlink()
+    if path.exists():
+        raise RuntimeError(f"Could not delete compacted solver row artifact: {path}")
 
 
 def is_recorded_failure(row: dict[str, str]) -> bool:
@@ -744,7 +877,7 @@ def main() -> int:
     by_task = {row.get("task_id", ""): row for row in existing if row.get("task_id")}
     final_rows = [row for row in existing if row.get("task_id")]
 
-    instance_config = load_instance_config(Path("config/fpp_new_instances_scaling_instances.csv"))
+    instance_config = load_instance_config(instance_config_path_from_manifest(manifest_rows))
 
     def record_failure(row, failure_stage, failure_type, failure_message, return_code,
                        train_ids, test_ids, command, log_path, started, finished, attempt,
@@ -869,14 +1002,16 @@ def main() -> int:
             Path(row["solution_dir"]) / f"{row['task_id']}.csv")
         completed_row["selected_firebreak_original_ids"] = ids_arg(selected_firebreak_ids)
 
-        reburn_id, resolution_method, resolution_status = resolve_paired_reburn_instance(
-            instance_config, row["instance_id"])
-        completed_row["paired_reburn_instance_requested"] = paired_reburn_instance_id(row["instance_id"]) or ""
+        paired_enabled, requested_reburn_id, reburn_id, resolution_method, resolution_status = (
+            paired_reburn_resolution_for_row(instance_config, row)
+        )
+        completed_row["paired_reburn_instance_requested"] = requested_reburn_id
         completed_row["paired_reburn_instance_resolved"] = reburn_id or ""
         completed_row["paired_reburn_resolution_method"] = resolution_method
         completed_row["paired_reburn_resolution_status"] = resolution_status
 
-        if reburn_id is not None:
+        reburn_eval_json: Path | None = None
+        if paired_enabled and reburn_id is not None:
             reburn_row = instance_config[reburn_id]
             reburn_eval_json = output_dir / "json" / f"{task_id}_paired_reburn_eval.json"
             reburn_command = build_paired_reburn_evaluation_command(
@@ -900,7 +1035,7 @@ def main() -> int:
                 completed_row["paired_reburn_return_code"] = "0"
                 completed_row.update(parse_paired_reburn_evaluation_json(reburn_eval_json))
                 completed_row["paired_reburn_train_eval_runtime_sec"] = str(reburn_finished - reburn_started)
-        elif bool_value(row.get("paired_evaluation_enabled")):
+        elif paired_enabled:
             # The manifest expected paired evaluation but resolution was rejected
             # (unavailable / ambiguous / cell-count mismatch): fail clearly, never
             # silently proceed as if pairing were not required.
@@ -913,10 +1048,54 @@ def main() -> int:
         else:
             completed_row["paired_reburn_status"] = "n/a"
 
+        completed_row["compact_success_output"] = "false"
+        completed_row["compact_success_cleanup_status"] = "not_requested"
+        completed_row["solver_result_json_status"] = "retained"
+        completed_row["paired_reburn_eval_json_status"] = (
+            "retained" if reburn_eval_json is not None and reburn_eval_json.exists() else "n/a"
+        )
+        completed_row["solver_row_csv_status"] = "retained"
+
         by_task[task_id] = completed_row
         final_rows = [r for r in final_rows if r.get("task_id") != task_id] + [completed_row]
         final_rows.sort(key=lambda r: r.get("task_id", ""))
         write_worker_csv(output_csv, final_rows, manifest_fields)
+
+        # Compact only fully successful rows, and only after the worker CSV receipt has
+        # been durably replaced.  A paired failure keeps both detailed JSON diagnostics.
+        compactable = (
+            args.compact_success_output
+            and completed_row.get("worker_return_code") == "0"
+            and (
+                not requires_objective_validation(completed_row)
+                or bool_value(completed_row.get("objective_validation_passed"))
+            )
+            and (not paired_enabled or completed_row.get("paired_reburn_status") == "ok")
+        )
+        if compactable:
+            completed_row["compact_success_output"] = "true"
+            completed_row["compact_success_cleanup_status"] = "pending"
+            write_worker_csv(output_csv, final_rows, manifest_fields)
+            try:
+                if paired_enabled:
+                    if reburn_eval_json is None:
+                        raise RuntimeError("Paired evaluation succeeded without a JSON artifact path.")
+                    delete_detailed_json(reburn_eval_json, label="paired-reburn evaluation")
+                    completed_row["paired_reburn_eval_json_status"] = "deleted"
+                else:
+                    completed_row["paired_reburn_eval_json_status"] = "n/a"
+                delete_detailed_json(Path(row["output_json"]), label="solver result")
+                completed_row["solver_result_json_status"] = "deleted"
+                delete_solver_row_csv(temp_csv)
+                completed_row["solver_row_csv_status"] = "deleted"
+                completed_row["compact_success_cleanup_status"] = "complete"
+            except Exception as exc:  # noqa: BLE001 - leave an explicit rerunnable receipt
+                completed_row["compact_success_cleanup_status"] = "failed"
+                completed_row["failure_stage"] = "output_compaction"
+                completed_row["failure_type"] = type(exc).__name__
+                completed_row["failure_message"] = str(exc)[:500]
+                print(f"FAILED {task_id} (output_compaction): {exc}", file=sys.stderr)
+            write_worker_csv(output_csv, final_rows, manifest_fields)
         print(f"END {task_id}: {finished - started:.3f}s")
 
     if args.dry_run:

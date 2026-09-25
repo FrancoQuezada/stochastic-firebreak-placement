@@ -20,6 +20,7 @@ FIELDS = [
     "seed_base",
     "seed",
     "split_seed",
+    "instance_config_path",
     "instance_id",
     "folder_name",
     "instance_type",
@@ -123,6 +124,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--projected-llbi-violation-tolerance", default="1e-6")
     parser.add_argument("--projected-llbi-cut-density-limit", default="0")
     parser.add_argument("--projected-poly-max-cuts", default="100000")
+    parser.add_argument(
+        "--methods-per-worker",
+        type=int,
+        default=0,
+        help=(
+            "Maximum methods assigned to one worker manifest. Zero keeps the full "
+            "controlled method block together (legacy/default behavior)."
+        ),
+    )
     parser.add_argument("--verify-only", action="store_true")
     # Phase 8A canonical weight-map / paired-reburn options (additive; defaults preserve
     # legacy homogeneous behavior).
@@ -208,13 +218,27 @@ def read_preflight(path: Path | None) -> dict[str, dict[str, str]]:
     return {row.get("folder", ""): row for row in rows if row.get("folder")}
 
 
-def selected_instances(args: argparse.Namespace) -> list[dict[str, str]]:
+def enabled_instance_rows(args: argparse.Namespace) -> list[dict[str, str]]:
     rows = read_csv(args.instance_config)
-    for raw_index, row in enumerate(rows):
+    enabled: list[dict[str, str]] = []
+    for raw_index, raw_row in enumerate(rows):
+        row = dict(raw_row)
         row["_config_index"] = str(raw_index)
+        if bool_value(row.get("enabled", "true")):
+            enabled.append(row)
+    return enabled
+
+
+def selected_instances(
+    args: argparse.Namespace,
+    enabled_rows: list[dict[str, str]] | None = None,
+) -> list[dict[str, str]]:
+    # Keep the complete enabled catalog separate from the optimization subset.  In
+    # particular, a reduced instance selected for optimization may need to resolve a
+    # reburn partner that is intentionally absent from --instance-filter.
+    enabled = list(enabled_rows if enabled_rows is not None else enabled_instance_rows(args))
     filters = split_csv(args.instance_filter)
     filter_set = set(filters)
-    enabled = [row for row in rows if bool_value(row.get("enabled", "true"))]
     if filters:
         known = {row.get("instance_id", "") for row in enabled}
         unknown = sorted(filter_set - known)
@@ -231,6 +255,7 @@ def selected_instances(args: argparse.Namespace) -> list[dict[str, str]]:
         pf = preflight.get(folder_name, {})
         instance = dict(row)
         instance["instance_index"] = row["_config_index"]
+        instance["instance_config_path"] = str(args.instance_config)
         instance["forest_path"] = str(resolve_instance_path(row.get("forest_path", ""), args.instances_root, folder_name))
         instance["results_path"] = str(resolve_instance_path(row.get("results_path", ""), args.instances_root, folder_name))
         instance["inferred_cells"] = pf.get("inferred_n_cells", "")
@@ -239,6 +264,32 @@ def selected_instances(args: argparse.Namespace) -> list[dict[str, str]]:
         instance["graph_variant"] = pf.get("graph_variant", "")
         out.append(instance)
     return out
+
+
+def validate_requested_reburn_pairs(
+    args: argparse.Namespace,
+    selected: list[dict[str, str]],
+    enabled_rows: list[dict[str, str]],
+) -> None:
+    """Fail manifest generation when a requested evaluation pair is not resolvable."""
+    if not args.paired_reburn_evaluation:
+        return
+    catalog = {row.get("instance_id", ""): row for row in enabled_rows}
+    for instance in selected:
+        instance_id = instance.get("instance_id", "")
+        if is_reburn(instance_id):
+            continue
+        reburn_id = f"{landscape_family(instance_id)}_reburn"
+        if reburn_id not in catalog:
+            raise RuntimeError(
+                f"Paired reburn evaluation requested for {instance_id}, but enabled instance "
+                f"{reburn_id} is absent from the complete instance configuration.")
+        reduced_cells = str(instance.get("declared_cells", "")).strip()
+        reburn_cells = str(catalog[reburn_id].get("declared_cells", "")).strip()
+        if reduced_cells and reburn_cells and reduced_cells != reburn_cells:
+            raise RuntimeError(
+                f"Paired reburn evaluation cell-count mismatch: {instance_id} has "
+                f"{reduced_cells}, {reburn_id} has {reburn_cells}.")
 
 
 def discover_scenario_ids(results_path: Path) -> list[int]:
@@ -650,6 +701,7 @@ def row_for_method(
         "seed_base": str(seed_base),
         "seed": str(seed),
         "split_seed": str(seed),
+        "instance_config_path": instance.get("instance_config_path", ""),
         "instance_id": instance["instance_id"],
         "folder_name": instance["folder_name"],
         "instance_type": instance["instance_type"],
@@ -732,12 +784,20 @@ def build_rows(
     instances: list[dict[str, str]],
     split_dir: Path,
     split_index: dict[tuple[str, int, int], tuple[Path, Path, int, list[int], list[int]]],
+    enabled_instance_ids: set[str] | None = None,
 ) -> tuple[list[dict[str, str]], int]:
     train_counts = [int(value) for value in split_csv(args.train_counts)]
     alphas = split_csv(args.alphas)
     profiles = [normalize_profile(value) for value in split_csv(args.weight_profiles)]
     replicates = [int(value) for value in split_csv(args.weight_replicates)]
-    instance_ids = {instance["instance_id"] for instance in instances}
+    # Pair discovery uses the complete enabled configuration, not the filtered
+    # optimization subset.  Splits and optimization rows still iterate only over
+    # `instances`, so resolving a reburn partner never creates a reburn solve.
+    configured_instance_ids = (
+        set(enabled_instance_ids)
+        if enabled_instance_ids is not None
+        else {instance["instance_id"] for instance in instances}
+    )
     rows: list[dict[str, str]] = []
     worker_index = 0
     filtered = 0
@@ -747,7 +807,7 @@ def build_rows(
         reburn_id = f"{family}_reburn"
         paired_reburn = (
             reburn_id if (args.paired_reburn_evaluation and not is_reburn(instance["instance_id"])
-                          and reburn_id in instance_ids) else "")
+                          and reburn_id in configured_instance_ids) else "")
         for train_count in train_counts:
             for alpha in alphas:
                 for case_index in range(args.num_cases):
@@ -773,44 +833,50 @@ def build_rows(
                                 surviving.append(method)
                             if not surviving:
                                 continue
-                            worker_id = f"worker_{worker_index:03d}"
-                            for task_index, method in enumerate(surviving):
-                                rows.append(row_for_method(
-                                    task_index=task_index,
-                                    worker_id=worker_id,
-                                    case_index=case_index,
-                                    seed_base=args.seed_base,
-                                    instance=instance,
-                                    alpha=alpha,
-                                    train_count=train_count,
-                                    test_count=args.test_count,
-                                    method=method,
-                                    output_dir=args.output_dir,
-                                    split_dir=split_dir,
-                                    train_path=train_path,
-                                    test_path=test_path,
-                                    seed=seed,
-                                    time_limit=args.time_limit,
-                                    mip_gap=args.mip_gap,
-                                    threads=args.threads,
-                                    cvar_beta=args.cvar_beta,
-                                    mean_cvar_lambda=args.mean_cvar_lambda,
-                                    projected_llbi_root_rounds=args.projected_llbi_root_rounds,
-                                    projected_llbi_max_cuts_per_round=args.projected_llbi_max_cuts_per_round,
-                                    projected_llbi_violation_tolerance=args.projected_llbi_violation_tolerance,
-                                    projected_llbi_cut_density_limit=args.projected_llbi_cut_density_limit,
-                                    projected_poly_max_cuts=args.projected_poly_max_cuts,
-                                    training_pool_min=args.training_pool_min,
-                                    training_pool_max=args.training_pool_max,
-                                    test_pool_min=args.test_pool_min,
-                                    test_pool_max=args.test_pool_max,
-                                    weight_profile=profile,
-                                    weight_replicate=replicate,
-                                    weight_entry=weight_entry,
-                                    paired_reburn_instance_id=paired_reburn,
-                                    paired_evaluation_enabled=bool(paired_reburn),
-                                ))
-                            worker_index += 1
+                            configured_chunk = getattr(args, "methods_per_worker", 0)
+                            if configured_chunk < 0:
+                                raise RuntimeError("--methods-per-worker must be >= 0.")
+                            chunk_size = configured_chunk or len(surviving)
+                            for chunk_start in range(0, len(surviving), chunk_size):
+                                method_chunk = surviving[chunk_start:chunk_start + chunk_size]
+                                worker_id = f"worker_{worker_index:03d}"
+                                for task_index, method in enumerate(method_chunk):
+                                    rows.append(row_for_method(
+                                        task_index=task_index,
+                                        worker_id=worker_id,
+                                        case_index=case_index,
+                                        seed_base=args.seed_base,
+                                        instance=instance,
+                                        alpha=alpha,
+                                        train_count=train_count,
+                                        test_count=args.test_count,
+                                        method=method,
+                                        output_dir=args.output_dir,
+                                        split_dir=split_dir,
+                                        train_path=train_path,
+                                        test_path=test_path,
+                                        seed=seed,
+                                        time_limit=args.time_limit,
+                                        mip_gap=args.mip_gap,
+                                        threads=args.threads,
+                                        cvar_beta=args.cvar_beta,
+                                        mean_cvar_lambda=args.mean_cvar_lambda,
+                                        projected_llbi_root_rounds=args.projected_llbi_root_rounds,
+                                        projected_llbi_max_cuts_per_round=args.projected_llbi_max_cuts_per_round,
+                                        projected_llbi_violation_tolerance=args.projected_llbi_violation_tolerance,
+                                        projected_llbi_cut_density_limit=args.projected_llbi_cut_density_limit,
+                                        projected_poly_max_cuts=args.projected_poly_max_cuts,
+                                        training_pool_min=args.training_pool_min,
+                                        training_pool_max=args.training_pool_max,
+                                        test_pool_min=args.test_pool_min,
+                                        test_pool_max=args.test_pool_max,
+                                        weight_profile=profile,
+                                        weight_replicate=replicate,
+                                        weight_entry=weight_entry,
+                                        paired_reburn_instance_id=paired_reburn,
+                                        paired_evaluation_enabled=bool(paired_reburn),
+                                    ))
+                                worker_index += 1
     return rows, filtered
 
 
@@ -857,7 +923,9 @@ def verify_manifests(*, manifest_dir: Path) -> None:
 def main() -> int:
     args = parse_args()
     methods = read_methods(args.method_file)
-    instances = selected_instances(args)
+    enabled_instances = enabled_instance_rows(args)
+    instances = selected_instances(args, enabled_instances)
+    validate_requested_reburn_pairs(args, instances, enabled_instances)
     train_counts = [int(value) for value in split_csv(args.train_counts)]
     alphas = split_csv(args.alphas)
     if not train_counts:
@@ -878,12 +946,25 @@ def main() -> int:
         train_counts=train_counts,
         split_dir=split_dir,
     )
-    rows, filtered = build_rows(args, methods, instances, split_dir, split_index)
+    rows, filtered = build_rows(
+        args,
+        methods,
+        instances,
+        split_dir,
+        split_index,
+        enabled_instance_ids={row.get("instance_id", "") for row in enabled_instances},
+    )
     if not rows:
         raise RuntimeError("No manifest rows generated (all combinations filtered?).")
 
     worker_ids = sorted({row["worker_id"] for row in rows})
     write_csv(manifest_dir / "full_task_manifest.csv", rows)
+    # Worker partitioning is configurable.  Remove generated manifests from an
+    # earlier partition before writing the current set so a launcher glob cannot
+    # accidentally execute stale tasks.
+    for stale_manifest in manifest_dir.glob("worker_*_manifest.csv"):
+        if stale_manifest.stem.removesuffix("_manifest") not in worker_ids:
+            stale_manifest.unlink()
     for worker_id in worker_ids:
         worker_rows = [row for row in rows if row["worker_id"] == worker_id]
         write_csv(manifest_dir / f"{worker_id}_manifest.csv", worker_rows)

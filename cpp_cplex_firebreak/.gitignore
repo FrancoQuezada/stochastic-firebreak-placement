@@ -36,7 +36,8 @@ scripts/**/__pycache__/
 scripts/sub20_alpha001_002_tl300_workers/
 scripts/sub20_projected_llbi_integral_tl300_workers/
 
-docs/
+docs/*
+!docs/NEW20X20_MANUSCRIPT_CAMPAIGN.md
 
 *.log
 *.lp

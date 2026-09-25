@@ -251,9 +251,9 @@ if [[ -n "$WEIGHT_REGISTRY" ]]; then
   if [[ "$GENERATE_MISSING_WEIGHT_MAPS" == "1" ]]; then
     manifest_args+=(--generate-missing-weight-maps)
   fi
-  if [[ "$PAIRED_REBURN_EVALUATION" == "1" ]]; then
-    manifest_args+=(--paired-reburn-evaluation)
-  fi
+fi
+if [[ "$PAIRED_REBURN_EVALUATION" == "1" ]]; then
+  manifest_args+=(--paired-reburn-evaluation)
 fi
 
 python3 scripts/generate_fpp_new_instances_scaling_manifests.py "${manifest_args[@]}"

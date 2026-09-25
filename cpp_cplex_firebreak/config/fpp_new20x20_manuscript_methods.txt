@@ -1,0 +1,30 @@
+# Dedicated principal manuscript panel for the new20x20 campaign.
+# Exactly eight algorithmic families for each of Expected, CVaR, and Mean-CVaR.
+# EtaDesc variants belong to a separate sensitivity experiment and are excluded.
+
+FPP-SAA
+FPP-Branch-Benders-RootCuts
+FPP-Branch-Benders-LLBI-RootCuts
+FPP-Branch-Benders-ProjectedCoverageLLBI-poly-RootCuts
+FPP-Branch-Benders-ProjectedPathLLBI-poly-RootCuts
+FPP-Branch-Benders-ProjectedCoverageLLBI-exp-RootCuts
+FPP-Branch-Benders-ProjectedPathLLBI-exp-RootCuts
+FPP-Branch-Benders-Combinatorial
+
+FPP-SAA-CVaR
+FPP-Branch-Benders-CVaR-RootCuts
+FPP-Branch-Benders-CVaR-LLBI-RootCuts
+FPP-Branch-Benders-CVaR-ProjectedCoverageLLBI-poly-RootCuts
+FPP-Branch-Benders-CVaR-ProjectedPathLLBI-poly-RootCuts
+FPP-Branch-Benders-CVaR-ProjectedCoverageLLBI-exp-RootCuts
+FPP-Branch-Benders-CVaR-ProjectedPathLLBI-exp-RootCuts
+FPP-Branch-Benders-Combinatorial-CVaR
+
+FPP-SAA-MeanCVaR
+FPP-Branch-Benders-MeanCVaR-RootCuts
+FPP-Branch-Benders-MeanCVaR-LLBI-RootCuts
+FPP-Branch-Benders-MeanCVaR-ProjectedCoverageLLBI-poly-RootCuts
+FPP-Branch-Benders-MeanCVaR-ProjectedPathLLBI-poly-RootCuts
+FPP-Branch-Benders-MeanCVaR-ProjectedCoverageLLBI-exp-RootCuts
+FPP-Branch-Benders-MeanCVaR-ProjectedPathLLBI-exp-RootCuts
+FPP-Branch-Benders-Combinatorial-MeanCVaR

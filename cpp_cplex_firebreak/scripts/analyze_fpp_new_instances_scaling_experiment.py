@@ -457,6 +457,9 @@ def build_projected_comparison(rows):
         if fam != "none" and var != "none":
             indexed[(comparison_key(row), fam, var)] = row
     pairs = [
+        ("coverage_poly_vs_coverage_exp", ("coverage", "poly"), ("coverage", "exp")),
+        ("path_poly_vs_path_exp", ("path", "poly"), ("path", "exp")),
+        ("coverage_poly_vs_path_poly", ("coverage", "poly"), ("path", "poly")),
         ("coverage_exp_vs_path_exp", ("coverage", "exp"), ("path", "exp")),
     ]
     out = []

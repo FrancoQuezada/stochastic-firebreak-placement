@@ -17,6 +17,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parent.parent
 GEN_PATH = ROOT / "scripts" / "generate_fpp_new_instances_scaling_manifests.py"
@@ -69,6 +70,116 @@ def test_run_identity(gen) -> None:
     assert legacy == base
     assert legacy != id_a
     print("run identity: OK")
+
+
+def test_filtered_legacy_pair_resolution(gen) -> None:
+    """A reburn partner is evaluation metadata, never an optimization filter member.
+
+    This is deliberately a no-binary/no-registry unit test so the legacy homogeneous
+    campaign path cannot accidentally regress behind weighted-registry setup.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+        instance_config = tmp_path / "instances.csv"
+        instance_config.write_text(
+            "instance_id,folder_name,landscape,forest_path,results_path,declared_cells,instance_type,enabled,requires_strict_metadata\n"
+            "new20x20,20x20,new20x20,new_instances/20x20,new_instances/20x20,400,shortest_path,true,true\n"
+            "new20x20_reburn,20x20_reburn,new20x20_reburn,new_instances/20x20_reburn,new_instances/20x20_reburn,400,reburn,true,true\n",
+            encoding="utf-8",
+        )
+        args = SimpleNamespace(
+            instance_config=instance_config,
+            instance_filter="new20x20",
+            preflight_csv=None,
+            instances_root=Path("new_instances"),
+            output_dir=tmp_path / "output",
+            train_counts="100",
+            alphas="0.02",
+            num_cases=1,
+            test_count=1000,
+            seed_base=20260529,
+            time_limit="1800",
+            mip_gap="0.001",
+            threads=1,
+            cvar_beta="0.9",
+            mean_cvar_lambda="0.5",
+            projected_llbi_root_rounds=100,
+            projected_llbi_max_cuts_per_round=100,
+            projected_llbi_violation_tolerance="1e-3",
+            projected_llbi_cut_density_limit="0",
+            projected_poly_max_cuts="100000",
+            training_pool_min=1,
+            training_pool_max=9000,
+            test_pool_min=9001,
+            test_pool_max=10000,
+            weight_profiles="homogeneous",
+            weight_replicates="0",
+            weight_registry=None,
+            paired_reburn_evaluation=True,
+            no_capability_filter=False,
+        )
+
+        enabled = gen.enabled_instance_rows(args)
+        selected = gen.selected_instances(args, enabled)
+        gen.validate_requested_reburn_pairs(args, selected, enabled)
+        assert {row["instance_id"] for row in enabled} == {"new20x20", "new20x20_reburn"}
+        assert [row["instance_id"] for row in selected] == ["new20x20"]
+
+        split_dir = tmp_path / "splits"
+        split_index = {
+            ("new20x20", 100, 0): (
+                split_dir / "train.csv",
+                split_dir / "test.csv",
+                gen.split_seed(20260529, 0, 0, 100),
+                list(range(1, 101)),
+                list(range(9001, 10001)),
+            )
+        }
+        rows, filtered = gen.build_rows(
+            args,
+            ["FPP-SAA"],
+            selected,
+            split_dir,
+            split_index,
+            enabled_instance_ids={row["instance_id"] for row in enabled},
+        )
+        assert filtered == 0
+        assert len(rows) == 1
+        row = rows[0]
+        assert row["instance_id"] == "new20x20"
+        assert row["paired_reburn_instance_id"] == "new20x20_reburn"
+        assert row["paired_evaluation_enabled"] == "true"
+        assert row["weight_profile"] == "homogeneous"
+        assert row["weight_map_path"] == ""
+        assert row["instance_config_path"] == str(instance_config)
+        assert not any(item["instance_id"] == "new20x20_reburn" for item in rows)
+
+        # Optional chunking can place one method in each worker, which is used by
+        # the parallel one-case manuscript sanity run.  The default above remains
+        # the legacy one-worker-per-controlled-block behavior.
+        args.methods_per_worker = 1
+        split_rows, split_filtered = gen.build_rows(
+            args,
+            ["FPP-SAA", "FPP-SAA-CVaR"],
+            selected,
+            split_dir,
+            split_index,
+            enabled_instance_ids={item["instance_id"] for item in enabled},
+        )
+        assert split_filtered == 0
+        assert len(split_rows) == 2
+        assert len({item["worker_id"] for item in split_rows}) == 2
+        assert {item["task_id"].rsplit("_", 1)[-1] for item in split_rows} == {"000"}
+
+        mismatched = [dict(item) for item in enabled]
+        next(item for item in mismatched if item["instance_id"] == "new20x20_reburn")["declared_cells"] = "401"
+        try:
+            gen.validate_requested_reburn_pairs(args, selected, mismatched)
+        except RuntimeError as exc:
+            assert "cell-count mismatch" in str(exc)
+        else:
+            raise AssertionError("paired cell-count mismatch was not rejected")
+    print("filtered legacy paired-reburn resolution: OK")
 
 
 def test_end_to_end(gen) -> None:
@@ -138,6 +249,7 @@ def main() -> int:
     gen = load_generator_module()
     test_capability_filter(gen)
     test_run_identity(gen)
+    test_filtered_legacy_pair_resolution(gen)
     test_end_to_end(gen)
     print("All weight manifest generation self-tests passed.")
     return 0

@@ -4,6 +4,25 @@ This checkout is trimmed to run the `new_instances` FPP scaling experiment.
 Historical experiment launchers, old config files, generated results, and logs
 are intentionally excluded from the active `scripts/` and `config/` folders.
 
+## Principal new20x20 manuscript campaign
+
+The dedicated manuscript campaign optimizes only `new20x20`, evaluates every
+incumbent on the fixed OOS set and on matching `new20x20_reburn` scenarios, and
+contains 8640 runs (four training sizes, three alpha values, 30 cases, and 24
+method/objective labels). It uses homogeneous unit weights and does not require a
+weight registry.
+
+```bash
+make cplex
+DRY_RUN=1 scripts/run_fpp_new20x20_manuscript_campaign.sh
+CONFIRM_LONG_RUN=1 scripts/run_fpp_new20x20_manuscript_campaign.sh
+CONFIRM_LONG_RUN=1 RETRY_FAILED=1 scripts/run_fpp_new20x20_manuscript_campaign.sh
+```
+
+The full design, compact schemas, validation rules, paired-reburn behavior, and
+resume commands are documented in
+[`docs/NEW20X20_MANUSCRIPT_CAMPAIGN.md`](docs/NEW20X20_MANUSCRIPT_CAMPAIGN.md).
+
 ## Weighted Landscapes
 
 The solver, DPV heuristics, and result/analysis pipeline all support
